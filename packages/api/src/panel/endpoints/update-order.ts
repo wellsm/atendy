@@ -1,0 +1,95 @@
+import type { Service } from '@ez4/common';
+import type { Http } from '@ez4/gateway';
+import type { String } from '@ez4/schema';
+import type { OrderStatus } from '../../orders/types';
+import type { PanelProvider } from '../provider';
+import type { PanelIdentity, PanelOrder } from '../types';
+
+import { HttpConflictError, HttpNotFoundError } from '@ez4/gateway';
+
+import { ConversationRepository } from '../../conversations/repository';
+import { OrderRepository, OrderStatusError, OrderStatusErrorCode } from '../../orders/repository';
+import { statusNotification } from '../../orders/status';
+import { sendStaffMessage } from '../send';
+import { requireStore } from '../store';
+import { toPanelOrder } from '../types';
+
+export declare class UpdateOrderRequest implements Http.Request {
+  identity: PanelIdentity;
+  parameters: {
+    orderId: String.UUID;
+  };
+  body: {
+    status: OrderStatus;
+  };
+}
+
+export declare class UpdateOrderResponse implements Http.Response {
+  status: 200;
+  body: {
+    order: PanelOrder;
+    /**
+     * Whether the customer got the status message (`done` sends none).
+     */
+    notified: boolean;
+  };
+}
+
+/**
+ * Store moves the order (accept, out, done, cancel), then tells the customer. The status never depends on WhatsApp.
+ */
+export async function updateOrderHandler(
+  request: Http.Incoming<UpdateOrderRequest>,
+  { db }: Service.Context<PanelProvider>
+): Promise<UpdateOrderResponse> {
+  const store = await requireStore(db, request.identity);
+  const { orderId } = request.parameters;
+  const { status } = request.body;
+
+  let changed;
+
+  try {
+    changed = await OrderRepository.setStatus(db, { storeId: store.id, orderId, status });
+  } catch (error) {
+    if (!(error instanceof OrderStatusError)) {
+      throw error;
+    }
+
+    if (error.code === OrderStatusErrorCode.NotFound) {
+      throw new HttpNotFoundError(error.message);
+    }
+
+    throw new HttpConflictError(error.message);
+  }
+
+  const text = statusNotification(status, changed.fulfillment);
+
+  let notified = false;
+
+  if (text) {
+    const conversation = await ConversationRepository.findForStore(db, store.id, changed.conversationId);
+
+    try {
+      if (conversation) {
+        await sendStaffMessage(db, {
+          storeId: store.id,
+          conversationId: conversation.id,
+          to: conversation.customer.jid,
+          text
+        });
+
+        notified = true;
+      }
+    } catch {
+      // Best effort: the panel shows that the customer was not told.
+    }
+  }
+
+  const order = await OrderRepository.getForPanel(db, store.id, orderId);
+
+  if (!order) {
+    throw new HttpNotFoundError('Order not found');
+  }
+
+  return { status: 200, body: { order: toPanelOrder(order), notified } };
+}

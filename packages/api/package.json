@@ -1,0 +1,38 @@
+{
+  "name": "@atendy/api",
+  "version": "0.0.0",
+  "license": "UNLICENSED",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "lint": "eslint --cache",
+    "serve": "dotenv -e ../../local.env -- ez4 serve --local",
+    "test": "EZ4_RAW_PG_DB_URL= EVOLUTION_API_URL=http://evolution.test EVOLUTION_API_KEY=test WEBHOOK_BASE_URL=http://api.test OPENROUTER_API_KEY=test CLERK_JWT_KEY=test ADMIN_USER_IDS=test TELEGRAM_BOT_TOKEN=test TELEGRAM_CHAT_ID=test ez4 test --local --reset",
+    "admin:create-store": "dotenv -e ../../local.env -- ez4 run --local -- ./src/admin/scripts/create-store.ts",
+    "admin:list-stores": "dotenv -e ../../local.env -- ez4 run --local -- ./src/admin/scripts/list-stores.ts",
+    "admin:toggle-store": "dotenv -e ../../local.env -- ez4 run --local -- ./src/admin/scripts/toggle-store.ts",
+    "admin:set-router": "dotenv -e ../../local.env -- ez4 run --local -- ./src/admin/scripts/set-router.ts",
+    "admin:connect-whatsapp": "dotenv -e ../../local.env -- ez4 run --local -- ./src/admin/scripts/connect-whatsapp.ts",
+    "admin:seed-demo": "dotenv -e ../../local.env -- ez4 run --local -- ./src/admin/scripts/seed-demo.ts",
+    "admin:set-policy": "dotenv -e ../../local.env -- ez4 run --local -- ./src/admin/scripts/set-policy.ts"
+  },
+  "devDependencies": {
+    "@ez4/aws-gateway": "^0.55.0",
+    "@ez4/aws-queue": "^0.55.0",
+    "@ez4/common": "^0.55.0",
+    "@ez4/database": "^0.55.0",
+    "@ez4/gateway": "^0.55.0",
+    "@ez4/local-database": "^0.55.0",
+    "@ez4/local-gateway": "^0.55.0",
+    "@ez4/local-queue": "^0.55.0",
+    "@ez4/pgclient": "^0.55.0",
+    "@ez4/queue": "^0.55.0",
+    "@ez4/raw-pg": "^0.55.0",
+    "@ez4/schema": "^0.55.0",
+    "@ez4/utils": "^0.55.0"
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.23.2"
+  }
+}

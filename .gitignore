@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.ez4/
+*.tsbuildinfo
+.eslintcache
+local.env
+*-deploy*
+.superpowers/
+tmp/
+.tanstack/
+.output/
+.env.local

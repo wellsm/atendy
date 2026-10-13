@@ -1,0 +1,43 @@
+name: atendy
+services:
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: atendy
+    ports:
+      - 54322:5432
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - 127.0.0.1:6381:6379
+  evolution:
+    image: evoapicloud/evolution-api:v2.3.0
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      SERVER_URL: http://127.0.0.1:8081
+      AUTHENTICATION_API_KEY: atendy_evolution_local_key
+      DATABASE_ENABLED: 'true'
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://postgres:postgres@postgres:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: atendy_evolution
+      CACHE_REDIS_ENABLED: 'true'
+      CACHE_REDIS_URI: redis://redis:6379/6
+      CACHE_REDIS_PREFIX_KEY: atendy
+      WEBHOOK_GLOBAL_ENABLED: 'false'
+      QRCODE_LIMIT: '30'
+      LOG_LEVEL: ERROR,WARN
+    ports:
+      - 127.0.0.1:8081:8080
+    volumes:
+      - evolution_instances:/evolution/instances
+volumes:
+  evolution_instances:

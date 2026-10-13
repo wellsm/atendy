@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "moduleResolution": "bundler",
+    "module": "preserve",
+    "strict": true,
+    "sourceMap": true,
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "preserveConstEnums": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noUnusedParameters": true,
+    "noUnusedLocals": true,
+    "skipLibCheck": true
+  },
+  "exclude": [
+    "node_modules"
+  ]
+}

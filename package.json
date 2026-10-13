@@ -1,0 +1,37 @@
+{
+  "name": "@atendy/root",
+  "version": "0.0.0",
+  "license": "UNLICENSED",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=24.21"
+  },
+  "workspaces": [
+    "packages/api",
+    "packages/web"
+  ],
+  "scripts": {
+    "prettify": "npx prettier 'packages/**/*.ts' 'packages/web/**/*.tsx' --cache --write",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "serve": "npm run serve -w @atendy/api",
+    "db:up": "docker compose up -d postgres",
+    "evolution:up": "docker compose up -d redis evolution",
+    "web": "npm run dev -w @atendy/web"
+  },
+  "devDependencies": {
+    "@ez4/project": "^0.55.0",
+    "@types/node": "^24.13.5",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
+    "dotenv-cli": "^8.0.0",
+    "eslint": "^9.32.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-promise": "^7.2.1",
+    "prettier": "^3.3.2",
+    "typescript": "^5.8.3"
+  }
+}
