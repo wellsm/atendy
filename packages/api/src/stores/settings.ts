@@ -1,15 +1,25 @@
+import type { DeliveryBand } from './geo';
 import type { HourRange } from './hours';
 import type { PaymentMethod, StorePolicy } from './types';
 
 import { normalizeNeighborhood } from './delivery';
 import { parsePolicyPatch, PolicyError } from './policy';
 import { DeliveryMode } from './types';
+import { normalizePhone } from '../storefront/web-order';
 
 export const MAX_HOUR_RANGES = 28;
 
 export const MAX_DELIVERY_ZONES = 200;
 
 export const MAX_NAME_LENGTH = 80;
+
+export const MAX_BANDS = 10;
+
+export const MIN_BAND_METERS = 100;
+
+export const MAX_BAND_METERS = 100_000;
+
+const MAX_BAND_FEE_CENTS = 10_000_000;
 
 const DAY_MINUTES = 24 * 60;
 
@@ -25,7 +35,14 @@ export const PANEL_POLICY_KEYS = [
   'max_item_qty',
   'new_customer_review_cents',
   'last_order_minutes',
-  'sop'
+  'delivery_min_minutes',
+  'delivery_max_minutes',
+  'sop',
+  'previous_address',
+  'repeat_order_statuses',
+  'new_order_after_status',
+  'add_on_category_ids',
+  'add_on_extra_minutes'
 ] as const;
 
 /**
@@ -44,6 +61,10 @@ export type DeliverySettings = {
   mode: DeliveryMode;
   flatFeeCents: number;
   zones: { neighborhood: string; feeCents: number }[];
+  /**
+   * `by_distance` only; absent = none.
+   */
+  bands?: DeliveryBand[];
 };
 
 const isCents = (value: number) => Number.isInteger(value) && value >= 0;
@@ -101,15 +122,45 @@ export const validateHours = (hours: HourRange[]) => {
 };
 
 /**
- * Valid delivery settings. Flat mode keeps no zones; by-zone mode needs at least one, unique after normalizing.
+ * 1–10 bands, strictly increasing distances within 100 m–100 km, fees from zero to R$ 100.000.
  */
-export const validateDelivery = (input: DeliverySettings): DeliverySettings => {
+export const validateBands = (bands: DeliveryBand[]) => {
+  if (!bands.length || bands.length > MAX_BANDS) {
+    throw new SettingsError('bands', `Add 1 to ${MAX_BANDS} distance bands.`);
+  }
+
+  bands.forEach(({ maxMeters, feeCents }, index) => {
+    if (!Number.isInteger(maxMeters) || maxMeters < MIN_BAND_METERS || maxMeters > MAX_BAND_METERS) {
+      throw new SettingsError('bands', 'Band distances must be between 100 m and 100 km.');
+    }
+
+    if (index > 0 && maxMeters <= bands[index - 1]!.maxMeters) {
+      throw new SettingsError('bands', 'Band distances must increase.');
+    }
+
+    if (!Number.isInteger(feeCents) || feeCents < 0 || feeCents > MAX_BAND_FEE_CENTS) {
+      throw new SettingsError('bands', 'Band fees must be between zero and R$ 100.000.');
+    }
+  });
+
+  return bands.map(({ maxMeters, feeCents }) => ({ maxMeters, feeCents }));
+};
+
+/**
+ * Valid delivery settings, keeping only the list of the chosen mode: flat keeps none; by-zone needs at least one
+ * neighborhood, unique after normalizing; by-distance needs valid bands.
+ */
+export const validateDelivery = (input: DeliverySettings): Required<DeliverySettings> => {
   if (!isCents(input.flatFeeCents)) {
     throw new SettingsError('flat_fee_cents', 'The delivery fee must be zero or more.');
   }
 
   if (input.mode === DeliveryMode.Flat) {
-    return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones: [] };
+    return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones: [], bands: [] };
+  }
+
+  if (input.mode === DeliveryMode.ByDistance) {
+    return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones: [], bands: validateBands(input.bands ?? []) };
   }
 
   if (!input.zones.length) {
@@ -144,7 +195,7 @@ export const validateDelivery = (input: DeliverySettings): DeliverySettings => {
     return { neighborhood, feeCents: zone.feeCents };
   });
 
-  return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones };
+  return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones, bands: [] };
 };
 
 export const validatePaymentMethods = (methods: PaymentMethod[]) => {
@@ -153,6 +204,20 @@ export const validatePaymentMethods = (methods: PaymentMethod[]) => {
   }
 
   return [...new Set(methods)];
+};
+
+export const validateStockAlert = (input: { phone: string | null; hour: number | null }) => {
+  const phone = input.phone === null ? null : normalizePhone(input.phone);
+
+  if (phone === undefined) {
+    throw new SettingsError('stock_alert_phone', 'Enter a valid phone with area code.');
+  }
+
+  if (input.hour !== null && (!Number.isInteger(input.hour) || input.hour < 0 || input.hour > 23)) {
+    throw new SettingsError('stock_alert_hour', 'The alert hour must be an integer from 0 to 23.');
+  }
+
+  return { phone, hour: input.hour };
 };
 
 export const validateStoreName = (name: string) => {

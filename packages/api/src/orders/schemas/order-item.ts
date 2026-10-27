@@ -1,5 +1,6 @@
 import type { Database } from '@ez4/database';
 import type { Integer, String } from '@ez4/schema';
+import type { StockUsage } from '../../stock/types';
 import type { OptionsSnapshot } from '../types';
 
 export interface OrderItemSchema extends Database.Schema {
@@ -12,5 +13,6 @@ export interface OrderItemSchema extends Database.Schema {
   unit_price_cents: Integer.Min<0>;
   options_snapshot: OptionsSnapshot;
   notes?: string | null;
+  stock_usage?: StockUsage | null;
   created_at: String.DateTime;
 }

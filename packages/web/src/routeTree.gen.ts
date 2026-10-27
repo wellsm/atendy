@@ -9,25 +9,38 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as PanelRouteImport } from './routes/_panel'
-import { Route as AdminRouteImport } from './routes/admin'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as SlugRouteImport } from './routes/$slug'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as PanelIndexRouteImport } from './routes/_panel/index'
-import { Route as PanelConfiguracoesRouteImport } from './routes/_panel/configuracoes'
-import { Route as PanelConversasRouteImport } from './routes/_panel/conversas'
-import { Route as PanelWhatsappRouteImport } from './routes/_panel/whatsapp'
-import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
-import { Route as PanelCardapioIndexRouteImport } from './routes/_panel/cardapio.index'
-import { Route as PanelCardapioProductIdRouteImport } from './routes/_panel/cardapio.$productId'
-import { Route as PanelCardapioNovoRouteImport } from './routes/_panel/cardapio.novo'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminStoreIdRouteImport } from './routes/admin.$storeId'
+import { Route as AdminCostsRouteImport } from './routes/admin.costs'
+import { Route as AdminPromptRouteImport } from './routes/admin.prompt'
+import { Route as AdminProspectingRouteImport } from './routes/admin.prospecting'
+import { Route as PanelIndexRouteImport } from './routes/panel.index'
+import { Route as PanelSlugRouteImport } from './routes/panel.$slug'
+import { Route as SignInIndexRouteImport } from './routes/sign-in.index'
+import { Route as SignInSsoCallbackRouteImport } from './routes/sign-in.sso-callback'
+import { Route as AdminConversationsIndexRouteImport } from './routes/admin.conversations.index'
+import { Route as AdminConversationsConversationIdRouteImport } from './routes/admin.conversations.$conversationId'
+import { Route as AdminSimulationsIndexRouteImport } from './routes/admin.simulations.index'
+import { Route as AdminSimulationsRunIdRouteImport } from './routes/admin.simulations.$runId'
+import { Route as PanelSlugIndexRouteImport } from './routes/panel.$slug/index'
+import { Route as PanelSlugBillingRouteImport } from './routes/panel.$slug/billing'
+import { Route as PanelSlugConversationsRouteImport } from './routes/panel.$slug/conversations'
+import { Route as PanelSlugSettingsRouteImport } from './routes/panel.$slug/settings'
+import { Route as PanelSlugWhatsappRouteImport } from './routes/panel.$slug/whatsapp'
+import { Route as PanelSlugMenuIndexRouteImport } from './routes/panel.$slug/menu.index'
+import { Route as PanelSlugMenuProductIdRouteImport } from './routes/panel.$slug/menu.$productId'
 
-const PanelRoute = PanelRouteImport.update({
-  id: '/_panel',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+const SlugRoute = SlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -35,146 +48,293 @@ const OnboardingRoute = OnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PanelIndexRoute = PanelIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => PanelRoute,
-} as any)
-const PanelConfiguracoesRoute = PanelConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => PanelRoute,
-} as any)
-const PanelConversasRoute = PanelConversasRouteImport.update({
-  id: '/conversas',
-  path: '/conversas',
-  getParentRoute: () => PanelRoute,
-} as any)
-const PanelWhatsappRoute = PanelWhatsappRouteImport.update({
-  id: '/whatsapp',
-  path: '/whatsapp',
-  getParentRoute: () => PanelRoute,
-} as any)
-const SignInSplatRoute = SignInSplatRouteImport.update({
-  id: '/sign-in/$',
-  path: '/sign-in/$',
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PanelCardapioIndexRoute = PanelCardapioIndexRouteImport.update({
-  id: '/cardapio/',
-  path: '/cardapio/',
-  getParentRoute: () => PanelRoute,
+const AdminStoreIdRoute = AdminStoreIdRouteImport.update({
+  id: '/admin/$storeId',
+  path: '/admin/$storeId',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PanelCardapioProductIdRoute = PanelCardapioProductIdRouteImport.update({
-  id: '/cardapio/$productId',
-  path: '/cardapio/$productId',
-  getParentRoute: () => PanelRoute,
+const AdminCostsRoute = AdminCostsRouteImport.update({
+  id: '/admin/costs',
+  path: '/admin/costs',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PanelCardapioNovoRoute = PanelCardapioNovoRouteImport.update({
-  id: '/cardapio/novo',
-  path: '/cardapio/novo',
-  getParentRoute: () => PanelRoute,
+const AdminPromptRoute = AdminPromptRouteImport.update({
+  id: '/admin/prompt',
+  path: '/admin/prompt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminProspectingRoute = AdminProspectingRouteImport.update({
+  id: '/admin/prospecting',
+  path: '/admin/prospecting',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PanelIndexRoute = PanelIndexRouteImport.update({
+  id: '/panel/',
+  path: '/panel/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PanelSlugRoute = PanelSlugRouteImport.update({
+  id: '/panel/$slug',
+  path: '/panel/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInIndexRoute = SignInIndexRouteImport.update({
+  id: '/sign-in/',
+  path: '/sign-in/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInSsoCallbackRoute = SignInSsoCallbackRouteImport.update({
+  id: '/sign-in/sso-callback',
+  path: '/sign-in/sso-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminConversationsIndexRoute = AdminConversationsIndexRouteImport.update({
+  id: '/admin/conversations/',
+  path: '/admin/conversations/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminConversationsConversationIdRoute =
+  AdminConversationsConversationIdRouteImport.update({
+    id: '/admin/conversations/$conversationId',
+    path: '/admin/conversations/$conversationId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminSimulationsIndexRoute = AdminSimulationsIndexRouteImport.update({
+  id: '/admin/simulations/',
+  path: '/admin/simulations/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSimulationsRunIdRoute = AdminSimulationsRunIdRouteImport.update({
+  id: '/admin/simulations/$runId',
+  path: '/admin/simulations/$runId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PanelSlugIndexRoute = PanelSlugIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PanelSlugRoute,
+} as any)
+const PanelSlugBillingRoute = PanelSlugBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => PanelSlugRoute,
+} as any)
+const PanelSlugConversationsRoute = PanelSlugConversationsRouteImport.update({
+  id: '/conversations',
+  path: '/conversations',
+  getParentRoute: () => PanelSlugRoute,
+} as any)
+const PanelSlugSettingsRoute = PanelSlugSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => PanelSlugRoute,
+} as any)
+const PanelSlugWhatsappRoute = PanelSlugWhatsappRouteImport.update({
+  id: '/whatsapp',
+  path: '/whatsapp',
+  getParentRoute: () => PanelSlugRoute,
+} as any)
+const PanelSlugMenuIndexRoute = PanelSlugMenuIndexRouteImport.update({
+  id: '/menu/',
+  path: '/menu/',
+  getParentRoute: () => PanelSlugRoute,
+} as any)
+const PanelSlugMenuProductIdRoute = PanelSlugMenuProductIdRouteImport.update({
+  id: '/menu/$productId',
+  path: '/menu/$productId',
+  getParentRoute: () => PanelSlugRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof PanelIndexRoute
-  '/admin': typeof AdminRoute
+  '/': typeof IndexRoute
+  '/$slug': typeof SlugRoute
   '/onboarding': typeof OnboardingRoute
-  '/configuracoes': typeof PanelConfiguracoesRoute
-  '/conversas': typeof PanelConversasRoute
-  '/whatsapp': typeof PanelWhatsappRoute
-  '/sign-in/$': typeof SignInSplatRoute
-  '/cardapio/$productId': typeof PanelCardapioProductIdRoute
-  '/cardapio/novo': typeof PanelCardapioNovoRoute
-  '/cardapio/': typeof PanelCardapioIndexRoute
+  '/admin/$storeId': typeof AdminStoreIdRoute
+  '/admin/costs': typeof AdminCostsRoute
+  '/admin/prompt': typeof AdminPromptRoute
+  '/admin/prospecting': typeof AdminProspectingRoute
+  '/panel/$slug': typeof PanelSlugRouteWithChildren
+  '/sign-in/sso-callback': typeof SignInSsoCallbackRoute
+  '/admin/': typeof AdminIndexRoute
+  '/panel/': typeof PanelIndexRoute
+  '/sign-in/': typeof SignInIndexRoute
+  '/admin/conversations/$conversationId': typeof AdminConversationsConversationIdRoute
+  '/admin/simulations/$runId': typeof AdminSimulationsRunIdRoute
+  '/panel/$slug/billing': typeof PanelSlugBillingRoute
+  '/panel/$slug/conversations': typeof PanelSlugConversationsRoute
+  '/panel/$slug/settings': typeof PanelSlugSettingsRoute
+  '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
+  '/admin/conversations/': typeof AdminConversationsIndexRoute
+  '/admin/simulations/': typeof AdminSimulationsIndexRoute
+  '/panel/$slug/': typeof PanelSlugIndexRoute
+  '/panel/$slug/menu/$productId': typeof PanelSlugMenuProductIdRoute
+  '/panel/$slug/menu/': typeof PanelSlugMenuIndexRoute
 }
 export interface FileRoutesByTo {
-  '/admin': typeof AdminRoute
+  '/': typeof IndexRoute
+  '/$slug': typeof SlugRoute
   '/onboarding': typeof OnboardingRoute
-  '/configuracoes': typeof PanelConfiguracoesRoute
-  '/conversas': typeof PanelConversasRoute
-  '/whatsapp': typeof PanelWhatsappRoute
-  '/sign-in/$': typeof SignInSplatRoute
-  '/': typeof PanelIndexRoute
-  '/cardapio/$productId': typeof PanelCardapioProductIdRoute
-  '/cardapio/novo': typeof PanelCardapioNovoRoute
-  '/cardapio': typeof PanelCardapioIndexRoute
+  '/admin/$storeId': typeof AdminStoreIdRoute
+  '/admin/costs': typeof AdminCostsRoute
+  '/admin/prompt': typeof AdminPromptRoute
+  '/admin/prospecting': typeof AdminProspectingRoute
+  '/sign-in/sso-callback': typeof SignInSsoCallbackRoute
+  '/admin': typeof AdminIndexRoute
+  '/panel': typeof PanelIndexRoute
+  '/sign-in': typeof SignInIndexRoute
+  '/admin/conversations/$conversationId': typeof AdminConversationsConversationIdRoute
+  '/admin/simulations/$runId': typeof AdminSimulationsRunIdRoute
+  '/panel/$slug/billing': typeof PanelSlugBillingRoute
+  '/panel/$slug/conversations': typeof PanelSlugConversationsRoute
+  '/panel/$slug/settings': typeof PanelSlugSettingsRoute
+  '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
+  '/admin/conversations': typeof AdminConversationsIndexRoute
+  '/admin/simulations': typeof AdminSimulationsIndexRoute
+  '/panel/$slug': typeof PanelSlugIndexRoute
+  '/panel/$slug/menu/$productId': typeof PanelSlugMenuProductIdRoute
+  '/panel/$slug/menu': typeof PanelSlugMenuIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_panel': typeof PanelRouteWithChildren
-  '/admin': typeof AdminRoute
+  '/': typeof IndexRoute
+  '/$slug': typeof SlugRoute
   '/onboarding': typeof OnboardingRoute
-  '/_panel/configuracoes': typeof PanelConfiguracoesRoute
-  '/_panel/conversas': typeof PanelConversasRoute
-  '/_panel/whatsapp': typeof PanelWhatsappRoute
-  '/sign-in/$': typeof SignInSplatRoute
-  '/_panel/': typeof PanelIndexRoute
-  '/_panel/cardapio/$productId': typeof PanelCardapioProductIdRoute
-  '/_panel/cardapio/novo': typeof PanelCardapioNovoRoute
-  '/_panel/cardapio/': typeof PanelCardapioIndexRoute
+  '/admin/$storeId': typeof AdminStoreIdRoute
+  '/admin/costs': typeof AdminCostsRoute
+  '/admin/prompt': typeof AdminPromptRoute
+  '/admin/prospecting': typeof AdminProspectingRoute
+  '/panel/$slug': typeof PanelSlugRouteWithChildren
+  '/sign-in/sso-callback': typeof SignInSsoCallbackRoute
+  '/admin/': typeof AdminIndexRoute
+  '/panel/': typeof PanelIndexRoute
+  '/sign-in/': typeof SignInIndexRoute
+  '/admin/conversations/$conversationId': typeof AdminConversationsConversationIdRoute
+  '/admin/simulations/$runId': typeof AdminSimulationsRunIdRoute
+  '/panel/$slug/billing': typeof PanelSlugBillingRoute
+  '/panel/$slug/conversations': typeof PanelSlugConversationsRoute
+  '/panel/$slug/settings': typeof PanelSlugSettingsRoute
+  '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
+  '/admin/conversations/': typeof AdminConversationsIndexRoute
+  '/admin/simulations/': typeof AdminSimulationsIndexRoute
+  '/panel/$slug/': typeof PanelSlugIndexRoute
+  '/panel/$slug/menu/$productId': typeof PanelSlugMenuProductIdRoute
+  '/panel/$slug/menu/': typeof PanelSlugMenuIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/admin'
+    | '/$slug'
     | '/onboarding'
-    | '/configuracoes'
-    | '/conversas'
-    | '/whatsapp'
-    | '/sign-in/$'
-    | '/cardapio/$productId'
-    | '/cardapio/novo'
-    | '/cardapio/'
+    | '/admin/$storeId'
+    | '/admin/costs'
+    | '/admin/prompt'
+    | '/admin/prospecting'
+    | '/panel/$slug'
+    | '/sign-in/sso-callback'
+    | '/admin/'
+    | '/panel/'
+    | '/sign-in/'
+    | '/admin/conversations/$conversationId'
+    | '/admin/simulations/$runId'
+    | '/panel/$slug/billing'
+    | '/panel/$slug/conversations'
+    | '/panel/$slug/settings'
+    | '/panel/$slug/whatsapp'
+    | '/admin/conversations/'
+    | '/admin/simulations/'
+    | '/panel/$slug/'
+    | '/panel/$slug/menu/$productId'
+    | '/panel/$slug/menu/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/admin'
-    | '/onboarding'
-    | '/configuracoes'
-    | '/conversas'
-    | '/whatsapp'
-    | '/sign-in/$'
     | '/'
-    | '/cardapio/$productId'
-    | '/cardapio/novo'
-    | '/cardapio'
+    | '/$slug'
+    | '/onboarding'
+    | '/admin/$storeId'
+    | '/admin/costs'
+    | '/admin/prompt'
+    | '/admin/prospecting'
+    | '/sign-in/sso-callback'
+    | '/admin'
+    | '/panel'
+    | '/sign-in'
+    | '/admin/conversations/$conversationId'
+    | '/admin/simulations/$runId'
+    | '/panel/$slug/billing'
+    | '/panel/$slug/conversations'
+    | '/panel/$slug/settings'
+    | '/panel/$slug/whatsapp'
+    | '/admin/conversations'
+    | '/admin/simulations'
+    | '/panel/$slug'
+    | '/panel/$slug/menu/$productId'
+    | '/panel/$slug/menu'
   id:
     | '__root__'
-    | '/_panel'
-    | '/admin'
+    | '/'
+    | '/$slug'
     | '/onboarding'
-    | '/_panel/configuracoes'
-    | '/_panel/conversas'
-    | '/_panel/whatsapp'
-    | '/sign-in/$'
-    | '/_panel/'
-    | '/_panel/cardapio/$productId'
-    | '/_panel/cardapio/novo'
-    | '/_panel/cardapio/'
+    | '/admin/$storeId'
+    | '/admin/costs'
+    | '/admin/prompt'
+    | '/admin/prospecting'
+    | '/panel/$slug'
+    | '/sign-in/sso-callback'
+    | '/admin/'
+    | '/panel/'
+    | '/sign-in/'
+    | '/admin/conversations/$conversationId'
+    | '/admin/simulations/$runId'
+    | '/panel/$slug/billing'
+    | '/panel/$slug/conversations'
+    | '/panel/$slug/settings'
+    | '/panel/$slug/whatsapp'
+    | '/admin/conversations/'
+    | '/admin/simulations/'
+    | '/panel/$slug/'
+    | '/panel/$slug/menu/$productId'
+    | '/panel/$slug/menu/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  PanelRoute: typeof PanelRouteWithChildren
-  AdminRoute: typeof AdminRoute
+  IndexRoute: typeof IndexRoute
+  SlugRoute: typeof SlugRoute
   OnboardingRoute: typeof OnboardingRoute
-  SignInSplatRoute: typeof SignInSplatRoute
+  AdminStoreIdRoute: typeof AdminStoreIdRoute
+  AdminCostsRoute: typeof AdminCostsRoute
+  AdminPromptRoute: typeof AdminPromptRoute
+  AdminProspectingRoute: typeof AdminProspectingRoute
+  PanelSlugRoute: typeof PanelSlugRouteWithChildren
+  SignInSsoCallbackRoute: typeof SignInSsoCallbackRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  PanelIndexRoute: typeof PanelIndexRoute
+  SignInIndexRoute: typeof SignInIndexRoute
+  AdminConversationsConversationIdRoute: typeof AdminConversationsConversationIdRoute
+  AdminSimulationsRunIdRoute: typeof AdminSimulationsRunIdRoute
+  AdminConversationsIndexRoute: typeof AdminConversationsIndexRoute
+  AdminSimulationsIndexRoute: typeof AdminSimulationsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_panel': {
-      id: '/_panel'
-      path: ''
+    '/': {
+      id: '/'
+      path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof PanelRouteImport
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
+    '/$slug': {
+      id: '/$slug'
+      path: '/$slug'
+      fullPath: '/$slug'
+      preLoaderRoute: typeof SlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -184,92 +344,190 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_panel/': {
-      id: '/_panel/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof PanelIndexRouteImport
-      parentRoute: typeof PanelRoute
-    }
-    '/_panel/configuracoes': {
-      id: '/_panel/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof PanelConfiguracoesRouteImport
-      parentRoute: typeof PanelRoute
-    }
-    '/_panel/conversas': {
-      id: '/_panel/conversas'
-      path: '/conversas'
-      fullPath: '/conversas'
-      preLoaderRoute: typeof PanelConversasRouteImport
-      parentRoute: typeof PanelRoute
-    }
-    '/_panel/whatsapp': {
-      id: '/_panel/whatsapp'
-      path: '/whatsapp'
-      fullPath: '/whatsapp'
-      preLoaderRoute: typeof PanelWhatsappRouteImport
-      parentRoute: typeof PanelRoute
-    }
-    '/sign-in/$': {
-      id: '/sign-in/$'
-      path: '/sign-in/$'
-      fullPath: '/sign-in/$'
-      preLoaderRoute: typeof SignInSplatRouteImport
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_panel/cardapio/': {
-      id: '/_panel/cardapio/'
-      path: '/cardapio'
-      fullPath: '/cardapio/'
-      preLoaderRoute: typeof PanelCardapioIndexRouteImport
-      parentRoute: typeof PanelRoute
+    '/admin/$storeId': {
+      id: '/admin/$storeId'
+      path: '/admin/$storeId'
+      fullPath: '/admin/$storeId'
+      preLoaderRoute: typeof AdminStoreIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_panel/cardapio/$productId': {
-      id: '/_panel/cardapio/$productId'
-      path: '/cardapio/$productId'
-      fullPath: '/cardapio/$productId'
-      preLoaderRoute: typeof PanelCardapioProductIdRouteImport
-      parentRoute: typeof PanelRoute
+    '/admin/costs': {
+      id: '/admin/costs'
+      path: '/admin/costs'
+      fullPath: '/admin/costs'
+      preLoaderRoute: typeof AdminCostsRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_panel/cardapio/novo': {
-      id: '/_panel/cardapio/novo'
-      path: '/cardapio/novo'
-      fullPath: '/cardapio/novo'
-      preLoaderRoute: typeof PanelCardapioNovoRouteImport
-      parentRoute: typeof PanelRoute
+    '/admin/prompt': {
+      id: '/admin/prompt'
+      path: '/admin/prompt'
+      fullPath: '/admin/prompt'
+      preLoaderRoute: typeof AdminPromptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/prospecting': {
+      id: '/admin/prospecting'
+      path: '/admin/prospecting'
+      fullPath: '/admin/prospecting'
+      preLoaderRoute: typeof AdminProspectingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/panel/': {
+      id: '/panel/'
+      path: '/panel'
+      fullPath: '/panel/'
+      preLoaderRoute: typeof PanelIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/panel/$slug': {
+      id: '/panel/$slug'
+      path: '/panel/$slug'
+      fullPath: '/panel/$slug'
+      preLoaderRoute: typeof PanelSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in/': {
+      id: '/sign-in/'
+      path: '/sign-in'
+      fullPath: '/sign-in/'
+      preLoaderRoute: typeof SignInIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in/sso-callback': {
+      id: '/sign-in/sso-callback'
+      path: '/sign-in/sso-callback'
+      fullPath: '/sign-in/sso-callback'
+      preLoaderRoute: typeof SignInSsoCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/conversations/': {
+      id: '/admin/conversations/'
+      path: '/admin/conversations'
+      fullPath: '/admin/conversations/'
+      preLoaderRoute: typeof AdminConversationsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/conversations/$conversationId': {
+      id: '/admin/conversations/$conversationId'
+      path: '/admin/conversations/$conversationId'
+      fullPath: '/admin/conversations/$conversationId'
+      preLoaderRoute: typeof AdminConversationsConversationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/simulations/': {
+      id: '/admin/simulations/'
+      path: '/admin/simulations'
+      fullPath: '/admin/simulations/'
+      preLoaderRoute: typeof AdminSimulationsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/simulations/$runId': {
+      id: '/admin/simulations/$runId'
+      path: '/admin/simulations/$runId'
+      fullPath: '/admin/simulations/$runId'
+      preLoaderRoute: typeof AdminSimulationsRunIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/panel/$slug/': {
+      id: '/panel/$slug/'
+      path: '/'
+      fullPath: '/panel/$slug/'
+      preLoaderRoute: typeof PanelSlugIndexRouteImport
+      parentRoute: typeof PanelSlugRoute
+    }
+    '/panel/$slug/billing': {
+      id: '/panel/$slug/billing'
+      path: '/billing'
+      fullPath: '/panel/$slug/billing'
+      preLoaderRoute: typeof PanelSlugBillingRouteImport
+      parentRoute: typeof PanelSlugRoute
+    }
+    '/panel/$slug/conversations': {
+      id: '/panel/$slug/conversations'
+      path: '/conversations'
+      fullPath: '/panel/$slug/conversations'
+      preLoaderRoute: typeof PanelSlugConversationsRouteImport
+      parentRoute: typeof PanelSlugRoute
+    }
+    '/panel/$slug/settings': {
+      id: '/panel/$slug/settings'
+      path: '/settings'
+      fullPath: '/panel/$slug/settings'
+      preLoaderRoute: typeof PanelSlugSettingsRouteImport
+      parentRoute: typeof PanelSlugRoute
+    }
+    '/panel/$slug/whatsapp': {
+      id: '/panel/$slug/whatsapp'
+      path: '/whatsapp'
+      fullPath: '/panel/$slug/whatsapp'
+      preLoaderRoute: typeof PanelSlugWhatsappRouteImport
+      parentRoute: typeof PanelSlugRoute
+    }
+    '/panel/$slug/menu/': {
+      id: '/panel/$slug/menu/'
+      path: '/menu'
+      fullPath: '/panel/$slug/menu/'
+      preLoaderRoute: typeof PanelSlugMenuIndexRouteImport
+      parentRoute: typeof PanelSlugRoute
+    }
+    '/panel/$slug/menu/$productId': {
+      id: '/panel/$slug/menu/$productId'
+      path: '/menu/$productId'
+      fullPath: '/panel/$slug/menu/$productId'
+      preLoaderRoute: typeof PanelSlugMenuProductIdRouteImport
+      parentRoute: typeof PanelSlugRoute
     }
   }
 }
 
-interface PanelRouteChildren {
-  PanelConfiguracoesRoute: typeof PanelConfiguracoesRoute
-  PanelConversasRoute: typeof PanelConversasRoute
-  PanelWhatsappRoute: typeof PanelWhatsappRoute
-  PanelIndexRoute: typeof PanelIndexRoute
-  PanelCardapioProductIdRoute: typeof PanelCardapioProductIdRoute
-  PanelCardapioNovoRoute: typeof PanelCardapioNovoRoute
-  PanelCardapioIndexRoute: typeof PanelCardapioIndexRoute
+interface PanelSlugRouteChildren {
+  PanelSlugBillingRoute: typeof PanelSlugBillingRoute
+  PanelSlugConversationsRoute: typeof PanelSlugConversationsRoute
+  PanelSlugSettingsRoute: typeof PanelSlugSettingsRoute
+  PanelSlugWhatsappRoute: typeof PanelSlugWhatsappRoute
+  PanelSlugIndexRoute: typeof PanelSlugIndexRoute
+  PanelSlugMenuProductIdRoute: typeof PanelSlugMenuProductIdRoute
+  PanelSlugMenuIndexRoute: typeof PanelSlugMenuIndexRoute
 }
 
-const PanelRouteChildren: PanelRouteChildren = {
-  PanelConfiguracoesRoute: PanelConfiguracoesRoute,
-  PanelConversasRoute: PanelConversasRoute,
-  PanelWhatsappRoute: PanelWhatsappRoute,
-  PanelIndexRoute: PanelIndexRoute,
-  PanelCardapioProductIdRoute: PanelCardapioProductIdRoute,
-  PanelCardapioNovoRoute: PanelCardapioNovoRoute,
-  PanelCardapioIndexRoute: PanelCardapioIndexRoute,
+const PanelSlugRouteChildren: PanelSlugRouteChildren = {
+  PanelSlugBillingRoute: PanelSlugBillingRoute,
+  PanelSlugConversationsRoute: PanelSlugConversationsRoute,
+  PanelSlugSettingsRoute: PanelSlugSettingsRoute,
+  PanelSlugWhatsappRoute: PanelSlugWhatsappRoute,
+  PanelSlugIndexRoute: PanelSlugIndexRoute,
+  PanelSlugMenuProductIdRoute: PanelSlugMenuProductIdRoute,
+  PanelSlugMenuIndexRoute: PanelSlugMenuIndexRoute,
 }
 
-const PanelRouteWithChildren = PanelRoute._addFileChildren(PanelRouteChildren)
+const PanelSlugRouteWithChildren = PanelSlugRoute._addFileChildren(
+  PanelSlugRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
-  PanelRoute: PanelRouteWithChildren,
-  AdminRoute: AdminRoute,
+  IndexRoute: IndexRoute,
+  SlugRoute: SlugRoute,
   OnboardingRoute: OnboardingRoute,
-  SignInSplatRoute: SignInSplatRoute,
+  AdminStoreIdRoute: AdminStoreIdRoute,
+  AdminCostsRoute: AdminCostsRoute,
+  AdminPromptRoute: AdminPromptRoute,
+  AdminProspectingRoute: AdminProspectingRoute,
+  PanelSlugRoute: PanelSlugRouteWithChildren,
+  SignInSsoCallbackRoute: SignInSsoCallbackRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  PanelIndexRoute: PanelIndexRoute,
+  SignInIndexRoute: SignInIndexRoute,
+  AdminConversationsConversationIdRoute: AdminConversationsConversationIdRoute,
+  AdminSimulationsRunIdRoute: AdminSimulationsRunIdRoute,
+  AdminConversationsIndexRoute: AdminConversationsIndexRoute,
+  AdminSimulationsIndexRoute: AdminSimulationsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,8 +1,9 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
-import type { PanelProvider } from '../provider';
+import type { PanelMenuProvider } from '../provider';
 import type { PanelIdentity, PanelMenuCategory } from '../types';
 
+import { withImageUrls } from '../../menu/images';
 import { MenuRepository } from '../../menu/repository';
 import { requireStore } from '../store';
 
@@ -22,9 +23,12 @@ export declare class GetMenuResponse implements Http.Response {
  */
 export async function getMenuHandler(
   request: Http.Incoming<GetMenuRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db, productImages }: Service.Context<PanelMenuProvider>
 ): Promise<GetMenuResponse> {
   const store = await requireStore(db, request.identity);
 
-  return { status: 200, body: { categories: await MenuRepository.loadPanel(db, store.id) } };
+  return {
+    status: 200,
+    body: { categories: await withImageUrls(productImages, await MenuRepository.loadPanel(db, store.id)) }
+  };
 }

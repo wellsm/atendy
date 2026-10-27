@@ -4,7 +4,18 @@ export const enum OrderStatus {
   Accepted = 'accepted',
   Out = 'out',
   Done = 'done',
-  Canceled = 'canceled'
+  Canceled = 'canceled',
+  /**
+   * A draft the customer left: no message for longer than the store's order memory window.
+   */
+  Abandoned = 'abandoned'
+}
+
+/**
+ * Where an order came from when not the WhatsApp conversation (null = WhatsApp, bot or attendant).
+ */
+export const enum OrderSource {
+  Web = 'web'
 }
 
 export const enum Fulfillment {

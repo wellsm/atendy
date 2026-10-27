@@ -7,9 +7,11 @@ import { afterEach, describe, it, mock } from 'node:test';
 import { HttpBadRequestError, HttpConflictError, HttpNotFoundError } from '@ez4/gateway';
 import { DatabaseTester } from '@ez4/local-database/test';
 
+import { ConversationRepository } from '../../src/conversations/repository';
 import { ConversationMode, MessageAuthor } from '../../src/conversations/types';
 import { PanelOrderScope } from '../../src/orders/repository';
 import { OrderStatus } from '../../src/orders/types';
+import { approveConversationHandler } from '../../src/panel/endpoints/approve-conversation';
 import { getConversationHandler } from '../../src/panel/endpoints/get-conversation';
 import { listConversationsHandler } from '../../src/panel/endpoints/list-conversations';
 import { listOrdersHandler } from '../../src/panel/endpoints/list-orders';
@@ -104,7 +106,7 @@ describe('panel operations endpoints', () => {
     equal(response.body.notified, true);
     deepEqual(
       sent.map(({ text }) => text),
-      ['Seu pedido foi aceito e já está sendo preparado!']
+      [`✅ Pedido #${response.body.order.code} aceito! Já está sendo preparado 👨‍🍳`]
     );
 
     const rows = await staffRows(conversationId);
@@ -156,36 +158,110 @@ describe('panel operations endpoints', () => {
       list.body.conversations.map(({ id }) => id),
       [conversationId]
     );
+    deepEqual(list.body.conversations[0]?.lastMessage, { author: MessageAuthor.Customer, body: 'oi' });
 
-    const thread = await getConversationHandler({ identity, parameters: { conversationId } } as never, { db });
+    const voiceNotes = { getReadUrl: (key: string) => Promise.resolve(`http://bucket/${key}`) } as never;
+
+    await db.messages.updateMany({
+      data: { reaction: '👍', audio_key: 'voice-notes/s/m' },
+      where: { conversation_id: conversationId }
+    });
+
+    const thread = await getConversationHandler({ identity, parameters: { conversationId } } as never, {
+      db,
+      voiceNotes
+    });
 
     equal(thread.body.conversation.mode, ConversationMode.Bot);
     deepEqual(
-      thread.body.messages.map(({ body }) => body),
-      ['oi']
+      thread.body.messages.map(({ body, reaction, audioUrl }) => [body, reaction, audioUrl]),
+      [['oi', '👍', 'http://bucket/voice-notes/s/m']]
     );
 
     await rejects(
-      getConversationHandler({ identity: other.identity, parameters: { conversationId } } as never, { db }),
+      getConversationHandler({ identity: other.identity, parameters: { conversationId } } as never, { db, voiceNotes }),
       HttpNotFoundError
     );
   });
 
-  it('takes over and gives back to the bot', async () => {
+  it('takes over and gives back to the bot, which answers what nobody answered', async () => {
     const { identity, conversationId } = await setup();
+    const queued: Record<string, unknown>[] = [];
+    const inboundQueue = { sendMessage: (event: Record<string, unknown>) => (queued.push(event), Promise.resolve()) };
 
     const update = (mode: ConversationMode) =>
-      updateConversationHandler({ identity, parameters: { conversationId }, body: { mode } } as never, { db });
+      updateConversationHandler(
+        { identity, parameters: { conversationId }, body: { mode } } as never,
+        {
+          db,
+          inboundQueue
+        } as never
+      );
 
     const human = await update(ConversationMode.Human);
 
     equal(human.body.conversation.mode, ConversationMode.Human);
     equal(human.body.conversation.handoffReason, 'staff_took_over');
+    equal(queued.length, 0);
 
     const bot = await update(ConversationMode.Bot);
 
     equal(bot.body.conversation.mode, ConversationMode.Bot);
     equal(bot.body.conversation.handoffReason, null);
+
+    // The customer's "oi" was never answered: it is pending again and queued.
+    const pending = await ConversationRepository.pendingInbound(db, conversationId);
+
+    deepEqual(
+      pending.map(({ body }) => body),
+      ['oi']
+    );
+    deepEqual(
+      queued.map(({ messageId, kind }) => ({ messageId, kind })),
+      [{ messageId: pending[0]!.id, kind: 'customer' }]
+    );
+  });
+
+  it('approves what the bot asked and queues the waiting messages', async () => {
+    const { identity, conversationId } = await setup();
+    const queued: Record<string, unknown>[] = [];
+    const inboundQueue = { sendMessage: (event: Record<string, unknown>) => (queued.push(event), Promise.resolve()) };
+    const approve = () =>
+      approveConversationHandler({ identity, parameters: { conversationId } } as never, { db, inboundQueue } as never);
+
+    await rejects(approve(), HttpConflictError);
+
+    await ConversationRepository.requestApproval(db, { conversationId, reason: 'order_limit' });
+
+    const listed = await listConversationsHandler({ identity } as never, { db });
+
+    equal(listed.body.conversations[0]?.approvalReason, 'order_limit');
+
+    const response = await approve();
+
+    equal(response.body.conversation.approvalReason, null);
+    equal(queued.length, 1);
+
+    const conversation = await db.conversations.findOne({
+      select: { approval_reason: true, approved_reason: true },
+      where: { id: conversationId }
+    });
+
+    deepEqual(conversation, { approval_reason: null, approved_reason: 'order_limit' });
+  });
+
+  it('taking over a conversation waiting for approval keeps the reason', async () => {
+    const { identity, conversationId } = await setup();
+
+    await ConversationRepository.requestApproval(db, { conversationId, reason: 'suspected_prank' });
+
+    const human = await updateConversationHandler(
+      { identity, parameters: { conversationId }, body: { mode: ConversationMode.Human } } as never,
+      { db, inboundQueue: { sendMessage: () => Promise.resolve() } } as never
+    );
+
+    equal(human.body.conversation.handoffReason, 'suspected_prank');
+    equal(human.body.conversation.approvalReason, null);
   });
 
   it('replies from the panel: takes over, sends and stores the staff message', async () => {

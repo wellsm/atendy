@@ -1,7 +1,8 @@
 import type { DbClient } from '../db';
+import type { Coordinates, DeliveryBand } from './geo';
 import type { HourRange } from './hours';
 import type { DeliverySettings } from './settings';
-import type { StorePolicy } from './types';
+import type { OrderCodeMode, StorePolicy } from './types';
 
 import { randomBytes, randomUUID } from 'node:crypto';
 
@@ -31,6 +32,22 @@ const PANEL_STORE_FIELDS = {
   accepting_orders: true,
   timezone: true
 } as const;
+
+const HEALTH_WINDOW_MS = 24 * 60 * 60_000;
+
+const RECENT_ERRORS = 5;
+
+/**
+ * Handoff reasons the inbound queue sets when the bot or WhatsApp failed.
+ */
+const ERROR_REASONS = ['send_failed', 'technical_error'];
+
+export type StoreHealth = {
+  lastMessageAt: string | null;
+  errorCount24h: number;
+  recentErrors: { conversationId: string; reason: string; at: string }[];
+  activeProducts: number;
+};
 
 export namespace StoreRepository {
   /**
@@ -91,16 +108,124 @@ export namespace StoreRepository {
     return store ?? undefined;
   };
 
+  export const findBySlug = async (db: DbClient, slug: string) => {
+    const store = await db.stores.findOne({ select: PANEL_STORE_FIELDS, where: { slug } });
+
+    return store ?? undefined;
+  };
+
+  /**
+   * Stores of these Clerk orgs (the panel's store switcher).
+   */
+  export const listByOrgIds = async (db: DbClient, orgIds: string[]) => {
+    const { records } = await db.stores.findMany({
+      select: { clerk_org_id: true, slug: true, name: true },
+      where: { clerk_org_id: { isIn: orgIds } }
+    });
+
+    return records;
+  };
+
   /**
    * Inactive stores first (waiting for the admin), newest first.
    */
   export const listForAdmin = async (db: DbClient) => {
     const { records } = await db.stores.findMany({
-      select: { ...PANEL_STORE_FIELDS, created_at: true },
+      select: { ...PANEL_STORE_FIELDS, created_at: true, router: true, llm_model: true },
       order: { created_at: Order.Desc }
     });
 
     return records.sort((a, b) => Number(a.active) - Number(b.active));
+  };
+
+  /**
+   * Store as the admin sees it, with the technical settings; undefined when unknown.
+   */
+  export const getAdminStore = async (db: DbClient, storeId: string) => {
+    return db.stores.findOne({
+      select: {
+        ...PANEL_STORE_FIELDS,
+        created_at: true,
+        router: true,
+        llm_model: true,
+        policy: true,
+        order_price_cents: true,
+        web_order_percent: true,
+        order_code_mode: true
+      },
+      where: { id: storeId }
+    });
+  };
+
+  /**
+   * `null` goes back to the default price.
+   */
+  export const setOrderPrice = async (db: DbClient, storeId: string, cents: number | null) => {
+    await db.stores.updateOne({
+      data: { order_price_cents: cents, updated_at: new Date().toISOString() },
+      where: { id: storeId }
+    });
+  };
+
+  /**
+   * `null` goes back to the default percent.
+   */
+  export const setWebOrderPercent = async (db: DbClient, storeId: string, percent: number | null) => {
+    await db.stores.updateOne({
+      data: { web_order_percent: percent, updated_at: new Date().toISOString() },
+      where: { id: storeId }
+    });
+  };
+
+  /**
+   * Switching to sequential keeps counting from the last number given (or 1).
+   */
+  export const setOrderCodeMode = async (db: DbClient, storeId: string, mode: OrderCodeMode) => {
+    await db.stores.updateOne({
+      data: { order_code_mode: mode, updated_at: new Date().toISOString() },
+      where: { id: storeId }
+    });
+  };
+
+  export const setLlmModel = async (db: DbClient, storeId: string, model: string) => {
+    await db.stores.updateOne({
+      data: { llm_model: model, updated_at: new Date().toISOString() },
+      where: { id: storeId }
+    });
+  };
+
+  /**
+   * Signals that a store is broken, from data that already exists. Errors are conversations whose last handoff was a
+   * failed send or a bot failure, active within the last 24 h (conversation-level, so an approximation).
+   */
+  export const getHealth = async (db: DbClient, storeId: string, now = new Date()): Promise<StoreHealth> => {
+    const since = new Date(now.getTime() - HEALTH_WINDOW_MS).toISOString();
+
+    const [{ records: latest }, { records: errors }, activeProducts] = await Promise.all([
+      db.conversations.findMany({
+        select: { last_message_at: true },
+        where: { store_id: storeId },
+        order: { last_message_at: Order.Desc },
+        take: 1
+      }),
+      db.conversations.findMany({
+        select: { id: true, handoff_reason: true, last_message_at: true },
+        where: { store_id: storeId, handoff_reason: { isIn: ERROR_REASONS }, last_message_at: { gte: since } },
+        order: { last_message_at: Order.Desc }
+      }),
+      db.products.count({ where: { store_id: storeId, active: true } })
+    ]);
+
+    return {
+      lastMessageAt: latest[0]?.last_message_at ?? null,
+      errorCount24h: errors.length,
+      recentErrors: errors.slice(0, RECENT_ERRORS).map((error) => ({
+        conversationId: error.id,
+        reason: error.handoff_reason ?? '',
+        at: error.last_message_at
+      })),
+      activeProducts
+    };
   };
 
   export const setActive = async (db: DbClient, storeId: string, active: boolean) => {
@@ -200,7 +325,52 @@ export namespace StoreRepository {
           data: { id: randomUUID(), store_id: storeId, neighborhood: zone.neighborhood, fee_cents: zone.feeCents }
         });
       }
+
+      await tx.delivery_bands.deleteMany({ where: { store_id: storeId } });
+
+      for (const band of delivery.bands ?? []) {
+        await tx.delivery_bands.insertOne({
+          data: { id: randomUUID(), store_id: storeId, max_meters: band.maxMeters, fee_cents: band.feeCents }
+        });
+      }
     });
+  };
+
+  /**
+   * Distance bands, shortest first.
+   */
+  export const getBands = async (db: DbClient, storeId: string): Promise<DeliveryBand[]> => {
+    const { records } = await db.delivery_bands.findMany({
+      select: { max_meters: true, fee_cents: true },
+      where: { store_id: storeId },
+      order: { max_meters: Order.Asc }
+    });
+
+    return records.map(({ max_meters, fee_cents }) => ({ maxMeters: max_meters, feeCents: fee_cents }));
+  };
+
+  export const setStoreLocation = async (
+    db: DbClient,
+    storeId: string,
+    location: { address: string; latitude: number; longitude: number }
+  ) => {
+    await db.stores.updateOne({
+      data: { ...location, updated_at: new Date().toISOString() },
+      where: { id: storeId }
+    });
+  };
+
+  /**
+   * Origin of distance delivery; undefined until the store located itself.
+   */
+  export const getStoreLocation = async (db: DbClient, storeId: string): Promise<Coordinates | undefined> => {
+    const store = await db.stores.findOne({ select: { latitude: true, longitude: true }, where: { id: storeId } });
+
+    if (store?.latitude == null || store.longitude == null) {
+      return undefined;
+    }
+
+    return { latitude: Number(store.latitude), longitude: Number(store.longitude) };
   };
 
   export const setPaymentMethods = async (db: DbClient, storeId: string, methods: PaymentMethod[]) => {
@@ -229,9 +399,19 @@ export namespace StoreRepository {
    * Everything the settings page edits. Hours sorted by weekday and opening time, zones by name.
    */
   export const getSettings = async (db: DbClient, storeId: string) => {
-    const [store, { records: hours }, { records: zones }] = await Promise.all([
+    const [store, { records: hours }, { records: zones }, bands] = await Promise.all([
       db.stores.findOne({
-        select: { delivery_mode: true, flat_fee_cents: true, payment_methods: true, policy: true },
+        select: {
+          delivery_mode: true,
+          flat_fee_cents: true,
+          payment_methods: true,
+          policy: true,
+          address: true,
+          latitude: true,
+          longitude: true,
+          stock_alert_phone: true,
+          stock_alert_hour: true
+        },
         where: { id: storeId }
       }),
       db.store_hours.findMany({
@@ -243,7 +423,8 @@ export namespace StoreRepository {
         select: { neighborhood: true, fee_cents: true },
         where: { store_id: storeId },
         order: { neighborhood: Order.Asc }
-      })
+      }),
+      getBands(db, storeId)
     ]);
 
     if (!store) {
@@ -255,11 +436,29 @@ export namespace StoreRepository {
       delivery: {
         mode: store.delivery_mode,
         flatFeeCents: store.flat_fee_cents,
-        zones: zones.map(({ neighborhood, fee_cents }) => ({ neighborhood, feeCents: fee_cents }))
+        zones: zones.map(({ neighborhood, fee_cents }) => ({ neighborhood, feeCents: fee_cents })),
+        bands
       },
+      storeLocation:
+        store.address && store.latitude != null && store.longitude != null
+          ? { address: store.address, latitude: Number(store.latitude), longitude: Number(store.longitude) }
+          : null,
       paymentMethods: store.payment_methods,
-      policy: store.policy ?? {}
+      policy: store.policy ?? {},
+      stockAlertPhone: store.stock_alert_phone ?? null,
+      stockAlertHour: store.stock_alert_hour ?? null
     };
+  };
+
+  export const setStockAlert = async (
+    db: DbClient,
+    storeId: string,
+    input: { phone: string | null; hour: number | null }
+  ) => {
+    await db.stores.updateOne({
+      data: { stock_alert_phone: input.phone, stock_alert_hour: input.hour, updated_at: new Date().toISOString() },
+      where: { id: storeId }
+    });
   };
 
   export const getHours = async (db: DbClient, storeId: string) => {

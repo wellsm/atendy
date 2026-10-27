@@ -48,6 +48,11 @@ export type GroupDraft = {
   options: OptionDraft[];
 };
 
+/**
+ * What a group shares with every product it is linked to (the library edit).
+ */
+export type GroupContentDraft = Omit<GroupDraft, 'id' | 'min' | 'max'>;
+
 export type ProductDraft = {
   categoryId: string;
   name: string;
@@ -75,8 +80,13 @@ export const validateCategoryName = (name: string) => {
   return cleanName(name, 'name', 'The category name');
 };
 
-const validateOptions = (group: GroupDraft, groupName: string) => {
+const validateOptions = (group: GroupContentDraft, groupName: string) => {
   const seen = new Set<string>();
+  const ids = group.options.flatMap(({ id }) => (id === undefined ? [] : [id]));
+
+  if (new Set(ids).size !== ids.length) {
+    throw new MenuError('ids', 'The same id was sent twice.');
+  }
 
   return group.options.map((option) => {
     const name = cleanName(option.name, 'options', `Options of ${groupName}`);
@@ -102,7 +112,10 @@ const validateOptions = (group: GroupDraft, groupName: string) => {
   });
 };
 
-const validateGroup = (group: GroupDraft): GroupDraft => {
+/**
+ * Valid shared part of a group: name, price mode and options, names cleaned.
+ */
+export const validateGroupContent = (group: GroupContentDraft): GroupContentDraft => {
   const name = cleanName(group.name, 'groups', 'Group names');
 
   if (!group.options.length || group.options.length > MAX_OPTIONS) {
@@ -113,24 +126,28 @@ const validateGroup = (group: GroupDraft): GroupDraft => {
     throw new MenuError('groups', `${name} has an unknown price mode.`);
   }
 
-  const { min, max } = group;
+  return { name, priceMode: group.priceMode, options: validateOptions(group, name) };
+};
 
+/**
+ * "Choose from `min` to `max`" of a group with `optionCount` options.
+ */
+export const validateLimits = (name: string, min: number, max: number, optionCount: number) => {
   if (!Number.isInteger(min) || !Number.isInteger(max) || min < 0 || max < 1 || min > max) {
     throw new MenuError('groups', `${name}: choose from a minimum to a maximum, with the maximum at least 1.`);
   }
 
-  if (max > group.options.length) {
+  if (max > optionCount) {
     throw new MenuError('groups', `${name}: the maximum is higher than the number of options.`);
   }
+};
 
-  return {
-    ...(group.id !== undefined && { id: group.id }),
-    name,
-    min,
-    max,
-    priceMode: group.priceMode,
-    options: validateOptions(group, name)
-  };
+const validateGroup = (group: GroupDraft): GroupDraft => {
+  const content = validateGroupContent(group);
+
+  validateLimits(content.name, group.min, group.max, content.options.length);
+
+  return { ...(group.id !== undefined && { id: group.id }), ...content, min: group.min, max: group.max };
 };
 
 /**

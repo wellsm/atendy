@@ -7,7 +7,7 @@ import { adminAuthorizer } from '../../src/admin/authorizer';
 import { signClerkToken } from '../support/clerk';
 
 describe('adminAuthorizer', () => {
-  const authorize = (authorization?: string) => adminAuthorizer({ headers: { authorization } });
+  const authorize = (authorization?: string) => adminAuthorizer({ headers: { authorization } }, {} as never);
 
   afterEach(() => {
     delete process.env.ADMIN_USER_IDS;

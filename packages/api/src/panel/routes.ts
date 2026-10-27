@@ -1,38 +1,61 @@
 import type { Http } from '@ez4/gateway';
 import type { panelAuthorizer } from './authorizer';
+import type { addDraftItemHandler } from './endpoints/add-draft-item';
+import type { applyMenuGroupHandler } from './endpoints/apply-group';
+import type { approveConversationHandler } from './endpoints/approve-conversation';
+import type { completeImageHandler } from './endpoints/complete-image';
 import type { connectWhatsAppHandler } from './endpoints/connect-whatsapp';
 import type { createCategoryHandler } from './endpoints/create-category';
 import type { createProductHandler } from './endpoints/create-product';
 import type { createStoreHandler } from './endpoints/create-store';
 import type { deleteCategoryHandler } from './endpoints/delete-category';
+import type { deleteMenuGroupHandler } from './endpoints/delete-group';
+import type { deleteImageHandler } from './endpoints/delete-image';
 import type { deleteProductHandler } from './endpoints/delete-product';
 import type { disconnectWhatsAppHandler } from './endpoints/disconnect-whatsapp';
+import type { getBillingHandler } from './endpoints/get-billing';
 import type { getConversationHandler } from './endpoints/get-conversation';
+import type { getDashboardHandler } from './endpoints/get-dashboard';
+import type { getDraftHandler } from './endpoints/get-draft';
 import type { getMeHandler } from './endpoints/get-me';
 import type { getMenuHandler } from './endpoints/get-menu';
 import type { getSettingsHandler } from './endpoints/get-settings';
 import type { getWhatsAppHandler } from './endpoints/get-whatsapp';
 import type { listConversationsHandler } from './endpoints/list-conversations';
 import type { listOrdersHandler } from './endpoints/list-orders';
+import type { listPanelStoresHandler } from './endpoints/list-stores';
+import type { placeDraftHandler } from './endpoints/place-draft';
+import type { removeDraftItemHandler } from './endpoints/remove-draft-item';
 import type { renameCategoryHandler } from './endpoints/rename-category';
 import type { reorderCategoriesHandler } from './endpoints/reorder-categories';
 import type { sendMessageHandler } from './endpoints/send-message';
 import type { setOptionActiveHandler } from './endpoints/set-option-active';
 import type { setProductActiveHandler } from './endpoints/set-product-active';
+import type { startImageHandler } from './endpoints/start-image';
+import type { updateBillingCardHandler } from './endpoints/update-billing-card';
 import type { updateConversationHandler } from './endpoints/update-conversation';
 import type { updateDeliveryHandler } from './endpoints/update-delivery';
+import type { updateDraftHandler } from './endpoints/update-draft';
+import type { updateMenuGroupHandler } from './endpoints/update-group';
 import type { updateHoursHandler } from './endpoints/update-hours';
 import type { updateOrderHandler } from './endpoints/update-order';
 import type { updatePaymentHandler } from './endpoints/update-payment';
 import type { updatePolicyHandler } from './endpoints/update-policy';
 import type { updateProductHandler } from './endpoints/update-product';
+import type { updateStockAlertHandler } from './endpoints/update-stock-alert';
 import type { updateStoreHandler } from './endpoints/update-store';
+import type { updateStoreLocationHandler } from './endpoints/update-store-location';
 
 export type PanelRoutes = [
   Http.UseRoute<{
     path: 'GET /panel/me';
     authorizer: typeof panelAuthorizer;
     handler: typeof getMeHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /panel/stores';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof listPanelStoresHandler;
   }>,
   Http.UseRoute<{
     path: 'POST /panel/stores';
@@ -65,6 +88,11 @@ export type PanelRoutes = [
     handler: typeof updatePaymentHandler;
   }>,
   Http.UseRoute<{
+    path: 'PUT /panel/settings/stock-alert';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updateStockAlertHandler;
+  }>,
+  Http.UseRoute<{
     path: 'PATCH /panel/settings/policy';
     authorizer: typeof panelAuthorizer;
     handler: typeof updatePolicyHandler;
@@ -93,6 +121,41 @@ export type PanelRoutes = [
     path: 'PATCH /panel/conversations/{conversationId}';
     authorizer: typeof panelAuthorizer;
     handler: typeof updateConversationHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/conversations/{conversationId}/approval';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof approveConversationHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /panel/dashboard';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof getDashboardHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /panel/conversations/{conversationId}/draft';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof getDraftHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'PATCH /panel/conversations/{conversationId}/draft';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updateDraftHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/conversations/{conversationId}/draft/items';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof addDraftItemHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'DELETE /panel/conversations/{conversationId}/draft/items/{itemId}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof removeDraftItemHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/conversations/{conversationId}/draft/place';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof placeDraftHandler;
   }>,
   Http.UseRoute<{
     path: 'POST /panel/conversations/{conversationId}/messages';
@@ -155,6 +218,21 @@ export type PanelRoutes = [
     handler: typeof deleteProductHandler;
   }>,
   Http.UseRoute<{
+    path: 'POST /panel/menu/{target}/{id}/image/upload';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof startImageHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/menu/{target}/{id}/image';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof completeImageHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'DELETE /panel/menu/{target}/{id}/image';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof deleteImageHandler;
+  }>,
+  Http.UseRoute<{
     path: 'PATCH /panel/menu/products/{productId}/active';
     authorizer: typeof panelAuthorizer;
     handler: typeof setProductActiveHandler;
@@ -163,5 +241,35 @@ export type PanelRoutes = [
     path: 'PATCH /panel/menu/options/{optionId}/active';
     authorizer: typeof panelAuthorizer;
     handler: typeof setOptionActiveHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/menu/groups/{groupId}/apply';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof applyMenuGroupHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'PUT /panel/menu/groups/{groupId}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updateMenuGroupHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'DELETE /panel/menu/groups/{groupId}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof deleteMenuGroupHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/settings/store-location';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updateStoreLocationHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /panel/billing';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof getBillingHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/billing/card';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updateBillingCardHandler;
   }>
 ];

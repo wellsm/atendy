@@ -1,21 +1,30 @@
 import type { JevDecision } from './jev-router';
-import type { AgentStore, HistoryMessage, LastOrder } from './prompt';
+import type { AgentStore, HistoryMessage, LastOrder, PreviousOrder, SavedAddress } from './prompt';
 import type { ToolContext } from './tools';
 import type { Cart } from '../orders/repository';
 
 import { AiRequestError } from './errors';
 import { JevClient } from './jev-client';
 import { buildJevPlan, decideJevAction, MAX_PRODUCT_CANDIDATES } from './jev-router';
-import { LlmAgent } from './llm';
+import { LlmAgent, toolTrace } from './llm';
 import { buildSystemPrompt, buildTurnState, REPLY_SYSTEM_PROMPT } from './prompt';
 import { AiCallRepository } from './repository';
 import { executeTool, ToolName } from './tools';
 import { AiPath, AiProvider } from './types';
 import { searchMenu } from '../menu/search';
 import { RouterType } from '../stores/types';
+import { isReactionForModel } from '../whatsapp/reaction';
 
 export type AgentEnv = {
   OPENROUTER_API_KEY?: string;
+  /**
+   * Stores on a direct Anthropic model (`anthropic-direct/...`); Jev and other models stay on OpenRouter.
+   */
+  ANTHROPIC_API_KEY?: string;
+  /**
+   * Geocodes typed addresses for distance delivery.
+   */
+  GOOGLE_MAPS_API_KEY?: string;
 };
 
 export type RouterInput = {
@@ -27,6 +36,17 @@ export type RouterInput = {
   messages: string[];
   lastOrder?: LastOrder | null;
   closingSoon?: boolean;
+  menuUrl?: string;
+  /**
+   * What the store approved after the bot asked (`conversations.approved_reason`).
+   */
+  approvedReason?: string | null;
+  savedAddress?: SavedAddress;
+  previousOrder?: PreviousOrder;
+  /**
+   * The store's fixed greeting goes out right before this reply.
+   */
+  greeted?: boolean;
 };
 
 /**
@@ -36,7 +56,8 @@ export type RouterInput = {
 const tryJev = async (input: RouterInput) => {
   const { ctx, env } = input;
 
-  if (!env.OPENROUTER_API_KEY) {
+  // A reaction means "yes" only to a yes/no question: the full agent reads it against the question.
+  if (!env.OPENROUTER_API_KEY || input.messages.some(isReactionForModel)) {
     return undefined;
   }
 
@@ -74,7 +95,7 @@ const tryJev = async (input: RouterInput) => {
       ? { kind: 'fallback', reason: 'order_not_editable', intent: decided.intent, confidence: decided.confidence }
       : decided;
 
-  await AiCallRepository.record(ctx.db, {
+  const jevCallId = await AiCallRepository.record(ctx.db, {
     storeId: ctx.storeId,
     conversationId: ctx.conversationId,
     provider: AiProvider.Jev,
@@ -94,6 +115,12 @@ const tryJev = async (input: RouterInput) => {
 
   const action = await executeTool(ctx, decision.tool, decision.args);
 
+  await AiCallRepository.setTools(ctx.db, jevCallId, [toolTrace(decision.tool, decision.args, action)]);
+
+  if (ctx.awaitingApproval) {
+    return '';
+  }
+
   // A failed tool goes to the full agent, unless it already handed the conversation to a human: only the reply is left.
   if (!action.ok && !ctx.mutated) {
     return undefined;
@@ -102,6 +129,7 @@ const tryJev = async (input: RouterInput) => {
   return LlmAgent.run({
     ctx,
     apiKey: env.OPENROUTER_API_KEY,
+    anthropicApiKey: env.ANTHROPIC_API_KEY,
     model: input.store.llm_model,
     system: REPLY_SYSTEM_PROMPT,
     state: buildTurnState({
@@ -129,6 +157,7 @@ export namespace AgentRouter {
     return LlmAgent.run({
       ctx: input.ctx,
       apiKey: input.env.OPENROUTER_API_KEY,
+      anthropicApiKey: input.env.ANTHROPIC_API_KEY,
       model: input.store.llm_model,
       system: buildSystemPrompt(input.store.policy?.sop),
       state: buildTurnState(input),

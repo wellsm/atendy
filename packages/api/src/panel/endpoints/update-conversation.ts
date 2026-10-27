@@ -1,11 +1,12 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
-import type { PanelProvider } from '../provider';
+import type { PanelConversationProvider } from '../provider';
 import type { PanelConversation, PanelIdentity } from '../types';
 
 import { HttpNotFoundError } from '@ez4/gateway';
 
+import { InboundEventKind } from '../../conversations/queues/inbound';
 import { ConversationRepository } from '../../conversations/repository';
 import { ConversationMode } from '../../conversations/types';
 import { requireStore } from '../store';
@@ -29,11 +30,12 @@ export declare class UpdateConversationResponse implements Http.Response {
 }
 
 /**
- * "Assumir" (human) or "Devolver ao bot" (bot). The bot answers only messages that arrive after it.
+ * "Assumir" (human) or "Devolver ao bot" (bot). Taking over a conversation waiting for approval keeps the approval
+ * reason as the handoff reason. Back to the bot, it answers the customer messages nobody answered.
  */
 export async function updateConversationHandler(
   request: Http.Incoming<UpdateConversationRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db, inboundQueue }: Service.Context<PanelConversationProvider>
 ): Promise<UpdateConversationResponse> {
   const store = await requireStore(db, request.identity);
   const { conversationId } = request.parameters;
@@ -45,11 +47,22 @@ export async function updateConversationHandler(
     throw new HttpNotFoundError('Conversation not found');
   }
 
-  await ConversationRepository.setMode(db, {
-    conversationId,
-    mode,
-    reason: mode === ConversationMode.Human ? 'staff_took_over' : undefined
-  });
+  const reason = mode === ConversationMode.Human ? (conversation.approval_reason ?? 'staff_took_over') : undefined;
+
+  await ConversationRepository.setMode(db, { conversationId, mode, reason });
+
+  if (mode === ConversationMode.Bot) {
+    const messageId = await ConversationRepository.reopenUnanswered(db, conversationId);
+
+    if (messageId) {
+      await inboundQueue.sendMessage({
+        conversationId,
+        eventId: `resume:${messageId}:${Date.now()}`,
+        kind: InboundEventKind.Customer,
+        messageId
+      });
+    }
+  }
 
   return {
     status: 200,
@@ -57,7 +70,8 @@ export async function updateConversationHandler(
       conversation: toPanelConversation({
         ...conversation,
         mode,
-        handoff_reason: mode === ConversationMode.Human ? 'staff_took_over' : null
+        handoff_reason: reason ?? null,
+        approval_reason: null
       })
     }
   };

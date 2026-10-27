@@ -8,5 +8,9 @@ export interface OptionSchema extends Database.Schema {
   name: string;
   price_delta_cents: Integer.Min<0>;
   active: boolean;
+  /**
+   * Object key in `ProductImages` (`options/<storeId>/<optionId>/<uuid>`); null = no photo.
+   */
+  image_key?: string | null;
   position: Integer.Min<0>;
 }

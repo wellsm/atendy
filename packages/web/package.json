@@ -7,10 +7,19 @@
   "scripts": {
     "dev": "vite dev --port 3000",
     "build": "vite build",
+    "build:dev": "dotenv -e dev.env -- vite build",
+    "deploy:dev": "npm run typecheck && npm run build:dev && APP_STAGE=dev dotenv -e dev.env -- ez4 deploy",
+    "output:dev": "APP_STAGE=dev dotenv -e dev.env -- ez4 output",
+    "destroy:dev": "APP_STAGE=dev dotenv -e dev.env -- ez4 destroy",
     "typecheck": "tsc --noEmit",
     "lint": "eslint --cache"
   },
   "devDependencies": {
+    "@ez4/aws-bucket": "^0.55.0",
+    "@ez4/aws-cloudfront": "^0.55.0",
+    "@ez4/common": "^0.55.0",
+    "@ez4/distribution": "^0.55.0",
+    "@ez4/storage": "^0.55.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
@@ -23,6 +32,7 @@
     "@tanstack/react-query": "5.104.1",
     "@tanstack/react-router": "1.170.42",
     "@tanstack/react-start": "1.168.61",
+    "barcode-detector": "3.2.2",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   }

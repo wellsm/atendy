@@ -43,7 +43,7 @@ const STATE_BY_EVOLUTION: Record<EvolutionConnectionState, WhatsAppState> = {
 /**
  * Evolution management uses the global key: server-side only, never returned to the panel.
  */
-const evolutionAdmin = (env: WhatsAppEnv) => {
+export const evolutionAdmin = (env: WhatsAppEnv) => {
   const { EVOLUTION_API_URL, EVOLUTION_API_KEY, WEBHOOK_BASE_URL } = env;
 
   if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !WEBHOOK_BASE_URL) {
@@ -53,7 +53,7 @@ const evolutionAdmin = (env: WhatsAppEnv) => {
   return { baseUrl: EVOLUTION_API_URL, apiKey: EVOLUTION_API_KEY, webhookBaseUrl: WEBHOOK_BASE_URL };
 };
 
-const readState = async (admin: ReturnType<typeof evolutionAdmin>, instance: string | null) => {
+export const readState = async (admin: ReturnType<typeof evolutionAdmin>, instance: string | null) => {
   if (!instance) {
     return WhatsAppState.NotCreated;
   }
@@ -108,6 +108,7 @@ export namespace StoreWhatsApp {
     }
 
     const instance = record.instance ?? `atd_${storeId}`;
+    const webhookUrl = `${admin.webhookBaseUrl}/webhooks/whatsapp/${storeId}`;
 
     if (current === WhatsAppState.NotCreated) {
       const token = randomBytes(32).toString('hex');
@@ -117,11 +118,13 @@ export namespace StoreWhatsApp {
         apiKey: admin.apiKey,
         instance,
         token,
-        webhookUrl: `${admin.webhookBaseUrl}/webhooks/whatsapp/${storeId}`,
+        webhookUrl,
         webhookSecret: record.webhookSecret
       });
 
       await StoreRepository.setWhatsAppInstance(db, storeId, { instance, token });
+    } else {
+      await EvolutionClient.setWebhook({ ...admin, instance, webhookUrl, webhookSecret: record.webhookSecret });
     }
 
     const { qrBase64, pairingCode } = await EvolutionClient.connect({ ...admin, instance });

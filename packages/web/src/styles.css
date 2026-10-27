@@ -1,1 +1,96 @@
 @import 'tailwindcss';
+
+/* Panel colors (`bg-surface`, `text-muted`, …): light here, dark under `[data-theme='dark']`. */
+@theme {
+  --color-page: #f5f5f4;
+  --color-surface: #ffffff;
+  --color-surface-2: #f5f5f5;
+  --color-hover: #fafafa;
+  --color-line: #e5e5e5;
+  --color-line-2: #d4d4d4;
+  --color-fg: #171717;
+  --color-fg-2: #404040;
+  --color-muted: #737373;
+  --color-faint: #a3a3a3;
+  --color-accent: #dc2626;
+  --color-accent-fg: #b91c1c;
+  --color-accent-soft: #fef2f2;
+  --color-accent-line: #fecaca;
+  --color-chat: #efeae2;
+  --color-bubble-in: #ffffff;
+  --color-bubble-out: #d9fdd3;
+  --color-bubble-bot: #f2f2f2;
+  --color-warn-bg: #fffbeb;
+  --color-warn-line: #fde68a;
+  --color-warn-fg: #78350f;
+  --color-ok-bg: #dcfce7;
+  --color-ok-fg: #166534;
+  --color-on: #16a34a;
+  --color-off: #d4d4d4;
+  --color-seg: #f0f0f0;
+  --color-seg-on: #ffffff;
+  --color-placed-bg: #fee2e2;
+  --color-placed-fg: #991b1b;
+  --color-accepted-bg: #fef3c7;
+  --color-accepted-fg: #92400e;
+  --color-out-bg: #dbeafe;
+  --color-out-fg: #1e40af;
+  --color-done-bg: #dcfce7;
+  --color-done-fg: #166534;
+  --color-canceled-bg: #e5e5e5;
+  --color-canceled-fg: #404040;
+  --color-amend-bg: #f3e8ff;
+  --color-amend-fg: #6b21a8;
+  --color-overlay: rgb(23 23 23 / 0.45);
+}
+
+@layer base {
+  /* Tailwind 4 leaves buttons with the default cursor. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  [data-theme='dark'] {
+    color-scheme: dark;
+    --color-page: #0c0c0c;
+    --color-surface: #161616;
+    --color-surface-2: #212121;
+    --color-hover: #1b1b1b;
+    --color-line: #2a2a2a;
+    --color-line-2: #3a3a3a;
+    --color-fg: #f5f5f5;
+    --color-fg-2: #d4d4d4;
+    --color-muted: #a3a3a3;
+    --color-faint: #737373;
+    --color-accent-fg: #f87171;
+    --color-accent-soft: #2a1515;
+    --color-accent-line: #5c2323;
+    --color-chat: #0b141a;
+    --color-bubble-in: #202c33;
+    --color-bubble-out: #005c4b;
+    --color-bubble-bot: #262626;
+    --color-warn-bg: #2b2410;
+    --color-warn-line: #5b4a14;
+    --color-warn-fg: #fcd34d;
+    --color-ok-bg: #12301d;
+    --color-ok-fg: #86efac;
+    --color-on: #22c55e;
+    --color-off: #404040;
+    --color-seg: #222222;
+    --color-seg-on: #3a3a3a;
+    --color-placed-bg: #3b1414;
+    --color-placed-fg: #fca5a5;
+    --color-accepted-bg: #3a2a0c;
+    --color-accepted-fg: #fcd34d;
+    --color-out-bg: #0f2547;
+    --color-out-fg: #93c5fd;
+    --color-done-bg: #12301d;
+    --color-done-fg: #86efac;
+    --color-canceled-bg: #2a2a2a;
+    --color-canceled-fg: #a3a3a3;
+    --color-amend-bg: #2c1840;
+    --color-amend-fg: #d8b4fe;
+    --color-overlay: rgb(0 0 0 / 0.6);
+  }
+}

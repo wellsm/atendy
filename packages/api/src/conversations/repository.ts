@@ -8,6 +8,19 @@ import { Order } from '@ez4/database';
 import { DuplicateUniqueKeyError } from '@ez4/pgclient';
 
 import { ConversationMode, MessageAuthor, MessageDirection } from './types';
+import { BillingRepository } from '../billing/repository';
+import { OrderStatus } from '../orders/types';
+
+/**
+ * Orders that reached the store (a customer with none is new to it).
+ */
+const PLACED_STATUSES = [
+  OrderStatus.Placed,
+  OrderStatus.Accepted,
+  OrderStatus.Out,
+  OrderStatus.Done,
+  OrderStatus.Canceled
+];
 
 export namespace ConversationRepository {
   /**
@@ -64,6 +77,7 @@ export namespace ConversationRepository {
           author: MessageAuthor.Customer,
           body: message.text,
           provider_message_id: message.providerMessageId,
+          voice_note: message.voiceNote ?? null,
           created_at: now
         }
       });
@@ -120,7 +134,14 @@ export namespace ConversationRepository {
 
   export const loadTurnContext = async (db: DbClient, conversationId: string) => {
     const conversation = await db.conversations.findOne({
-      select: { id: true, store_id: true, mode: true, customer_id: true },
+      select: {
+        id: true,
+        store_id: true,
+        mode: true,
+        customer_id: true,
+        approval_reason: true,
+        approved_reason: true
+      },
       where: { id: conversationId }
     });
 
@@ -133,6 +154,7 @@ export namespace ConversationRepository {
         select: {
           id: true,
           name: true,
+          slug: true,
           timezone: true,
           accepting_orders: true,
           router: true,
@@ -174,7 +196,7 @@ export namespace ConversationRepository {
 
   export const pendingInbound = async (db: DbClient, conversationId: string) => {
     const { records } = await db.messages.findMany({
-      select: { id: true, body: true, created_at: true },
+      select: { id: true, body: true, voice_note: true, audio_key: true, created_at: true },
       where: { conversation_id: conversationId, direction: MessageDirection.In, processed_at: null },
       order: { created_at: Order.Asc }
     });
@@ -201,6 +223,33 @@ export namespace ConversationRepository {
       .slice(0, input.limit)
       .reverse()
       .map(({ author, body }) => ({ author, body }));
+  };
+
+  /**
+   * Time of the conversation's newest message outside `excludeIds` (the batch being answered): when the customer was
+   * last active before coming back.
+   */
+  export const lastActivityBefore = async (db: DbClient, conversationId: string, excludeIds: string[]) => {
+    const { records } = await db.messages.findMany({
+      select: { id: true, created_at: true },
+      where: { conversation_id: conversationId },
+      order: { created_at: Order.Desc },
+      take: excludeIds.length + 1
+    });
+
+    return records.find(({ id }) => !excludeIds.includes(id))?.created_at;
+  };
+
+  /**
+   * Who the greeting talks to: the WhatsApp name and whether the customer never placed an order in the store.
+   */
+  export const greetingCustomer = async (db: DbClient, customerId: string) => {
+    const [customer, placed] = await Promise.all([
+      db.customers.findOne({ select: { name: true }, where: { id: customerId } }),
+      db.orders.count({ where: { customer_id: customerId, status: { isIn: PLACED_STATUSES } } })
+    ]);
+
+    return { name: customer?.name ?? null, newCustomer: !placed };
   };
 
   export const markProcessed = async (db: DbClient, ids: string[]) => {
@@ -235,6 +284,43 @@ export namespace ConversationRepository {
     });
   };
 
+  /**
+   * Puts the customer's reaction on the reacted message of their conversation (null when removed). Returns the reacted
+   * message and whether it is the conversation's latest outbound one; undefined when either is unknown.
+   */
+  export const applyReaction = async (
+    db: DbClient,
+    input: { storeId: string; phone: string; jid: string; reactedId: string; emoji: string }
+  ) => {
+    const conversationId = await findConversation(db, input);
+
+    if (!conversationId) {
+      return undefined;
+    }
+
+    const reacted = await db.messages.findOne({
+      select: { id: true, conversation_id: true, direction: true, author: true, body: true },
+      where: { store_id: input.storeId, provider_message_id: input.reactedId }
+    });
+
+    if (reacted?.conversation_id !== conversationId) {
+      return undefined;
+    }
+
+    await db.messages.updateOne({ data: { reaction: input.emoji || null }, where: { id: reacted.id } });
+
+    const {
+      records: [latest]
+    } = await db.messages.findMany({
+      select: { id: true },
+      where: { conversation_id: conversationId, direction: MessageDirection.Out },
+      order: { created_at: Order.Desc },
+      take: 1
+    });
+
+    return { reacted, latestOutboundId: latest?.id };
+  };
+
   export const hasMessage = async (db: DbClient, input: { storeId: string; providerMessageId: string }) => {
     const count = await db.messages.count({
       where: { store_id: input.storeId, provider_message_id: input.providerMessageId }
@@ -243,11 +329,41 @@ export namespace ConversationRepository {
     return count > 0;
   };
 
+  /**
+   * The bot answered in the current order cycle (since the last placed order): a handoff without it means the store
+   * served the customer alone.
+   */
+  const botServed = async (db: DbClient, conversationId: string) => {
+    const { records: placed } = await db.orders.findMany({
+      select: { placed_at: true },
+      where: { conversation_id: conversationId, placed_at: { isNull: false } },
+      order: { placed_at: Order.Desc },
+      take: 1
+    });
+
+    const since = placed[0]?.placed_at;
+
+    const replies = await db.messages.count({
+      where: {
+        conversation_id: conversationId,
+        author: MessageAuthor.Bot,
+        ...(since && { created_at: { gt: since } })
+      }
+    });
+
+    return replies > 0;
+  };
+
+  /**
+   * Every way to a person goes here or through `setMode(Human)`: both bill what the AI finished so far.
+   */
   export const handOffToHuman = async (db: DbClient, input: { conversationId: string; reason: string }) => {
     await db.conversations.updateOne({
-      data: { mode: ConversationMode.Human, handoff_reason: input.reason },
+      data: { mode: ConversationMode.Human, handoff_reason: input.reason, approval_reason: null },
       where: { id: input.conversationId }
     });
+
+    await BillingRepository.recordHandoff(db, { ...input, botServed: await botServed(db, input.conversationId) });
   };
 
   export const lastBotReplyAt = async (db: DbClient, input: { conversationId: string; body: string }) => {
@@ -346,21 +462,31 @@ export namespace ConversationRepository {
 
   const PANEL_MESSAGE_LIMIT = 100;
 
+  const PANEL_PREVIEW_LENGTH = 120;
+
   /**
-   * Every conversation a person is handling (never paged out), then the newest ones with the bot.
+   * Every conversation a person is handling or must approve (never paged out), then the newest ones with the bot, each
+   * with the start of its last message.
    */
   export const listForPanel = async (db: DbClient, storeId: string) => {
-    const select = { id: true, customer_id: true, mode: true, handoff_reason: true, last_message_at: true } as const;
+    const select = {
+      id: true,
+      customer_id: true,
+      mode: true,
+      handoff_reason: true,
+      approval_reason: true,
+      last_message_at: true
+    } as const;
 
     const [{ records: human }, { records: bot }] = await Promise.all([
       db.conversations.findMany({
         select,
-        where: { store_id: storeId, mode: ConversationMode.Human },
+        where: { store_id: storeId, OR: [{ mode: ConversationMode.Human }, { approval_reason: { isNull: false } }] },
         order: { last_message_at: Order.Desc }
       }),
       db.conversations.findMany({
         select,
-        where: { store_id: storeId, mode: ConversationMode.Bot },
+        where: { store_id: storeId, mode: ConversationMode.Bot, approval_reason: null },
         order: { last_message_at: Order.Desc },
         take: PANEL_CONVERSATION_LIMIT
       })
@@ -372,21 +498,47 @@ export namespace ConversationRepository {
       return [];
     }
 
-    const { records: customers } = await db.customers.findMany({
-      select: { id: true, name: true, phone: true },
-      where: { id: { isIn: conversations.map(({ customer_id }) => customer_id) } }
-    });
+    const [{ records: customers }, lastMessages] = await Promise.all([
+      db.customers.findMany({
+        select: { id: true, name: true, phone: true },
+        where: { id: { isIn: conversations.map(({ customer_id }) => customer_id) } }
+      }),
+      Promise.all(
+        conversations.map(async ({ id }) => {
+          const { records } = await db.messages.findMany({
+            select: { author: true, body: true },
+            where: { conversation_id: id },
+            order: { created_at: Order.Desc },
+            take: 1
+          });
 
-    return conversations.map((conversation) => {
+          return records[0] && { author: records[0].author, body: records[0].body.slice(0, PANEL_PREVIEW_LENGTH) };
+        })
+      )
+    ]);
+
+    return conversations.map((conversation, index) => {
       const customer = customers.find(({ id }) => id === conversation.customer_id);
 
-      return { ...conversation, customer: { name: customer?.name ?? null, phone: customer?.phone ?? '' } };
+      return {
+        ...conversation,
+        customer: { name: customer?.name ?? null, phone: customer?.phone ?? '' },
+        last_message: lastMessages[index] ?? null
+      };
     });
   };
 
   export const findForStore = async (db: DbClient, storeId: string, conversationId: string) => {
     const conversation = await db.conversations.findOne({
-      select: { id: true, store_id: true, customer_id: true, mode: true, handoff_reason: true, last_message_at: true },
+      select: {
+        id: true,
+        store_id: true,
+        customer_id: true,
+        mode: true,
+        handoff_reason: true,
+        approval_reason: true,
+        last_message_at: true
+      },
       where: { id: conversationId }
     });
 
@@ -402,6 +554,7 @@ export namespace ConversationRepository {
     return {
       ...conversation,
       handoff_reason: conversation.handoff_reason ?? null,
+      approval_reason: conversation.approval_reason ?? null,
       customer: {
         name: customer?.name ?? null,
         phone: customer?.phone ?? '',
@@ -415,7 +568,7 @@ export namespace ConversationRepository {
    */
   export const messagesForPanel = async (db: DbClient, conversationId: string) => {
     const { records } = await db.messages.findMany({
-      select: { id: true, author: true, body: true, created_at: true },
+      select: { id: true, author: true, body: true, created_at: true, reaction: true, audio_key: true },
       where: { conversation_id: conversationId },
       order: { created_at: Order.Desc },
       take: PANEL_MESSAGE_LIMIT
@@ -434,9 +587,75 @@ export namespace ConversationRepository {
     await db.conversations.updateOne({
       data: {
         mode: input.mode,
-        handoff_reason: input.mode === ConversationMode.Human ? (input.reason ?? null) : null
+        handoff_reason: input.mode === ConversationMode.Human ? (input.reason ?? null) : null,
+        approval_reason: null
       },
       where: { id: input.conversationId }
     });
+
+    if (input.mode === ConversationMode.Human) {
+      await BillingRepository.recordHandoff(db, {
+        conversationId: input.conversationId,
+        reason: input.reason ?? null,
+        botServed: await botServed(db, input.conversationId)
+      });
+    }
+  };
+
+  /**
+   * The bot hit a limit the store may lift: it waits (no reply, messages stay pending) until the store approves or
+   * takes over. Nothing is billed here; taking over bills as a handoff.
+   */
+  export const requestApproval = async (db: DbClient, input: { conversationId: string; reason: string }) => {
+    await db.conversations.updateOne({
+      data: { approval_reason: input.reason },
+      where: { id: input.conversationId }
+    });
+  };
+
+  /**
+   * The store allowed what the bot asked: the next turn knows it (`approved_reason`) and answers the pending messages.
+   */
+  export const approve = async (db: DbClient, input: { conversationId: string; reason: string }) => {
+    await db.conversations.updateOne({
+      data: { approval_reason: null, approved_reason: input.reason },
+      where: { id: input.conversationId }
+    });
+  };
+
+  /**
+   * Customer messages nobody answered (after the last bot or staff message) become pending again. Returns the newest
+   * one, which the caller queues so the bot answers them all.
+   */
+  export const reopenUnanswered = async (db: DbClient, conversationId: string) => {
+    const { records: outbound } = await db.messages.findMany({
+      select: { created_at: true },
+      where: { conversation_id: conversationId, direction: MessageDirection.Out },
+      order: { created_at: Order.Desc },
+      take: 1
+    });
+
+    const since = outbound[0]?.created_at;
+
+    const { records: unanswered } = await db.messages.findMany({
+      select: { id: true },
+      where: {
+        conversation_id: conversationId,
+        direction: MessageDirection.In,
+        ...(since && { created_at: { gt: since } })
+      },
+      order: { created_at: Order.Asc }
+    });
+
+    if (!unanswered.length) {
+      return undefined;
+    }
+
+    await db.messages.updateMany({
+      data: { processed_at: null },
+      where: { id: { isIn: unanswered.map(({ id }) => id) } }
+    });
+
+    return unanswered[unanswered.length - 1]!.id;
   };
 }

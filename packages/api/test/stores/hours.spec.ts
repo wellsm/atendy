@@ -1,7 +1,7 @@
 import { equal } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { formatHours, isClosingSoon, isStoreOpen } from '../../src/stores/hours';
+import { closesAt, formatHours, isClosingSoon, isStoreOpen } from '../../src/stores/hours';
 
 const TZ = 'America/Sao_Paulo';
 
@@ -70,6 +70,41 @@ describe('formatHours', () => {
         'Sáb fechado'
       ].join('\n')
     );
+  });
+});
+
+describe('closesAt', () => {
+  const split = [
+    { weekday: 5, opens_at: '11:00', closes_at: '14:00' },
+    { weekday: 5, opens_at: '18:00', closes_at: '02:00' }
+  ];
+
+  it('returns the end of the range open now', () => {
+    // Friday 12:00 local
+    equal(closesAt(split, TZ, new Date('2026-10-09T15:00:00Z')), '14:00');
+    // Saturday 01:00 local, still Friday's overnight range
+    equal(closesAt(split, TZ, new Date('2026-10-10T04:00:00Z')), '02:00');
+  });
+
+  it('follows a range that starts where the open one ends', () => {
+    const late = [
+      { weekday: 5, opens_at: '18:00', closes_at: '00:00' },
+      { weekday: 6, opens_at: '00:00', closes_at: '02:00' }
+    ];
+
+    // Friday 20:00 local
+    equal(closesAt(late, TZ, new Date('2026-10-09T23:00:00Z')), '02:00');
+  });
+
+  it('is null when open around the clock', () => {
+    const always = [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, opens_at: '00:00', closes_at: '00:00' }));
+
+    equal(closesAt(always, TZ, new Date('2026-10-09T15:00:00Z')), null);
+  });
+
+  it('is null when closed', () => {
+    // Friday 15:00 local
+    equal(closesAt(split, TZ, new Date('2026-10-09T18:00:00Z')), null);
   });
 });
 

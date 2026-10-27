@@ -64,6 +64,7 @@ describe('OpenRouterClient.chat', () => {
     const [, init] = fetchMock.mock.calls[0]!.arguments as [string, RequestInit];
 
     equal('tools' in (JSON.parse(init.body as string) as object), false);
+    equal('reasoning' in (JSON.parse(init.body as string) as object), false);
     equal(result.message.content, 'Olá!');
     equal(result.message.tool_calls, undefined);
     equal(result.usage.costUsd, 0);
@@ -77,6 +78,16 @@ describe('OpenRouterClient.chat', () => {
     const [, init] = fetchMock.mock.calls[0]!.arguments as [string, RequestInit];
 
     equal((JSON.parse(init.body as string) as { tool_choice?: string }).tool_choice, 'none');
+  });
+
+  it('sends the reasoning effort when given', async () => {
+    const fetchMock = respond(200, { choices: [{ message: { content: 'Ok' } }] });
+
+    await OpenRouterClient.chat({ apiKey: 'k', model: 'm', messages, reasoningEffort: 'low' });
+
+    const [, init] = fetchMock.mock.calls[0]!.arguments as [string, RequestInit];
+
+    deepEqual((JSON.parse(init.body as string) as { reasoning?: unknown }).reasoning, { effort: 'low' });
   });
 
   it('throws AiRequestError with the HTTP status', async () => {
@@ -101,5 +112,42 @@ describe('OpenRouterClient.chat', () => {
     respond(200, { choices: [] });
 
     await rejects(OpenRouterClient.chat({ apiKey: 'k', model: 'm', messages }), AiRequestError);
+  });
+});
+
+describe('OpenRouterClient.transcribe', () => {
+  afterEach(() => mock.restoreAll());
+
+  const input = { apiKey: 'k', model: 'openai/whisper-large-v3-turbo', data: 'T2dn', format: 'ogg', language: 'pt' };
+
+  it('posts the audio as base64 and returns the text, tokens and cost', async () => {
+    const fetchMock = mock.method(globalThis, 'fetch', () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ text: ' uma calabresa ', usage: { seconds: 4, cost: 0.0000133 } }), {
+          status: 200
+        })
+      )
+    );
+
+    const result = await OpenRouterClient.transcribe(input);
+
+    equal(result.text, 'uma calabresa');
+    deepEqual(result.usage, { inputTokens: 0, outputTokens: 0, costUsd: 0.0000133 });
+
+    const [url, init] = fetchMock.mock.calls[0]!.arguments as unknown as [string, RequestInit];
+
+    equal(url, 'https://openrouter.ai/api/v1/audio/transcriptions');
+    equal((init.headers as Record<string, string>).Authorization, 'Bearer k');
+    deepEqual(JSON.parse(init.body as string), {
+      model: 'openai/whisper-large-v3-turbo',
+      input_audio: { data: 'T2dn', format: 'ogg' },
+      language: 'pt'
+    });
+  });
+
+  it('throws an AiRequestError on a failed response', async () => {
+    mock.method(globalThis, 'fetch', () => Promise.resolve(new Response('{}', { status: 502 })));
+
+    await rejects(OpenRouterClient.transcribe(input), AiRequestError);
   });
 });

@@ -4,6 +4,8 @@ dist/
 *.tsbuildinfo
 .eslintcache
 local.env
+dev.env
+prd.env
 *-deploy*
 .superpowers/
 tmp/

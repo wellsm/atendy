@@ -9,6 +9,7 @@ import { PriceMode } from '../../src/menu/types';
 const product = (id: string, name: string, category: string, options: [string, boolean][] = []): MenuProduct => ({
   id,
   name,
+  category_id: `c-${category}`,
   category,
   description: null,
   price_cents: 0,

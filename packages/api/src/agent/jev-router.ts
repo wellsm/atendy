@@ -89,6 +89,10 @@ export type JevPlan = {
    * Choice key → cart item id.
    */
   items: Map<string, string>;
+  /**
+   * What the cart already has, so a repeated "vou retirar" is not a second request.
+   */
+  current: { fulfillment: Fulfillment | null; payment: PaymentMethod | null };
 };
 
 export type JevDecision =
@@ -221,7 +225,8 @@ export const buildJevPlan = (input: {
     questions,
     products,
     groupProducts,
-    items
+    items,
+    current: { fulfillment: input.cart?.fulfillment ?? null, payment: input.cart?.payment_method ?? null }
   };
 };
 
@@ -229,6 +234,25 @@ const confidentChoice = (answers: Record<string, JevAnswer>, id: string) => {
   const answer = answers[id];
 
   return answer?.type === 'choice' && answer.confidence >= JEV_MIN_CONFIDENCE ? answer.choice : undefined;
+};
+
+/**
+ * The direct path runs one tool: a message that also sets fulfillment or payment (beyond its intent, and different
+ * from the cart) would lose that part, so it goes to the LLM.
+ */
+const hasOtherRequest = (plan: JevPlan, answers: Record<string, JevAnswer>, intent: Intent) => {
+  const fulfillment = confidentChoice(answers, Q_FULFILLMENT);
+  const payment = confidentChoice(answers, Q_PAYMENT);
+
+  return (
+    (intent !== Intent.SetFulfillment &&
+      (fulfillment === Fulfillment.Delivery || fulfillment === Fulfillment.Pickup) &&
+      fulfillment !== plan.current.fulfillment) ||
+    (intent !== Intent.SetPayment &&
+      payment !== undefined &&
+      payment !== NOT_MENTIONED &&
+      payment !== plan.current.payment)
+  );
 };
 
 const decideAddItem = (plan: JevPlan, answers: Record<string, JevAnswer>) => {
@@ -339,6 +363,10 @@ export const decideJevAction = (
 
   if (confidence < JEV_MIN_CONFIDENCE) {
     return fallback('low_confidence');
+  }
+
+  if (hasOtherRequest(plan, answers, intent)) {
+    return fallback('several_requests');
   }
 
   switch (intent) {

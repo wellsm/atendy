@@ -1,0 +1,1 @@
+export const CONNECTION_TTL_SECONDS = 8100;

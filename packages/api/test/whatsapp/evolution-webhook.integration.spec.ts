@@ -1,6 +1,7 @@
 import type { Db } from '../../src/db';
 
 import { deepEqual, equal, rejects } from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import { HttpUnauthorizedError } from '@ez4/gateway';
@@ -8,7 +9,7 @@ import { DatabaseTester } from '@ez4/local-database/test';
 import { QueueTester } from '@ez4/local-queue/test';
 
 import { InboundEventKind } from '../../src/conversations/queues/inbound';
-import { ConversationMode, MessageAuthor } from '../../src/conversations/types';
+import { ConversationMode, MessageAuthor, MessageDirection } from '../../src/conversations/types';
 import { evolutionWebhookHandler } from '../../src/whatsapp/endpoints/evolution-webhook';
 import { evolutionTextEvent, seedStore } from '../support/fixtures';
 
@@ -29,6 +30,90 @@ describe('evolution webhook', () => {
 
     return { response, inboundQueue };
   };
+
+  it('shows every customer reaction on its message, but sends the bot only answers to its latest question', async () => {
+    const { storeId, secret, instance } = await seedStore(db);
+
+    await call({ storeId, secret, body: evolutionTextEvent({ instance, id: 'C1', text: 'oi' }) });
+
+    const customer = await db.messages.findOne({
+      select: { conversation_id: true },
+      where: { store_id: storeId, provider_message_id: 'C1' }
+    });
+
+    const conversationId = customer!.conversation_id;
+
+    const outbound = async (providerMessageId: string, author: MessageAuthor, body: string, at: string) =>
+      db.messages.insertOne({
+        data: {
+          id: randomUUID(),
+          store_id: storeId,
+          conversation_id: conversationId,
+          direction: MessageDirection.Out,
+          author,
+          body,
+          provider_message_id: providerMessageId,
+          created_at: at
+        }
+      });
+
+    await outbound('S1', MessageAuthor.Staff, 'Seu pedido saiu para entrega!', '2026-10-19T19:00:00.000Z');
+    await outbound('B1', MessageAuthor.Bot, 'Confere o resumo? Posso confirmar?', '2026-10-19T19:01:00.000Z');
+
+    const react = (id: string, target: string, text: string, fromMe = false) =>
+      call({
+        storeId,
+        secret,
+        body: evolutionTextEvent({
+          instance,
+          id,
+          fromMe,
+          message: { reactionMessage: { key: { id: target }, text } }
+        })
+      });
+
+    const reactionOf = async (providerMessageId: string) =>
+      (
+        await db.messages.findOne({
+          select: { reaction: true },
+          where: { store_id: storeId, provider_message_id: providerMessageId }
+        })
+      )?.reaction;
+
+    const ignored = await react('R1', 'S1', '👍');
+
+    equal(ignored.inboundQueue.sendMessage.mock.callCount(), 0);
+    equal(await reactionOf('S1'), '👍');
+    equal(await db.messages.count({ where: { store_id: storeId, provider_message_id: 'R1' } }), 0);
+
+    // The owner answering as a customer from the alert phone is still a customer reaction.
+    await db.stores.updateOne({ data: { stock_alert_phone: '5511999998888' }, where: { id: storeId } });
+
+    const answer = await react('R2', 'B1', '👍');
+
+    equal(answer.inboundQueue.sendMessage.mock.callCount(), 1);
+    equal(await reactionOf('B1'), '👍');
+
+    const reactionMessage = await db.messages.findOne({
+      select: { body: true, author: true },
+      where: { store_id: storeId, provider_message_id: 'R2' }
+    });
+
+    deepEqual(reactionMessage, {
+      body: 'Reação 👍 à mensagem: Confere o resumo? Posso confirmar?',
+      author: MessageAuthor.Customer
+    });
+
+    const removed = await react('R3', 'S1', '');
+
+    equal(removed.inboundQueue.sendMessage.mock.callCount(), 0);
+    equal(await reactionOf('S1'), null);
+
+    // The store's own reaction from the phone.
+    await react('R4', 'C1', '😀', true);
+
+    equal(await reactionOf('C1'), null);
+  });
 
   it('stores a customer message, creates customer and conversation, and enqueues it', async () => {
     const { storeId, secret, instance } = await seedStore(db);
@@ -143,6 +228,55 @@ describe('evolution webhook', () => {
     equal(await db.messages.count({ where: { store_id: storeId, provider_message_id: 'S1' } }), 0);
   });
 
+  it('drops fromMe messages to the stock alert phone, even with a conversation, but not to other customers', async () => {
+    const { storeId, secret, instance } = await seedStore(db);
+
+    // Customer writes first, so a conversation exists for that phone.
+    await call({ storeId, secret, body: evolutionTextEvent({ instance, id: 'C1' }) });
+    await db.stores.updateOne({ data: { stock_alert_phone: '5511999998888' }, where: { id: storeId } });
+
+    const digest = await call({
+      storeId,
+      secret,
+      body: evolutionTextEvent({ instance, id: 'D1', fromMe: true, text: 'Estoque baixo' })
+    });
+    const eight = await call({
+      storeId,
+      secret,
+      body: evolutionTextEvent({
+        instance,
+        id: 'D2',
+        fromMe: true,
+        remoteJid: '551199998888@s.whatsapp.net',
+        text: 'Estoque baixo'
+      })
+    });
+
+    equal(digest.response.status, 200);
+    equal(digest.inboundQueue.sendMessage.mock.callCount(), 0);
+    equal(eight.inboundQueue.sendMessage.mock.callCount(), 0);
+
+    await db.stores.updateOne({ data: { stock_alert_phone: '5511911112222' }, where: { id: storeId } });
+
+    const other = await call({
+      storeId,
+      secret,
+      body: evolutionTextEvent({ instance, id: 'S9', fromMe: true, text: 'Oi' })
+    });
+
+    equal(other.inboundQueue.sendMessage.mock.callCount(), 1);
+
+    const conversation = await db.conversations.findOne({
+      select: { mode: true },
+      where: {
+        id: (await db.conversations.findMany({ select: { id: true }, where: { store_id: storeId }, take: 1 }))
+          .records[0]!.id
+      }
+    });
+
+    equal(conversation?.mode, ConversationMode.Bot);
+  });
+
   it('ignores fromMe messages to someone who never wrote, and non-message events', async () => {
     const { storeId, secret, instance } = await seedStore(db);
 
@@ -191,5 +325,21 @@ describe('evolution webhook', () => {
     }
 
     equal(await db.messages.count({ where: { store_id: storeId } }), 1);
+  });
+
+  it('drops events of a store blocked by an unpaid invoice', async () => {
+    const { storeId, secret, instance } = await seedStore(db);
+
+    await db.stores.updateOne({ data: { billing_blocked: true }, where: { id: storeId } });
+
+    const { response, inboundQueue } = await call({
+      storeId,
+      secret,
+      body: evolutionTextEvent({ instance, id: 'BLOCKED-1', text: 'oi' })
+    });
+
+    equal(response.status, 200);
+    equal(inboundQueue.sendMessage.mock.callCount(), 0);
+    equal(await db.messages.count({ where: { store_id: storeId } }), 0);
   });
 });

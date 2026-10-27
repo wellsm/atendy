@@ -23,7 +23,24 @@ export namespace WhatsAppProviders {
     }
 
     return {
-      sendText: ({ to, text }) => EvolutionClient.sendText({ baseUrl, instance, token, to, text })
+      sendText: ({ to, text, delayMs }) => EvolutionClient.sendText({ baseUrl, instance, token, to, text, delayMs }),
+      downloadMedia: ({ message }) => EvolutionClient.getMediaBase64({ baseUrl, instance, token, message }),
+      startTyping: ({ to }) => {
+        const controller = new AbortController();
+        // Best effort: a failed or aborted presence never affects the reply.
+        const pending = (async () => {
+          try {
+            await EvolutionClient.sendTyping({ baseUrl, instance, token, to, signal: controller.signal });
+          } catch {
+            // Ignored on purpose (see above).
+          }
+        })();
+
+        return async () => {
+          controller.abort();
+          await pending;
+        };
+      }
     };
   };
 }

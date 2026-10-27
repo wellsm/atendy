@@ -8,7 +8,7 @@ import { HttpNotFoundError } from '@ez4/gateway';
 import { DatabaseTester } from '@ez4/local-database/test';
 
 import { listStoresHandler } from '../../src/admin/endpoints/list-stores';
-import { updateStoreHandler } from '../../src/admin/endpoints/update-store';
+import { updateAdminStoreHandler } from '../../src/admin/endpoints/update-store';
 import { seedStore } from '../support/fixtures';
 
 describe('admin endpoints', () => {
@@ -38,7 +38,7 @@ describe('admin endpoints', () => {
     const { storeId } = await seedStore(db, { active: false });
 
     const update = (active: boolean) =>
-      updateStoreHandler({ identity, parameters: { storeId }, body: { active } } as never, { db });
+      updateAdminStoreHandler({ identity, parameters: { storeId }, body: { active } } as never, { db });
 
     equal((await update(true)).body.store.active, true);
     equal((await db.stores.findOne({ select: { active: true }, where: { id: storeId } }))?.active, true);
@@ -48,7 +48,9 @@ describe('admin endpoints', () => {
 
   it('returns 404 for an unknown store', async () => {
     await rejects(
-      updateStoreHandler({ identity, parameters: { storeId: randomUUID() }, body: { active: true } } as never, { db }),
+      updateAdminStoreHandler({ identity, parameters: { storeId: randomUUID() }, body: { active: true } } as never, {
+        db
+      }),
       HttpNotFoundError
     );
   });

@@ -14,6 +14,7 @@ import { updateDeliveryHandler } from '../../src/panel/endpoints/update-delivery
 import { updateHoursHandler } from '../../src/panel/endpoints/update-hours';
 import { updatePaymentHandler } from '../../src/panel/endpoints/update-payment';
 import { updatePolicyHandler } from '../../src/panel/endpoints/update-policy';
+import { updateStockAlertHandler } from '../../src/panel/endpoints/update-stock-alert';
 import { updateStoreHandler } from '../../src/panel/endpoints/update-store';
 import { resolveDeliveryFee } from '../../src/stores/delivery';
 import { StoreRepository } from '../../src/stores/repository';
@@ -63,6 +64,43 @@ describe('panel settings endpoints', () => {
     await rejects(updateStoreHandler({ identity, body: { name: '  ' } } as never, { db }), badField('name'));
   });
 
+  it('saves the stock alert phone and hour and reads them back', async () => {
+    const { identity, storeId } = await setup();
+
+    const response = await updateStockAlertHandler(
+      { identity, body: { stockAlertPhone: '(11) 99999-8888', stockAlertHour: 7 } } as never,
+      { db }
+    );
+
+    deepEqual(response.body, { stockAlertPhone: '5511999998888', stockAlertHour: 7 });
+
+    const settings = await getSettingsHandler({ identity } as never, { db });
+
+    equal(settings.body.stockAlertPhone, '5511999998888');
+    equal(settings.body.stockAlertHour, 7);
+
+    await updateStockAlertHandler({ identity, body: { stockAlertPhone: null, stockAlertHour: null } } as never, {
+      db
+    });
+
+    const stored = await db.stores.findOne({
+      select: { stock_alert_phone: true, stock_alert_hour: true },
+      where: { id: storeId }
+    });
+
+    deepEqual(stored, { stock_alert_phone: null, stock_alert_hour: null });
+  });
+
+  it('refuses a stock alert hour outside 0-23 or a phone that is not Brazilian', async () => {
+    const { identity } = await setup();
+    const save = (body: object) => updateStockAlertHandler({ identity, body } as never, { db });
+
+    await rejects(save({ stockAlertPhone: null, stockAlertHour: 24 }), badField('stock_alert_hour'));
+    await rejects(save({ stockAlertPhone: null, stockAlertHour: -1 }), badField('stock_alert_hour'));
+    await rejects(save({ stockAlertPhone: null, stockAlertHour: 7.5 }), badField('stock_alert_hour'));
+    await rejects(save({ stockAlertPhone: '123', stockAlertHour: 9 }), badField('stock_alert_phone'));
+  });
+
   it('tells whether the store is open now by its hours', async () => {
     const open = await setup();
     const closed = await setup({ hours: [] });
@@ -88,7 +126,7 @@ describe('panel settings endpoints', () => {
 
     deepEqual(response.body, {
       hours: [{ weekday: 5, opensAt: '18:00', closesAt: '02:00' }],
-      delivery: { mode: DeliveryMode.Flat, flatFeeCents: 600, zones: [] },
+      delivery: { mode: DeliveryMode.Flat, flatFeeCents: 600, zones: [], bands: [] },
       paymentMethods: [PaymentMethod.Pix, PaymentMethod.Cash],
       policy: {
         minOrderCents: 3000,
@@ -97,8 +135,18 @@ describe('panel settings endpoints', () => {
         maxItemQty: null,
         newCustomerReviewCents: null,
         lastOrderMinutes: null,
-        sop: 'Sem troco.'
-      }
+        deliveryMinMinutes: null,
+        deliveryMaxMinutes: null,
+        sop: 'Sem troco.',
+        previousAddress: null,
+        repeatOrderStatuses: null,
+        newOrderAfterStatus: null,
+        addOnCategoryIds: null,
+        addOnExtraMinutes: null
+      },
+      storeLocation: null,
+      stockAlertPhone: null,
+      stockAlertHour: null
     });
   });
 

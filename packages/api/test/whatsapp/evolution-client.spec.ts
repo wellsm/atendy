@@ -40,6 +40,30 @@ describe('EvolutionClient.sendText', () => {
   });
 });
 
+describe('EvolutionClient.getMediaBase64', () => {
+  afterEach(() => mock.restoreAll());
+
+  const message = { key: { id: 'A1' }, message: { audioMessage: { mediaKey: 'k' } } };
+  const input = { baseUrl: 'http://evo', instance: 'atd x', token: 'tok', message };
+
+  it('sends the whole message with the instance token and returns the bytes', async () => {
+    const fetchMock = respond(201, { mediaType: 'audioMessage', mimetype: 'audio/ogg; codecs=opus', base64: 'T2dn' });
+
+    deepEqual(await EvolutionClient.getMediaBase64(input), { base64: 'T2dn', mimetype: 'audio/ogg; codecs=opus' });
+
+    const [url, init] = fetchMock.mock.calls[0]!.arguments as unknown as [string, RequestInit];
+
+    equal(url, 'http://evo/chat/getBase64FromMediaMessage/atd%20x');
+    equal((init.headers as Record<string, string>).apikey, 'tok');
+    deepEqual(JSON.parse(init.body as string), { message, convertToMp4: false });
+  });
+
+  it('fails without bytes', async () => {
+    respond(201, { mediaType: 'audioMessage' });
+    await rejects(EvolutionClient.getMediaBase64(input));
+  });
+});
+
 describe('EvolutionClient instance management', () => {
   afterEach(() => mock.restoreAll());
 
@@ -75,5 +99,35 @@ describe('EvolutionClient instance management', () => {
 
     equal(url, 'http://evo/instance/logout/atd%20x');
     deepEqual([init.method, (init.headers as Record<string, string>).apikey], ['DELETE', 'global-key']);
+  });
+});
+
+describe('EvolutionClient.sendTyping', () => {
+  afterEach(() => mock.restoreAll());
+
+  it('posts "composing" with the instance token and stops when aborted', async () => {
+    const fetchMock = mock.method(globalThis, 'fetch', (_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    });
+    const controller = new AbortController();
+
+    const pending = EvolutionClient.sendTyping({
+      baseUrl: 'http://evo',
+      instance: 'atd x',
+      token: 'tok',
+      to: '5511@s.whatsapp.net',
+      signal: controller.signal
+    });
+
+    controller.abort();
+    await rejects(pending);
+
+    const [url, init] = fetchMock.mock.calls[0]!.arguments as unknown as [string, RequestInit];
+
+    equal(url, 'http://evo/chat/sendPresence/atd%20x');
+    equal((init.headers as Record<string, string>).apikey, 'tok');
+    deepEqual(JSON.parse(init.body as string), { number: '5511@s.whatsapp.net', presence: 'composing', delay: 25_000 });
   });
 });

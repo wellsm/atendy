@@ -131,11 +131,12 @@ describe('panel WhatsApp endpoints', () => {
     equal(stored?.token, create?.body?.token);
   });
 
-  it('only asks for a new QR when the instance exists and is disconnected', async () => {
-    const { identity, storeId } = await setup();
+  it('refreshes the webhook and asks for a new QR when the instance exists and is disconnected', async () => {
+    const { identity, storeId, secret } = await setup();
 
     const calls = evolution({
       '/instance/connectionState/': [200, { instance: { state: 'close' } }],
+      '/webhook/set/': [201, {}],
       '/instance/connect/': [200, { qrcode: { base64: 'data:image/png;base64,QR2' } }]
     });
 
@@ -145,6 +146,15 @@ describe('panel WhatsApp endpoints', () => {
       false
     );
     equal((await StoreRepository.getWhatsAppInstance(db, storeId))?.token, 'instance-token');
+
+    const set = calls.find(({ url }) => url === `/webhook/set/atd_${storeId}`);
+    const webhook = set?.body?.webhook as { enabled: boolean; url: string; headers: { authorization: string } };
+
+    equal(set?.method, 'POST');
+    equal(set?.apikey, 'global-key');
+    equal(webhook.enabled, true);
+    equal(webhook.url, `http://api.test/base/webhooks/whatsapp/${storeId}`);
+    equal(webhook.headers.authorization, secret);
   });
 
   it('recreates an instance that Evolution no longer has', async () => {

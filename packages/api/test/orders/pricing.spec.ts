@@ -151,3 +151,61 @@ describe('validateChange', () => {
     throws(() => validateChange(5000, 2000), expectCode(PricingErrorCode.ChangeBelowTotal));
   });
 });
+
+describe('priceItem sold out', () => {
+  const flavors = (product: PricingProduct) => product.groups[0]!;
+  const calabresa = [{ group_id: 'g-flavors', option_ids: ['o-calabresa'] }];
+
+  it('refuses a sold-out product unless the staff allows it', () => {
+    const soldOut = { ...pizza, sold_out: true };
+
+    throws(() => priceItem(soldOut, calabresa), expectCode(PricingErrorCode.SoldOut));
+    equal(priceItem(soldOut, calabresa, { allowSoldOut: true }).unit_price_cents, 5500);
+  });
+
+  it('refuses a sold-out option unless the staff allows it', () => {
+    const product: PricingProduct = {
+      ...pizza,
+      groups: [
+        {
+          ...flavors(pizza),
+          options: flavors(pizza).options.map((option) =>
+            option.id === 'o-calabresa' ? { ...option, sold_out: true } : option
+          )
+        }
+      ]
+    };
+
+    throws(() => priceItem(product, calabresa), expectCode(PricingErrorCode.OptionSoldOut));
+    equal(priceItem(product, calabresa, { allowSoldOut: true }).unit_price_cents, 5500);
+  });
+
+  it('reports sold out, not inactive, when a required group has no option left to sell', () => {
+    const product: PricingProduct = {
+      ...pizza,
+      groups: [
+        {
+          ...flavors(pizza),
+          options: [{ id: 'o-only', name: 'Única', price_delta_cents: 100, active: true, sold_out: true }]
+        }
+      ]
+    };
+
+    throws(() => priceItem(product, []), expectCode(PricingErrorCode.SoldOut));
+    equal(
+      priceItem(product, [{ group_id: 'g-flavors', option_ids: ['o-only'] }], { allowSoldOut: true }).unit_price_cents,
+      100
+    );
+  });
+
+  it('never lets allowSoldOut bypass an inactive product or option', () => {
+    throws(
+      () => priceItem({ ...pizza, active: false, sold_out: true }, calabresa, { allowSoldOut: true }),
+      expectCode(PricingErrorCode.ProductInactive)
+    );
+    throws(
+      () => priceItem(pizza, [{ group_id: 'g-flavors', option_ids: ['o-off'] }], { allowSoldOut: true }),
+      expectCode(PricingErrorCode.OptionInactive)
+    );
+  });
+});

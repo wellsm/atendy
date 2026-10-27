@@ -9,6 +9,10 @@ export interface ProductSchema extends Database.Schema {
   description?: string | null;
   price_cents: Integer.Min<0>;
   active: boolean;
+  /**
+   * Object key in `ProductImages` (`products/<storeId>/<productId>/<uuid>`); null = no photo.
+   */
+  image_key?: string | null;
   created_at: String.DateTime;
   updated_at: String.DateTime;
 }

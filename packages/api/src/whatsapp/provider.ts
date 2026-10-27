@@ -9,3 +9,20 @@ export declare class WebhookProvider implements Http.Provider {
     inboundQueue: Environment.Service<InboundQueue>;
   };
 }
+
+/**
+ * Meta's Cloud API webhook (Atendy's own number).
+ */
+export declare class CloudWebhookProvider implements Http.Provider {
+  variables: {
+    /**
+     * Verify token typed in Meta's webhook settings, and the app secret that signs each call.
+     */
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: Environment.Variable<'WHATSAPP_WEBHOOK_VERIFY_TOKEN'>;
+    WHATSAPP_APP_SECRET: Environment.Variable<'WHATSAPP_APP_SECRET'>;
+  };
+
+  services: {
+    db: Environment.Service<Db>;
+  };
+}

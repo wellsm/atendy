@@ -13,8 +13,9 @@ import { TurnResponder } from '../../src/agent/turn';
 import { AiProvider } from '../../src/agent/types';
 import { ConversationRepository } from '../../src/conversations/repository';
 import { MessageAuthor } from '../../src/conversations/types';
-import { OrderStatus } from '../../src/orders/types';
-import { DeliveryMode, PaymentMethod, RouterType } from '../../src/stores/types';
+import { OrderRepository } from '../../src/orders/repository';
+import { Fulfillment, OrderStatus } from '../../src/orders/types';
+import { DeliveryMode, PaymentMethod, PreviousAddress, RouterType } from '../../src/stores/types';
 import {
   hoursClosingIn,
   minutesAgo,
@@ -83,6 +84,88 @@ describe('TurnResponder', () => {
 
   const failure = () => new AiRequestError('OpenRouter request failed (503)', AiProvider.OpenRouter, 503);
 
+  it('offers the previous order once and the saved address while the order has none', async () => {
+    const turn = await setup({
+      repeat_order_statuses: [OrderStatus.Done],
+      previous_address: PreviousAddress.OnRequest
+    });
+    const orderId = await placeOrder(db, scopeOf(turn), turn.menu);
+
+    // Yesterday's delivered order: outside the memory window, so a new order starts.
+    await db.orders.updateOne({
+      data: {
+        status: OrderStatus.Done,
+        placed_at: minutesAgo(24 * 60),
+        fulfillment: Fulfillment.Delivery,
+        address: 'Rua das Flores, 10',
+        neighborhood: 'Centro'
+      },
+      where: { id: orderId }
+    });
+
+    const chat = replyWith('Quer repetir o pedido de ontem?');
+
+    await TurnResponder.respond({ db, env, ...turn });
+
+    const state = stateOf(chat);
+
+    deepEqual(state.saved_address, { address: 'Rua das Flores, 10', neighborhood: 'Centro', offer: 'on_request' });
+    deepEqual(state.previous_order, {
+      items: [{ name: 'Coca-Cola 2L', qty: 1, options: '' }],
+      total_cents: 1400,
+      days_ago: 1
+    });
+
+    // Once the bot spoke in this thread, the offer is not repeated.
+    await ConversationRepository.recordOutbound(db, {
+      storeId: turn.store.id,
+      conversationId: turn.conversationId,
+      author: MessageAuthor.Bot,
+      body: 'Quer repetir o pedido de ontem?',
+      providerMessageId: 'BOT-R1'
+    });
+
+    chat.mock.resetCalls();
+
+    await TurnResponder.respond({ db, env, ...turn });
+
+    equal(stateOf(chat).previous_order, undefined);
+  });
+
+  it('swaps the summary token for the current draft, prices from the cart', async () => {
+    const turn = await setup({ delivery_min_minutes: 40, delivery_max_minutes: 50 });
+    const scope = scopeOf(turn);
+
+    await OrderRepository.addItem(db, scope, {
+      product: productByName(turn.menu, 'Coca-Cola 2L'),
+      qty: 2,
+      selections: []
+    });
+    await OrderRepository.setFulfillment(db, scope, Fulfillment.Pickup);
+
+    replyWith('Confere o resumo 👇\n---\n[[resumo]]\n---\nPosso confirmar?');
+
+    const { text } = await TurnResponder.respond({ db, env, ...turn });
+
+    equal(
+      text,
+      [
+        'Confere o resumo 👇',
+        '---',
+        '🧾 *Resumo do pedido*',
+        '',
+        '➡️ 2x Coca-Cola 2L',
+        '   R$\u00a028,00',
+        '',
+        '🛍️ Retirada na loja',
+        '',
+        '💰 *Total: R$\u00a028,00*',
+        '---',
+        'Posso confirmar?'
+      ].join('\n')
+    );
+  });
+
   it('sends history without the pending messages and the current cart to the model', async () => {
     const turn = await setup();
 
@@ -102,7 +185,11 @@ describe('TurnResponder', () => {
       })
     );
 
-    deepEqual(await TurnResponder.respond({ db, env, ...turn }), { text: 'Oi de novo!', mutated: false });
+    deepEqual(await TurnResponder.respond({ db, env, ...turn }), {
+      text: 'Oi de novo!',
+      mutated: false,
+      awaitingApproval: false
+    });
 
     const { messages } = chat.mock.calls[0]!.arguments[0] as { messages: { content: string }[] };
     const state = JSON.parse(messages[1]!.content) as { recent_history: unknown; new_messages: unknown; cart: unknown };
@@ -230,7 +317,28 @@ describe('TurnResponder', () => {
 
     await TurnResponder.respond({ db, env, ...turn });
 
-    equal((stateOf(chat).last_order as LastOrder).editable, false);
+    const lastOrder = stateOf(chat).last_order as LastOrder;
+
+    equal(lastOrder.editable, false);
+    // Default: one order at a time.
+    equal(lastOrder.new_order_allowed, false);
+    // Default add-ons: the drink categories of the menu.
+    deepEqual(lastOrder.add_on, { categories: ['Bebidas'], extra_minutes: null });
+  });
+
+  it('tells the model a placed order takes no new order and no add-on', async () => {
+    const turn = await setup();
+
+    await placeOrder(db, scopeOf(turn), turn.menu);
+
+    const chat = replyWith('Ok!');
+
+    await TurnResponder.respond({ db, env, ...turn });
+
+    const lastOrder = stateOf(chat).last_order as LastOrder;
+
+    equal(lastOrder.new_order_allowed, false);
+    equal(lastOrder.add_on, null);
   });
 
   it('forgets the previous order and its messages after the memory window', async () => {
@@ -268,5 +376,21 @@ describe('TurnResponder', () => {
     equal(state.closing_soon, true);
     deepEqual(state.store.limits, { min_order_cents: 3000 });
     equal(sentMessages(chat)[0]!.content.includes('Não aceitamos troco para R$ 200.'), true);
+  });
+
+  it('gives the model the public menu link, built in code', async () => {
+    const turn = await setup();
+    const chat = replyWith('Nosso cardápio: https://web.test/loja-1');
+
+    await TurnResponder.respond({ db, env, ...turn, menuUrl: 'https://web.test/loja-1' });
+
+    equal((stateOf(chat) as { store: { menu_url: string } }).store.menu_url, 'https://web.test/loja-1');
+
+    const other = await setup();
+    const withoutLink = replyWith('Oi!');
+
+    await TurnResponder.respond({ db, env, ...other });
+
+    equal('menu_url' in (stateOf(withoutLink) as { store: object }).store, false);
   });
 });

@@ -7,7 +7,7 @@ import { panelAuthorizer } from '../../src/panel/authorizer';
 import { signClerkToken } from '../support/clerk';
 
 describe('panelAuthorizer', () => {
-  const authorize = (authorization?: string) => panelAuthorizer({ headers: { authorization } });
+  const authorize = (authorization?: string) => panelAuthorizer({ headers: { authorization } }, {} as never);
 
   it('returns the user and the active org of a v2 session token', async () => {
     const { identity } = await authorize(await signClerkToken({ sub: 'user_1', o: { id: 'org_1', rol: 'admin' } }));

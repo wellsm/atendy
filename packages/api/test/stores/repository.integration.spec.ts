@@ -129,7 +129,7 @@ describe('StoreRepository', () => {
 
     settings = await StoreRepository.getSettings(db, id);
 
-    deepEqual(settings?.delivery, { mode: DeliveryMode.Flat, flatFeeCents: 700, zones: [] });
+    deepEqual(settings?.delivery, { mode: DeliveryMode.Flat, flatFeeCents: 700, zones: [], bands: [] });
   });
 
   it('reads the settings of one store only', async () => {
@@ -155,9 +155,12 @@ describe('StoreRepository', () => {
         { weekday: 0, opens_at: '11:00', closes_at: '15:00' },
         { weekday: 5, opens_at: '18:00', closes_at: '02:00' }
       ],
-      delivery: { mode: DeliveryMode.Flat, flatFeeCents: 0, zones: [] },
+      delivery: { mode: DeliveryMode.Flat, flatFeeCents: 0, zones: [], bands: [] },
+      storeLocation: null,
       paymentMethods: [PaymentMethod.Pix],
-      policy: { min_order_cents: 3000 }
+      policy: { min_order_cents: 3000 },
+      stockAlertPhone: null,
+      stockAlertHour: null
     });
   });
 

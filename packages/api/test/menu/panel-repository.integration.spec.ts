@@ -48,7 +48,7 @@ describe('MenuRepository (panel)', () => {
   const setup = async () => {
     const { storeId } = await seedStore(db);
     const category = await MenuRepository.createCategory(db, storeId, 'Pizzas');
-    const product = await MenuRepository.createProduct(db, storeId, pizzaDraft(category.id));
+    const { product } = await MenuRepository.createProduct(db, storeId, pizzaDraft(category.id));
 
     return { storeId, category, product };
   };
@@ -82,7 +82,7 @@ describe('MenuRepository (panel)', () => {
     const [flavors, border] = product.groups;
     const [calabresa, mussarela, portuguesa] = flavors!.options;
 
-    const replaced = await MenuRepository.replaceProduct(db, storeId, product.id, {
+    const { product: replaced } = (await MenuRepository.replaceProduct(db, storeId, product.id, {
       ...product,
       name: 'Pizza Grande (8 fatias)',
       groups: [
@@ -96,7 +96,7 @@ describe('MenuRepository (panel)', () => {
           ]
         }
       ]
-    });
+    }))!;
 
     ok(replaced);
     equal(replaced.name, 'Pizza Grande (8 fatias)');
@@ -137,7 +137,10 @@ describe('MenuRepository (panel)', () => {
 
   it('rejects ids that do not belong to the product group', async () => {
     const { storeId, category, product } = await setup();
-    const other = await MenuRepository.createProduct(db, storeId, { ...pizzaDraft(category.id), name: 'Pizza Broto' });
+    const { product: other } = await MenuRepository.createProduct(db, storeId, {
+      ...pizzaDraft(category.id),
+      name: 'Pizza Broto'
+    });
     const foreign = await setup();
     const [flavors, border] = product.groups;
 
@@ -157,11 +160,15 @@ describe('MenuRepository (panel)', () => {
     deepEqual(await MenuRepository.getProduct(db, storeId, product.id), product);
   });
 
-  it('rejects ids on create', async () => {
-    const { storeId, category, product } = await setup();
+  it('rejects ids of another store on create', async () => {
+    const { storeId, category } = await setup();
+    const foreign = await setup();
 
     await rejects(
-      MenuRepository.createProduct(db, storeId, { ...pizzaDraft(category.id), groups: [{ ...product.groups[0]! }] }),
+      MenuRepository.createProduct(db, storeId, {
+        ...pizzaDraft(category.id),
+        groups: [{ ...foreign.product.groups[0]! }]
+      }),
       failsOn('ids')
     );
   });
@@ -204,7 +211,7 @@ describe('MenuRepository (panel)', () => {
     equal(await MenuRepository.getProduct(db, storeId, foreign.product.id), undefined);
     equal(await MenuRepository.setProductActive(db, storeId, foreign.product.id, false), false);
     equal(await MenuRepository.setOptionActive(db, storeId, foreign.product.groups[0]!.options[0]!.id, false), false);
-    equal(await MenuRepository.deleteProduct(db, storeId, foreign.product.id), false);
+    equal(await MenuRepository.deleteProduct(db, storeId, foreign.product.id), undefined);
     equal(await MenuRepository.renameCategory(db, storeId, foreign.category.id, 'X'), false);
     equal(await MenuRepository.deleteCategory(db, storeId, foreign.category.id), DeleteCategoryResult.NotFound);
 
@@ -241,18 +248,20 @@ describe('MenuRepository (panel)', () => {
     const { active: _product, ...draft } = product;
     const [flavors, border] = product.groups;
 
-    const replaced = await MenuRepository.replaceProduct(db, storeId, product.id, {
-      ...draft,
-      groups: [
-        {
-          ...flavors!,
-          options: flavors!.options.map(({ active: _option, ...option }) =>
-            option.id === mussarela!.id ? { ...option, priceDeltaCents: 4690 } : option
-          )
-        },
-        { ...border!, options: [...border!.options, { name: 'Cheddar', priceDeltaCents: 1000 }] }
-      ]
-    });
+    const replaced = (
+      await MenuRepository.replaceProduct(db, storeId, product.id, {
+        ...draft,
+        groups: [
+          {
+            ...flavors!,
+            options: flavors!.options.map(({ active: _option, ...option }) =>
+              option.id === mussarela!.id ? { ...option, priceDeltaCents: 4690 } : option
+            )
+          },
+          { ...border!, options: [...border!.options, { name: 'Cheddar', priceDeltaCents: 1000 }] }
+        ]
+      })
+    )?.product;
 
     equal(replaced?.active, false);
     equal(replaced?.groups[0]!.options[0]!.active, false);
@@ -263,7 +272,7 @@ describe('MenuRepository (panel)', () => {
   it('deletes a product with its groups and options', async () => {
     const { storeId, product } = await setup();
 
-    equal(await MenuRepository.deleteProduct(db, storeId, product.id), true);
+    deepEqual(await MenuRepository.deleteProduct(db, storeId, product.id), []);
     equal(await MenuRepository.getProduct(db, storeId, product.id), undefined);
 
     const { records } = await db.options.findMany({
@@ -272,6 +281,144 @@ describe('MenuRepository (panel)', () => {
     });
 
     deepEqual(records, []);
+  });
+
+  it('shares a group between products: options everywhere, limits per product', async () => {
+    const { storeId, category, product: grande } = await setup();
+    const [flavors] = grande.groups;
+    const [calabresa, mussarela, portuguesa] = flavors!.options;
+
+    // Broto links the same "Sabores" with one flavor and a new Calabresa price.
+    const { product: broto } = await MenuRepository.createProduct(db, storeId, {
+      ...pizzaDraft(category.id),
+      name: 'Pizza Broto',
+      groups: [
+        {
+          ...flavors!,
+          min: 1,
+          max: 1,
+          options: [{ ...calabresa!, priceDeltaCents: 3990 }, { ...mussarela! }, { ...portuguesa! }]
+        }
+      ]
+    });
+
+    equal(broto.groups[0]!.id, flavors!.id);
+    equal(await db.option_groups.count({ where: { store_id: storeId } }), 2);
+
+    await MenuRepository.setOptionActive(db, storeId, mussarela!.id, false);
+
+    const both = await MenuRepository.loadPanel(db, storeId);
+    const shared = (name: string) => both[0]!.products.find((product) => product.name === name)!.groups[0]!;
+
+    deepEqual([shared('Pizza Grande').max, shared('Pizza Broto').max], [2, 1]);
+    deepEqual(shared('Pizza Grande').options, shared('Pizza Broto').options);
+    equal(shared('Pizza Grande').options[0]!.priceDeltaCents, 3990);
+    equal(shared('Pizza Grande').options[1]!.active, false);
+
+    // Grande chooses up to 2: Broto may not leave the shared group with a single flavor.
+    await rejects(
+      MenuRepository.replaceProduct(db, storeId, broto.id, {
+        ...broto,
+        groups: [{ ...broto.groups[0]!, options: [{ ...calabresa! }] }]
+      }),
+      failsOn('shared_groups')
+    );
+
+    // Unlinking keeps the group for Grande; deleting Grande then deletes it.
+    await MenuRepository.replaceProduct(db, storeId, broto.id, { ...broto, groups: [] });
+    equal((await MenuRepository.getProduct(db, storeId, grande.id))!.groups[0]!.id, flavors!.id);
+
+    await MenuRepository.deleteProduct(db, storeId, grande.id);
+
+    equal(await db.option_groups.count({ where: { store_id: storeId } }), 0);
+    equal(await db.options.count({ where: { store_id: storeId } }), 0);
+    equal(await db.product_groups.count({ where: { store_id: storeId } }), 0);
+  });
+
+  it('edits and deletes a shared group from the library', async () => {
+    const { storeId, category, product: grande } = await setup();
+    const [flavors] = grande.groups;
+    const { product: broto } = await MenuRepository.createProduct(db, storeId, {
+      ...pizzaDraft(category.id),
+      name: 'Pizza Broto',
+      groups: [{ ...flavors!, min: 1, max: 1 }]
+    });
+
+    const [calabresa, mussarela] = flavors!.options;
+
+    // Grande allows 2 flavors: the library may not leave one.
+    await rejects(
+      MenuRepository.updateGroup(db, storeId, flavors!.id, { ...flavors!, options: [{ ...calabresa! }] }),
+      failsOn('shared_groups')
+    );
+
+    const updated = await MenuRepository.updateGroup(db, storeId, flavors!.id, {
+      name: 'Sabores da casa',
+      priceMode: PriceMode.Sum,
+      options: [{ ...mussarela! }, { ...calabresa! }]
+    });
+
+    deepEqual(updated?.droppedImageKeys, []);
+    deepEqual(
+      updated?.group.options.map(({ id }) => id),
+      [mussarela!.id, calabresa!.id]
+    );
+    // Default limits shrink to fit the 2 options left.
+    deepEqual([updated?.group.min, updated?.group.max], [1, 1]);
+
+    for (const id of [grande.id, broto.id]) {
+      const group = (await MenuRepository.getProduct(db, storeId, id))!.groups[0]!;
+
+      deepEqual([group.name, group.priceMode, group.options.length], ['Sabores da casa', PriceMode.Sum, 2]);
+    }
+
+    const foreign = await setup();
+
+    equal(await MenuRepository.updateGroup(db, storeId, foreign.product.groups[0]!.id, flavors!), undefined);
+    equal(await MenuRepository.deleteGroup(db, storeId, foreign.product.groups[0]!.id), undefined);
+
+    deepEqual(await MenuRepository.deleteGroup(db, storeId, flavors!.id), []);
+
+    for (const id of [grande.id, broto.id]) {
+      deepEqual(
+        (await MenuRepository.getProduct(db, storeId, id))!.groups.map(({ name }) => name),
+        id === grande.id ? ['Borda'] : []
+      );
+    }
+
+    equal(await db.options.count({ where: { group_id: flavors!.id } }), 0);
+  });
+
+  it('imports equal groups once, linked with each product limits', async () => {
+    const { storeId } = await seedStore(db);
+    const drinks = (max: number) => ({
+      name: 'Bebida',
+      min: 0,
+      max,
+      price_mode: PriceMode.Sum,
+      options: [
+        { name: 'Coca', price_delta_cents: 690 },
+        { name: 'Guaraná', price_delta_cents: 590 }
+      ]
+    });
+
+    await MenuRepository.importMenu(db, storeId, {
+      categories: [
+        {
+          name: 'Pratos',
+          products: [
+            { name: 'Yakisoba', price_cents: 3990, groups: [drinks(2)] },
+            { name: 'Poke', price_cents: 4590, groups: [drinks(1)] }
+          ]
+        }
+      ]
+    });
+
+    const [poke, yakisoba] = await MenuRepository.load(db, storeId);
+
+    equal(await db.option_groups.count({ where: { store_id: storeId } }), 1);
+    equal(poke!.groups[0]!.id, yakisoba!.groups[0]!.id);
+    deepEqual([poke!.groups[0]!.max, yakisoba!.groups[0]!.max], [1, 2]);
   });
 
   it('orders, renames and deletes categories', async () => {

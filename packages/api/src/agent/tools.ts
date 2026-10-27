@@ -2,13 +2,16 @@ import type { DbClient } from '../db';
 import type { LlmTool } from './openrouter-client';
 import type { MenuProduct } from '../menu/repository';
 import type { Selection } from '../orders/pricing';
-import type { DraftScope } from '../orders/repository';
+import type { DraftScope, Geocode } from '../orders/repository';
 
+import { BillingRepository } from '../billing/repository';
 import { ConversationRepository } from '../conversations/repository';
+import { APPROVAL_REASONS, LIMIT_REASONS } from '../conversations/types';
 import { searchMenu } from '../menu/search';
 import { PricingError } from '../orders/pricing';
 import { OrderError, OrderErrorCode, OrderRepository } from '../orders/repository';
 import { Fulfillment } from '../orders/types';
+import { StoreRepository } from '../stores/repository';
 import { PaymentMethod } from '../stores/types';
 
 export const enum ToolName {
@@ -17,15 +20,22 @@ export const enum ToolName {
   RemoveItem = 'remove_item',
   SetFulfillment = 'set_fulfillment',
   SetAddress = 'set_address',
+  UseSavedAddress = 'use_saved_address',
   SetPayment = 'set_payment',
   GetCart = 'get_cart',
   PlaceOrder = 'place_order',
-  CallHuman = 'call_human'
+  CallHuman = 'call_human',
+  RepeatPreviousOrder = 'repeat_previous_order',
+  AddToOrder = 'add_to_order'
 }
 
 export type ToolContext = DraftScope & {
   db: DbClient;
   menu: MenuProduct[];
+  /**
+   * Places a typed address for distance delivery; absent = never geocode.
+   */
+  geocode?: Geocode;
   /**
    * Set once a tool changed the order or the conversation: a failed turn must not be replayed after it.
    */
@@ -34,6 +44,28 @@ export type ToolContext = DraftScope & {
    * Set once a tool handed the conversation to a human: later tool calls in the turn are refused.
    */
   handedOff?: boolean;
+  /**
+   * What the store approved for the current order (`conversations.approved_reason`).
+   */
+  approvedReason?: string | null;
+  /**
+   * Set once a tool asked the store's approval: like `handedOff`, and the turn's reply is never sent.
+   */
+  awaitingApproval?: boolean;
+};
+
+/**
+ * A person is needed: an approval reason pauses the bot for the store's decision, any other hands off.
+ */
+const escalate = async (ctx: ToolContext, reason: string) => {
+  if (APPROVAL_REASONS.has(reason)) {
+    await ConversationRepository.requestApproval(ctx.db, { conversationId: ctx.conversationId, reason });
+    ctx.awaitingApproval = true;
+  } else {
+    await ConversationRepository.handOffToHuman(ctx.db, { conversationId: ctx.conversationId, reason });
+  }
+
+  ctx.handedOff = true;
 };
 
 export type ToolResult = { ok: true; data: unknown } | { ok: false; error: string; message: string };
@@ -47,10 +79,28 @@ const MUTATING_TOOLS = new Set<string>([
   ToolName.RemoveItem,
   ToolName.SetFulfillment,
   ToolName.SetAddress,
+  ToolName.UseSavedAddress,
   ToolName.SetPayment,
   ToolName.PlaceOrder,
-  ToolName.CallHuman
+  ToolName.CallHuman,
+  ToolName.RepeatPreviousOrder,
+  ToolName.AddToOrder
 ]);
+
+const ITEM_PROPERTIES = {
+  product_id: { type: 'string' },
+  qty: { type: 'integer', minimum: 1 },
+  selections: {
+    type: 'array',
+    description: 'One entry per option group, with the chosen option ids (two flavors = half-and-half).',
+    items: {
+      type: 'object',
+      properties: { group_id: { type: 'string' }, option_ids: { type: 'array', items: { type: 'string' } } },
+      required: ['group_id', 'option_ids']
+    }
+  },
+  notes: { type: 'string', description: 'Free notes, e.g. "sem cebola".' }
+};
 
 const tool = (
   name: ToolName,
@@ -73,25 +123,10 @@ export const TOOL_DEFINITIONS: LlmTool[] = [
     { query: { type: 'string', description: 'Words from the customer, e.g. "calabresa". Empty lists the menu.' } },
     []
   ),
-  tool(
-    ToolName.AddItem,
-    'Add a product to the order. Prices are computed by the system.',
-    {
-      product_id: { type: 'string' },
-      qty: { type: 'integer', minimum: 1 },
-      selections: {
-        type: 'array',
-        description: 'One entry per option group, with the chosen option ids (two flavors = half-and-half).',
-        items: {
-          type: 'object',
-          properties: { group_id: { type: 'string' }, option_ids: { type: 'array', items: { type: 'string' } } },
-          required: ['group_id', 'option_ids']
-        }
-      },
-      notes: { type: 'string', description: 'Free notes, e.g. "sem cebola".' }
-    },
-    ['product_id', 'qty']
-  ),
+  tool(ToolName.AddItem, 'Add a product to the order. Prices are computed by the system.', ITEM_PROPERTIES, [
+    'product_id',
+    'qty'
+  ]),
   tool(
     ToolName.RemoveItem,
     'Remove an item from the order by its item_id from the cart.',
@@ -114,6 +149,12 @@ export const TOOL_DEFINITIONS: LlmTool[] = [
     ['address', 'neighborhood']
   ),
   tool(
+    ToolName.UseSavedAddress,
+    "Deliver to the customer's previous delivery address (`saved_address`), after the customer agreed.",
+    {},
+    []
+  ),
+  tool(
     ToolName.SetPayment,
     'Set the payment method. For cash, change_for_cents is the bill the customer pays with, in cents.',
     {
@@ -129,6 +170,20 @@ export const TOOL_DEFINITIONS: LlmTool[] = [
     'Hand the conversation to a human attendant.',
     { reason: { type: 'string', description: 'Short reason, e.g. "customer_asked" or "complaint".' } },
     ['reason']
+  ),
+  tool(
+    ToolName.RepeatPreviousOrder,
+    "Add the items of the customer's previous order (`previous_order`) with today's prices, after the customer " +
+      'accepted. Items no longer on the menu come back in `skipped`.',
+    {},
+    []
+  ),
+  tool(
+    ToolName.AddToOrder,
+    'Add a product to `last_order` while the store prepares it (`last_order.add_on`), after the customer confirmed ' +
+      'the item, its price and the possible delay. Only products from `last_order.add_on.categories`.',
+    ITEM_PROPERTIES,
+    ['product_id', 'qty']
   )
 ];
 
@@ -218,12 +273,32 @@ const parseSelections = (value: unknown): Selection[] => {
   });
 };
 
+const findProduct = (ctx: ToolContext, args: Record<string, unknown>) => {
+  const productId = requireString(args, 'product_id');
+  const product = ctx.menu.find(({ id }) => id === productId);
+
+  if (!product) {
+    throw new OrderError(OrderErrorCode.UnknownProduct, `Unknown product ${productId}`);
+  }
+
+  return product;
+};
+
+const parseLine = (ctx: ToolContext, args: Record<string, unknown>) => ({
+  product: findProduct(ctx, args),
+  qty: optionalInteger(args, 'qty', 1) ?? 1,
+  selections: parseSelections(args.selections),
+  notes: optionalString(args, 'notes') ?? null,
+  skipLimits: !!ctx.approvedReason && LIMIT_REASONS.has(ctx.approvedReason)
+});
+
 const toMenuView = (product: MenuProduct) => ({
   product_id: product.id,
   name: product.name,
   category: product.category,
   description: product.description,
   price_cents: product.price_cents,
+  sold_out: product.sold_out ?? false,
   groups: product.groups.map((group) => ({
     group_id: group.id,
     name: group.name,
@@ -232,7 +307,12 @@ const toMenuView = (product: MenuProduct) => ({
     price_mode: group.price_mode,
     options: group.options
       .filter(({ active }) => active)
-      .map(({ id, name, price_delta_cents }) => ({ option_id: id, name, price_delta_cents }))
+      .map(({ id, name, price_delta_cents, sold_out }) => ({
+        option_id: id,
+        name,
+        price_delta_cents,
+        sold_out: sold_out ?? false
+      }))
   }))
 });
 
@@ -247,21 +327,18 @@ const run = async (ctx: ToolContext, name: string, args: Record<string, unknown>
     }
 
     case ToolName.AddItem: {
-      const productId = requireString(args, 'product_id');
-      const product = ctx.menu.find(({ id }) => id === productId);
+      const line = parseLine(ctx, args);
 
-      if (!product) {
-        throw new OrderError(OrderErrorCode.UnknownProduct, `Unknown product ${productId}`);
-      }
+      await OrderRepository.assertCanStartOrder(db, ctx);
 
-      const cart = await OrderRepository.addItem(db, ctx, {
-        product,
-        qty: optionalInteger(args, 'qty', 1) ?? 1,
-        selections: parseSelections(args.selections),
-        notes: optionalString(args, 'notes') ?? null
-      });
+      return { cart: await OrderRepository.addItem(db, ctx, line) };
+    }
 
-      return { cart };
+    case ToolName.AddToOrder: {
+      const cart = await OrderRepository.addToAcceptedOrder(db, ctx, parseLine(ctx, args));
+      const policy = await StoreRepository.getPolicy(db, ctx.storeId);
+
+      return { cart, extra_minutes: policy.add_on_extra_minutes ?? null };
     }
 
     case ToolName.RemoveItem: {
@@ -285,11 +362,73 @@ const run = async (ctx: ToolContext, name: string, args: Record<string, unknown>
 
     case ToolName.SetAddress: {
       return {
-        cart: await OrderRepository.setAddress(db, ctx, {
-          address: requireString(args, 'address'),
-          neighborhood: optionalString(args, 'neighborhood') ?? null
-        })
+        cart: await OrderRepository.setAddress(
+          db,
+          ctx,
+          {
+            address: requireString(args, 'address'),
+            neighborhood: optionalString(args, 'neighborhood') ?? null
+          },
+          ctx.geocode
+        )
       };
+    }
+
+    case ToolName.UseSavedAddress: {
+      return { cart: await OrderRepository.applySavedAddress(db, ctx, ctx.geocode) };
+    }
+
+    case ToolName.RepeatPreviousOrder: {
+      const policy = await StoreRepository.getPolicy(db, ctx.storeId);
+      const previous = await OrderRepository.findPreviousOrder(db, ctx, policy.repeat_order_statuses ?? []);
+
+      if (!previous) {
+        throw new OrderError(OrderErrorCode.NoPreviousOrder, 'There is no previous order to repeat');
+      }
+
+      await OrderRepository.assertCanStartOrder(db, ctx);
+
+      const skipped: string[] = [];
+      let cart: Awaited<ReturnType<typeof OrderRepository.addItem>> | undefined;
+
+      for (const item of previous.items) {
+        const product = ctx.menu.find(({ id }) => id === item.productId);
+
+        if (!product) {
+          skipped.push(item.name);
+          continue;
+        }
+
+        try {
+          cart = await OrderRepository.addItem(db, ctx, {
+            product,
+            qty: item.qty,
+            selections: item.selections,
+            notes: item.notes,
+            skipLimits: !!ctx.approvedReason && LIMIT_REASONS.has(ctx.approvedReason)
+          });
+
+          // Lines already added stay: a later failure must not replay the tool and add them again.
+          ctx.mutated = true;
+        } catch (error) {
+          // An option left the menu or the stock ran out: the item is skipped, the rest still comes back.
+          if (
+            error instanceof PricingError ||
+            (error instanceof OrderError && error.code === OrderErrorCode.OutOfStock)
+          ) {
+            skipped.push(item.name);
+            continue;
+          }
+
+          throw error;
+        }
+      }
+
+      if (!cart) {
+        throw new OrderError(OrderErrorCode.NoPreviousOrder, 'No item of the previous order is on the menu now');
+      }
+
+      return { cart, skipped };
     }
 
     case ToolName.SetPayment: {
@@ -312,27 +451,23 @@ const run = async (ctx: ToolContext, name: string, args: Record<string, unknown>
     case ToolName.PlaceOrder: {
       const cart = await OrderRepository.place(db, ctx);
 
+      await BillingRepository.recordPlaced(db, {
+        storeId: ctx.storeId,
+        conversationId: ctx.conversationId,
+        orderId: cart.order_id
+      });
+
       if (!cart.review) {
         return { cart };
       }
 
-      await ConversationRepository.handOffToHuman(db, {
-        conversationId: ctx.conversationId,
-        reason: 'new_customer_review'
-      });
-
-      ctx.handedOff = true;
+      await escalate(ctx, 'new_customer_review');
 
       return { cart, handed_off: true };
     }
 
     case ToolName.CallHuman: {
-      await ConversationRepository.handOffToHuman(db, {
-        conversationId: ctx.conversationId,
-        reason: optionalString(args, 'reason') ?? 'agent_requested'
-      });
-
-      ctx.handedOff = true;
+      await escalate(ctx, optionalString(args, 'reason') ?? 'agent_requested');
 
       return { handed_off: true };
     }
@@ -367,13 +502,9 @@ export const executeTool = async (ctx: ToolContext, name: string, args: unknown)
   } catch (error) {
     // A limit that needs a person: code hands off, the model only says goodbye.
     if (error instanceof OrderError && error.handoffReason) {
-      await ConversationRepository.handOffToHuman(ctx.db, {
-        conversationId: ctx.conversationId,
-        reason: error.handoffReason
-      });
+      await escalate(ctx, error.handoffReason);
 
       ctx.mutated = true;
-      ctx.handedOff = true;
 
       return { ok: false, error: error.code, message: error.message };
     }

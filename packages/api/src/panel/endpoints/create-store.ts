@@ -1,7 +1,7 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
-import type { PanelProvider } from '../provider';
+import type { PanelOnboardingProvider } from '../provider';
 import type { PanelIdentity, PanelStore } from '../types';
 
 import { HttpBadRequestError, HttpConflictError } from '@ez4/gateway';
@@ -34,7 +34,7 @@ export declare class CreateStoreResponse implements Http.Response {
  */
 export async function createStoreHandler(
   request: Http.Incoming<CreateStoreRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db }: Service.Context<PanelOnboardingProvider>
 ): Promise<CreateStoreResponse> {
   const { orgId } = request.identity;
   const { acceptRisk } = request.body;

@@ -7,11 +7,12 @@ import { afterEach, describe, it, mock } from 'node:test';
 
 import { DatabaseTester } from '@ez4/local-database/test';
 
+import { AnthropicClient } from '../../src/agent/anthropic-client';
 import { AiRequestError } from '../../src/agent/errors';
 import { LlmAgent, MAX_TOOL_ROUNDS } from '../../src/agent/llm';
 import { OpenRouterClient } from '../../src/agent/openrouter-client';
 import { buildSystemPrompt, buildTurnState, SYSTEM_PROMPT } from '../../src/agent/prompt';
-import { AiPath } from '../../src/agent/types';
+import { AiPath, AiProvider } from '../../src/agent/types';
 import { MessageAuthor } from '../../src/conversations/types';
 import { OrderRepository } from '../../src/orders/repository';
 import { DeliveryMode, PaymentMethod, RouterType } from '../../src/stores/types';
@@ -188,6 +189,46 @@ describe('LlmAgent', () => {
         tools: true
       }),
       AiRequestError
+    );
+  });
+
+  it('runs direct Anthropic models on the Anthropic key and logs them as Anthropic', async () => {
+    const { ctx } = await setup();
+
+    const openRouter = queue([]);
+    const anthropic = mock.method(AnthropicClient, 'chat', () => Promise.resolve(chatResult({ content: 'Oi!' })));
+
+    const run = (anthropicApiKey: string | undefined) =>
+      LlmAgent.run({
+        ctx,
+        apiKey: 'or-key',
+        anthropicApiKey,
+        model: 'anthropic-direct/claude-haiku-5-5',
+        system: SYSTEM_PROMPT,
+        state: '{}',
+        path: AiPath.LlmFallback,
+        tools: true
+      });
+
+    equal(await run('an-key'), 'Oi!');
+
+    const [sent] = anthropic.mock.calls[0]!.arguments as [{ apiKey: string; model: string }];
+
+    equal(sent.apiKey, 'an-key');
+    equal(sent.model, 'claude-haiku-5-5');
+    equal(openRouter.mock.callCount(), 0);
+
+    const { records } = await db.ai_calls.findMany({
+      select: { provider: true, model: true },
+      where: { conversation_id: ctx.conversationId }
+    });
+
+    deepEqual(records, [{ provider: AiProvider.Anthropic, model: 'anthropic-direct/claude-haiku-5-5' }]);
+
+    // The OpenRouter key never stands in for a missing Anthropic key.
+    await rejects(
+      run(undefined),
+      (error) => error instanceof AiRequestError && error.provider === AiProvider.Anthropic
     );
   });
 

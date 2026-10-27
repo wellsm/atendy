@@ -1,45 +1,28 @@
 import type { DbClient } from '../db';
 import type { PricingProduct, Selection } from './pricing';
 import type { OptionsSnapshot } from './types';
+import type { Coordinates } from '../stores/geo';
 import type { StorePolicy } from '../stores/types';
 
 import { randomUUID } from 'node:crypto';
 
 import { Order } from '@ez4/database';
 
+import { displayOrderCode, nextOrderCodeIn } from './code';
+import { OrderError, OrderErrorCode } from './errors';
+import { addOnCategories, canStartNewOrder, DEFAULT_NEW_ORDER_AFTER_STATUS } from './in-progress';
 import { computeTotals, priceItem, validateChange } from './pricing';
 import { canTransition } from './status';
 import { Fulfillment, OrderStatus } from './types';
+import { syncOrderStock } from '../stock/order-stock';
+import { StockRepository } from '../stock/repository';
 import { resolveDeliveryFee } from '../stores/delivery';
+import { distanceMeters, pickBandFee } from '../stores/geo';
 import { isClosingSoon } from '../stores/hours';
 import { orderMemorySince } from '../stores/policy';
 import { StoreRepository } from '../stores/repository';
 import { DeliveryMode, PaymentMethod } from '../stores/types';
-
-export const enum OrderErrorCode {
-  UnknownProduct = 'unknown_product',
-  ItemNotFound = 'item_not_found',
-  NoDraft = 'no_draft',
-  Incomplete = 'incomplete',
-  PaymentNotAccepted = 'payment_not_accepted',
-  NeedsHuman = 'needs_human',
-  OrderLocked = 'order_locked',
-  ChangeTooHigh = 'change_too_high',
-  StoreClosing = 'store_closing'
-}
-
-export class OrderError extends Error {
-  constructor(
-    public readonly code: OrderErrorCode,
-    message: string,
-    /**
-     * Set when a human must take over: the tool hands the conversation off with this reason.
-     */
-    public readonly handoffReason?: string
-  ) {
-    super(message);
-  }
-}
+export { OrderError, OrderErrorCode } from './errors';
 
 export const enum OrderStatusErrorCode {
   NotFound = 'not_found',
@@ -68,6 +51,10 @@ export const enum CartMissing {
   MinimumOrder = 'minimum_order',
   Fulfillment = 'fulfillment',
   Address = 'address',
+  /**
+   * Distance delivery: no customer location yet (pin or geocoded address).
+   */
+  Location = 'location',
   DeliveryArea = 'delivery_area',
   Payment = 'payment'
 }
@@ -100,6 +87,10 @@ export type Cart = {
   subtotal_cents: number;
   fee_cents: number;
   total_cents: number;
+  /**
+   * Straight-line distance to the store, one decimal; only in distance delivery once known.
+   */
+  distance_km?: number;
   missing: CartMissing[];
 };
 
@@ -125,8 +116,11 @@ const PANEL_CLOSED_STATUSES = [OrderStatus.Done, OrderStatus.Canceled];
 
 const PANEL_CLOSED_LIMIT = 50;
 
+const PANEL_ABANDONED_LIMIT = 20;
+
 const PANEL_ORDER_FIELDS = {
   id: true,
+  code: true,
   status: true,
   customer_id: true,
   conversation_id: true,
@@ -139,7 +133,9 @@ const PANEL_ORDER_FIELDS = {
   fee_cents: true,
   total_cents: true,
   placed_at: true,
-  amended_at: true
+  abandoned_at: true,
+  amended_at: true,
+  source: true
 } as const;
 
 const OPEN_ORDER_STATUSES = [OrderStatus.Placed, OrderStatus.Accepted, OrderStatus.Out, OrderStatus.Done];
@@ -157,6 +153,75 @@ const checkChange = (totalCents: number, changeForCents: number | null, policy: 
   }
 };
 
+type NewLine = {
+  product: PricingProduct;
+  qty: number;
+  selections: Selection[];
+  notes?: string | null;
+  skipLimits?: boolean;
+  /**
+   * The attendant writes it: stock never refuses it (the balance may go negative).
+   */
+  byStaff?: boolean;
+};
+
+/**
+ * Prices one new line and checks the store limits on it. The returned `write` checks the order total against the
+ * stored items again and inserts the line (run it inside the order's write).
+ */
+const prepareLine = async (db: DbClient, scope: DraftScope, input: NewLine) => {
+  const { unit_price_cents, options_snapshot } = priceItem(input.product, input.selections, {
+    allowSoldOut: input.byStaff
+  });
+
+  const policy: StorePolicy = input.skipLimits ? {} : await StoreRepository.getPolicy(db, scope.storeId);
+  const lineCents = unit_price_cents * input.qty;
+  const maxOrderCents = policy.max_order_cents;
+
+  if (policy.max_item_qty != null && input.qty > policy.max_item_qty) {
+    throw new OrderError(
+      OrderErrorCode.NeedsHuman,
+      `Quantity above the store limit of ${policy.max_item_qty}`,
+      'qty_limit'
+    );
+  }
+
+  const orderLimit = () =>
+    new OrderError(OrderErrorCode.NeedsHuman, `Order above the store limit of ${maxOrderCents} cents`, 'order_limit');
+
+  if (maxOrderCents != null && lineCents > maxOrderCents) {
+    throw orderLimit();
+  }
+
+  // What one unit uses now, frozen on the line: later link changes never move this order's stock.
+  const stockUsage = await StockRepository.usageFor(db, scope.storeId, {
+    productId: input.product.id,
+    optionIds: options_snapshot.flatMap(({ options }) => options.map(({ id }) => id))
+  });
+
+  return async (client: DbClient, orderId: string) => {
+    if (maxOrderCents != null && (await sumSubtotal(client, orderId)) + lineCents > maxOrderCents) {
+      throw orderLimit();
+    }
+
+    await client.order_items.insertOne({
+      data: {
+        id: randomUUID(),
+        store_id: scope.storeId,
+        order_id: orderId,
+        product_id: input.product.id,
+        product_name: input.product.name,
+        qty: input.qty,
+        unit_price_cents,
+        options_snapshot,
+        notes: input.notes ?? null,
+        stock_usage: stockUsage,
+        created_at: new Date().toISOString()
+      }
+    });
+  };
+};
+
 const sumSubtotal = async (db: DbClient, orderId: string) => {
   const { records } = await db.order_items.findMany({
     select: { qty: true, unit_price_cents: true },
@@ -165,6 +230,26 @@ const sumSubtotal = async (db: DbClient, orderId: string) => {
 
   return computeTotals(records, 0).subtotal_cents;
 };
+
+/**
+ * Finds the coordinates of a typed address near the store; undefined when it cannot be placed.
+ */
+export type Geocode = (query: string, near: Coordinates) => Promise<Coordinates | undefined>;
+
+/**
+ * Store coordinates when it delivers by distance.
+ */
+const distanceOrigin = async (db: DbClient, storeId: string) => {
+  const store = await db.stores.findOne({ select: { delivery_mode: true }, where: { id: storeId } });
+
+  return store?.delivery_mode === DeliveryMode.ByDistance ? StoreRepository.getStoreLocation(db, storeId) : undefined;
+};
+
+const locationData = (origin: Coordinates, location: Coordinates) => ({
+  latitude: location.latitude,
+  longitude: location.longitude,
+  distance_meters: distanceMeters(origin, location)
+});
 
 export namespace OrderRepository {
   /**
@@ -253,11 +338,21 @@ export namespace OrderRepository {
 
   /**
    * Runs `write` on a placed order only while the store has not accepted it. The row is locked and its status
-   * checked in one transaction, so a store accepting at the same moment either waits or wins.
+   * checked in one transaction, so a store accepting at the same moment either waits or wins. The order's stock follows
+   * the new lines in the same commit; only `byStaff` writes may take more than the balance.
    */
-  export const editPlacedOrder = async (db: DbClient, orderId: string, write: (tx: DbClient) => Promise<void>) => {
+  export const editPlacedOrder = async (
+    db: DbClient,
+    orderId: string,
+    write: (tx: DbClient) => Promise<void>,
+    options: { byStaff?: boolean } = {}
+  ) => {
     await db.transaction(async (tx) => {
-      const order = await tx.orders.findOne({ select: { status: true }, where: { id: orderId }, lock: true });
+      const order = await tx.orders.findOne({
+        select: { status: true, store_id: true },
+        where: { id: orderId },
+        lock: true
+      });
 
       if (order?.status !== OrderStatus.Placed) {
         throw new OrderError(
@@ -268,6 +363,7 @@ export namespace OrderRepository {
       }
 
       await write(tx);
+      await syncOrderStock(tx, { storeId: order.store_id, orderId, enforce: !options.byStaff });
 
       // Totals land in the same commit: a store accepting right after must not see the old total.
       await getCart(tx, orderId);
@@ -282,11 +378,17 @@ export namespace OrderRepository {
    * Runs `write` on the current order. With no order, a draft is created when `create` is set; otherwise
    * `no_draft`. A placed order is changed only through `editPlacedOrder`. Returns the order id.
    */
-  const writeCurrentOrder = async (db: DbClient, scope: DraftScope, create: boolean, write: OrderWrite) => {
+  const writeCurrentOrder = async (
+    db: DbClient,
+    scope: DraftScope,
+    create: boolean,
+    write: OrderWrite,
+    options: { byStaff?: boolean } = {}
+  ) => {
     const current = await findCurrentOrder(db, scope);
 
     if (current?.status === OrderStatus.Placed) {
-      await editPlacedOrder(db, current.id, (tx) => write(tx, current.id, OrderStatus.Placed));
+      await editPlacedOrder(db, current.id, (tx) => write(tx, current.id, OrderStatus.Placed), options);
 
       return current.id;
     }
@@ -315,7 +417,8 @@ export namespace OrderRepository {
         address: true,
         neighborhood: true,
         payment_method: true,
-        change_for_cents: true
+        change_for_cents: true,
+        distance_meters: true
       },
       where: { id: orderId }
     });
@@ -324,7 +427,7 @@ export namespace OrderRepository {
       throw new OrderError(OrderErrorCode.NoDraft, 'There is no open order');
     }
 
-    const [{ records: items }, store, { records: zones }] = await Promise.all([
+    const [{ records: items }, store, { records: zones }, bands] = await Promise.all([
       db.order_items.findMany({
         select: {
           id: true,
@@ -344,22 +447,30 @@ export namespace OrderRepository {
       db.delivery_zones.findMany({
         select: { neighborhood: true, fee_cents: true },
         where: { store_id: order.store_id }
-      })
+      }),
+      StoreRepository.getBands(db, order.store_id)
     ]);
 
     if (!store) {
       throw new OrderError(OrderErrorCode.NoDraft, 'Store not found');
     }
 
-    const fee = order.fulfillment
-      ? resolveDeliveryFee({
-          fulfillment: order.fulfillment,
-          deliveryMode: store.delivery_mode,
-          flatFeeCents: store.flat_fee_cents,
-          zones,
-          neighborhood: order.neighborhood
-        })
-      : 0;
+    const byDistance = store.delivery_mode === DeliveryMode.ByDistance;
+    const distance = order.distance_meters ?? null;
+
+    const fee = !order.fulfillment
+      ? 0
+      : byDistance && order.fulfillment === Fulfillment.Delivery
+        ? distance === null
+          ? undefined
+          : pickBandFee(bands, distance)
+        : resolveDeliveryFee({
+            fulfillment: order.fulfillment,
+            deliveryMode: store.delivery_mode,
+            flatFeeCents: store.flat_fee_cents,
+            zones,
+            neighborhood: order.neighborhood
+          });
 
     const totals = computeTotals(items, fee ?? 0);
 
@@ -382,7 +493,12 @@ export namespace OrderRepository {
     if (order.fulfillment === Fulfillment.Delivery) {
       if (!order.address || (store.delivery_mode === DeliveryMode.ByZone && !order.neighborhood)) {
         missing.push(CartMissing.Address);
-      } else if (fee === undefined) {
+      }
+
+      if (byDistance && distance === null) {
+        missing.push(CartMissing.Location);
+      } else if ((byDistance || order.address) && fee === undefined) {
+        // A far pin is out of area right away, before the customer types an address.
         missing.push(CartMissing.DeliveryArea);
       }
     }
@@ -417,61 +533,105 @@ export namespace OrderRepository {
       payment_method: order.payment_method ?? null,
       change_for_cents: order.change_for_cents ?? null,
       ...totals,
+      ...(byDistance && distance !== null && { distance_km: Math.round(distance / 100) / 10 }),
       missing
     };
   };
 
   /**
-   * Prices the item and checks the store limits first: a refused item never creates a draft or a row.
+   * Prices the item and checks the store limits first: a refused item never creates a draft or a row. `skipLimits`:
+   * the store approved going over them for this order.
    */
-  export const addItem = async (
+  export const addItem = async (db: DbClient, scope: DraftScope, input: NewLine) => {
+    const writeLine = await prepareLine(db, scope, input);
+    const orderId = await writeCurrentOrder(db, scope, true, writeLine, { byStaff: input.byStaff });
+
+    return getCart(db, orderId);
+  };
+
+  /**
+   * The conversation's last placed order inside the memory window, with the store policy.
+   */
+  const lastPlacedInWindow = async (db: DbClient, scope: DraftScope) => {
+    const [last, policy] = await Promise.all([
+      findLastPlaced(db, scope.conversationId),
+      StoreRepository.getPolicy(db, scope.storeId)
+    ]);
+
+    const inWindow = last && Date.parse(last.placedAt) >= Date.parse(orderMemorySince(policy, new Date()));
+
+    return { last: inWindow ? last : undefined, policy };
+  };
+
+  /**
+   * For the bot only (attendants and web orders are not gated): with no current order, a new one may start only
+   * once the last placed order reached the store's `new_order_after_status`.
+   */
+  export const assertCanStartOrder = async (db: DbClient, scope: DraftScope) => {
+    if (await findCurrentOrder(db, scope)) {
+      return;
+    }
+
+    const { last, policy } = await lastPlacedInWindow(db, scope);
+
+    if (last && !canStartNewOrder(last.status, policy)) {
+      throw new OrderError(
+        OrderErrorCode.PreviousOrderOpen,
+        `The previous order is ${last.status}; the store takes a new order once it is ${policy.new_order_after_status ?? DEFAULT_NEW_ORDER_AFTER_STATUS}`
+      );
+    }
+  };
+
+  /**
+   * Adds one line to the last order while the store prepares it (`accepted`), if its category is an add-on category.
+   * Locked like `editPlacedOrder`, so a status change and an addition never interleave.
+   */
+  export const addToAcceptedOrder = async (
     db: DbClient,
     scope: DraftScope,
-    input: { product: PricingProduct; qty: number; selections: Selection[]; notes?: string | null }
+    input: NewLine & { product: PricingProduct & { category_id: string } }
   ) => {
-    const { unit_price_cents, options_snapshot } = priceItem(input.product, input.selections);
+    const { last, policy } = await lastPlacedInWindow(db, scope);
 
-    const policy = await StoreRepository.getPolicy(db, scope.storeId);
-    const lineCents = unit_price_cents * input.qty;
-    const maxOrderCents = policy.max_order_cents;
+    if (last?.status !== OrderStatus.Accepted) {
+      throw new OrderError(OrderErrorCode.NoOrderInProgress, 'There is no order being prepared to add to');
+    }
 
-    if (policy.max_item_qty != null && input.qty > policy.max_item_qty) {
+    const { records: categories } = await db.categories.findMany({
+      select: { id: true, name: true },
+      where: { store_id: scope.storeId }
+    });
+
+    const allowed = addOnCategories(policy, categories);
+
+    if (!allowed.some(({ id }) => id === input.product.category_id)) {
       throw new OrderError(
-        OrderErrorCode.NeedsHuman,
-        `Quantity above the store limit of ${policy.max_item_qty}`,
-        'qty_limit'
+        OrderErrorCode.NotAllowedAfterAccept,
+        allowed.length
+          ? `Only items from ${allowed.map(({ name }) => name).join(', ')} can be added to an order being prepared`
+          : 'The store does not take additions to an order being prepared'
       );
     }
 
-    const orderLimit = () =>
-      new OrderError(OrderErrorCode.NeedsHuman, `Order above the store limit of ${maxOrderCents} cents`, 'order_limit');
+    const writeLine = await prepareLine(db, scope, input);
 
-    if (maxOrderCents != null && lineCents > maxOrderCents) {
-      throw orderLimit();
-    }
+    await db.transaction(async (tx) => {
+      const order = await tx.orders.findOne({ select: { status: true }, where: { id: last.id }, lock: true });
 
-    const orderId = await writeCurrentOrder(db, scope, true, async (client, id) => {
-      if (maxOrderCents != null && (await sumSubtotal(client, id)) + lineCents > maxOrderCents) {
-        throw orderLimit();
+      if (order?.status !== OrderStatus.Accepted) {
+        throw new OrderError(OrderErrorCode.NoOrderInProgress, 'The order is no longer being prepared');
       }
 
-      await client.order_items.insertOne({
-        data: {
-          id: randomUUID(),
-          store_id: scope.storeId,
-          order_id: id,
-          product_id: input.product.id,
-          product_name: input.product.name,
-          qty: input.qty,
-          unit_price_cents,
-          options_snapshot,
-          notes: input.notes ?? null,
-          created_at: new Date().toISOString()
-        }
-      });
+      await writeLine(tx, last.id);
+      await syncOrderStock(tx, { storeId: scope.storeId, orderId: last.id, enforce: true });
+      await getCart(tx, last.id);
+
+      const now = new Date().toISOString();
+
+      await tx.orders.updateOne({ data: { amended_at: now, updated_at: now }, where: { id: last.id } });
     });
 
-    return getCart(db, orderId);
+    return getCart(db, last.id);
   };
 
   export const removeItem = async (db: DbClient, scope: DraftScope, itemId: string) => {
@@ -507,16 +667,209 @@ export namespace OrderRepository {
   export const setAddress = async (
     db: DbClient,
     scope: DraftScope,
-    input: { address: string; neighborhood: string | null }
+    input: { address: string; neighborhood: string | null },
+    geocode?: Geocode
   ) => {
+    const origin = await distanceOrigin(db, scope.storeId);
+    const current = origin && (await findCurrentOrder(db, scope));
+
+    const pinned =
+      !!current &&
+      (await db.orders.findOne({ select: { location_pinned: true }, where: { id: current.id } }))?.location_pinned ===
+        true;
+
+    // Distance delivery without a pin: every typed address is geocoded again (never a guessed or stale fee).
+    const geocoded = !!origin && !pinned;
+
+    const location =
+      geocoded && geocode
+        ? await geocode([input.address, input.neighborhood].filter(Boolean).join(', '), origin)
+        : undefined;
+
     const orderId = await writeCurrentOrder(db, scope, true, async (client, id) => {
       await client.orders.updateOne({
-        data: { fulfillment: Fulfillment.Delivery, address: input.address, neighborhood: input.neighborhood },
+        data: {
+          fulfillment: Fulfillment.Delivery,
+          address: input.address,
+          neighborhood: input.neighborhood,
+          ...(geocoded &&
+            (location
+              ? { ...locationData(origin, location), location_pinned: false }
+              : { latitude: null, longitude: null, distance_meters: null, location_pinned: null }))
+        },
+        where: { id }
+      });
+    });
+
+    if (geocoded && !location) {
+      throw new OrderError(OrderErrorCode.LocationNeeded, 'Ask the customer to share the WhatsApp location');
+    }
+
+    return getCart(db, orderId);
+  };
+
+  /**
+   * The customer's last delivery address at this store (any conversation), with the location it had.
+   */
+  export const findSavedAddress = async (db: DbClient, scope: DraftScope) => {
+    const {
+      records: [order]
+    } = await db.orders.findMany({
+      select: { address: true, neighborhood: true, latitude: true, longitude: true, location_pinned: true },
+      where: {
+        store_id: scope.storeId,
+        customer_id: scope.customerId,
+        fulfillment: Fulfillment.Delivery,
+        placed_at: { isNull: false },
+        address: { isNull: false }
+      },
+      order: { placed_at: Order.Desc },
+      take: 1
+    });
+
+    return order?.address
+      ? {
+          address: order.address,
+          neighborhood: order.neighborhood ?? null,
+          location:
+            order.latitude != null && order.longitude != null
+              ? { latitude: order.latitude, longitude: order.longitude }
+              : undefined,
+          pinned: order.location_pinned === true
+        }
+      : undefined;
+  };
+
+  /**
+   * "Mesmo endereço": the last delivery address and its location go to the current order, so distance delivery
+   * needs no new geocoding. Without a stored location it is set like a typed address.
+   */
+  export const applySavedAddress = async (db: DbClient, scope: DraftScope, geocode?: Geocode) => {
+    const saved = await findSavedAddress(db, scope);
+
+    if (!saved) {
+      throw new OrderError(OrderErrorCode.NoSavedAddress, 'The customer has no previous delivery address');
+    }
+
+    const input = { address: saved.address, neighborhood: saved.neighborhood };
+    const origin = await distanceOrigin(db, scope.storeId);
+
+    if (!origin || !saved.location) {
+      return setAddress(db, scope, input, geocode);
+    }
+
+    const current = await findCurrentOrder(db, scope);
+
+    // A pin sent in this order is newer than the saved location.
+    const pinned =
+      !!current &&
+      (await db.orders.findOne({ select: { location_pinned: true }, where: { id: current.id } }))?.location_pinned ===
+        true;
+
+    const location = saved.location;
+
+    const orderId = await writeCurrentOrder(db, scope, true, async (client, id) => {
+      await client.orders.updateOne({
+        data: {
+          fulfillment: Fulfillment.Delivery,
+          ...input,
+          ...(!pinned && { ...locationData(origin, location), location_pinned: saved.pinned })
+        },
         where: { id }
       });
     });
 
     return getCart(db, orderId);
+  };
+
+  /**
+   * The customer's newest order at this store that ended in one of `statuses`, with its items.
+   */
+  export const findPreviousOrder = async (db: DbClient, scope: DraftScope, statuses: OrderStatus[]) => {
+    if (!statuses.length) {
+      return undefined;
+    }
+
+    const {
+      records: [order]
+    } = await db.orders.findMany({
+      select: { id: true, status: true, placed_at: true, abandoned_at: true, total_cents: true },
+      where: {
+        store_id: scope.storeId,
+        customer_id: scope.customerId,
+        status: { isIn: statuses },
+        subtotal_cents: { gt: 0 }
+      },
+      order: { created_at: Order.Desc },
+      take: 1
+    });
+
+    // Placed orders have `placed_at`; an abandoned draft has when the customer stopped.
+    const at = order?.placed_at ?? order?.abandoned_at;
+
+    if (!order || !at) {
+      return undefined;
+    }
+
+    const { records: items } = await db.order_items.findMany({
+      select: { product_id: true, product_name: true, qty: true, options_snapshot: true, notes: true },
+      where: { order_id: order.id },
+      order: { created_at: Order.Asc }
+    });
+
+    return {
+      status: order.status,
+      placedAt: at,
+      totalCents: order.total_cents,
+      items: items.map((item) => ({
+        productId: item.product_id,
+        name: item.product_name,
+        qty: item.qty,
+        options: describeOptions(item.options_snapshot),
+        selections: item.options_snapshot.map(({ group_id, options }) => ({
+          group_id,
+          option_ids: options.map(({ id }) => id)
+        })),
+        notes: item.notes ?? null
+      }))
+    };
+  };
+
+  /**
+   * A WhatsApp location pin: stored on the current order (created if needed) with its distance, when the store
+   * delivers by distance; ignored otherwise. The pin implies delivery.
+   */
+  export const setLocation = async (db: DbClient, scope: DraftScope, location: Coordinates) => {
+    const origin = await distanceOrigin(db, scope.storeId);
+
+    if (!origin) {
+      return;
+    }
+
+    // A pin sent while the store prepares the last order is for the courier, not a new order.
+    if (!(await findCurrentOrder(db, scope))) {
+      const last = await findLastPlaced(db, scope.conversationId);
+
+      if (last && (last.status === OrderStatus.Accepted || last.status === OrderStatus.Out)) {
+        return;
+      }
+    }
+
+    try {
+      await writeCurrentOrder(db, scope, true, async (client, id) => {
+        await client.orders.updateOne({
+          data: { fulfillment: Fulfillment.Delivery, ...locationData(origin, location), location_pinned: true },
+          where: { id }
+        });
+      });
+    } catch (error) {
+      // The store took the order meanwhile: same as above.
+      if (error instanceof OrderError && error.code === OrderErrorCode.OrderLocked) {
+        return;
+      }
+
+      throw error;
+    }
   };
 
   /**
@@ -556,7 +909,7 @@ export namespace OrderRepository {
    * Places the draft. On a placed order (customer came back to change it), confirms the changes: it is validated
    * again and stays placed; the closing cutoff and the new-customer review apply only to the first placement.
    */
-  export const place = async (db: DbClient, scope: DraftScope) => {
+  export const place = async (db: DbClient, scope: DraftScope, options: { byStaff?: boolean } = {}) => {
     const current = await findCurrentOrder(db, scope);
 
     if (!current) {
@@ -581,10 +934,13 @@ export namespace OrderRepository {
     checkChange(cart.total_cents, cart.change_for_cents, policy);
 
     if (current.status === OrderStatus.Placed) {
-      return { ...cart, review: false };
+      const placed = await db.orders.findOne({ select: { id: true, code: true }, where: { id: current.id } });
+
+      return { ...cart, code: placed ? displayOrderCode(placed) : null, review: false };
     }
 
-    const lastOrderMinutes = policy.last_order_minutes;
+    // The store itself may take an order at any time; the review exists to protect it from the bot.
+    const lastOrderMinutes = options.byStaff ? null : policy.last_order_minutes;
 
     if (store && lastOrderMinutes != null && isClosingSoon(hours, store.timezone, new Date(), lastOrderMinutes)) {
       throw new OrderError(
@@ -597,29 +953,57 @@ export namespace OrderRepository {
     const reviewCents = policy.new_customer_review_cents;
 
     const review =
+      !options.byStaff &&
       reviewCents != null &&
       cart.total_cents > reviewCents &&
       !(await db.orders.count({
         where: { customer_id: scope.customerId, status: { isIn: OPEN_ORDER_STATUSES } }
       }));
 
-    const now = new Date().toISOString();
+    // Stock, number and status in one commit: a shortage leaves the draft as it was and gives no number away.
+    const placed = await db.transaction(async (tx) => {
+      const order = await tx.orders.findOne({
+        select: { status: true, code: true },
+        where: { id: current.id },
+        lock: true
+      });
 
-    await db.orders.updateOne({
-      data: { status: OrderStatus.Placed, placed_at: now, updated_at: now },
-      where: { id: current.id }
+      // A parallel placement of the same draft won: answer as for a placed order.
+      if (order?.status === OrderStatus.Placed) {
+        return { code: displayOrderCode({ id: current.id, code: order.code }), first: false };
+      }
+
+      if (order?.status !== OrderStatus.Draft) {
+        throw new OrderError(OrderErrorCode.NoDraft, 'There is no open order');
+      }
+
+      await syncOrderStock(tx, { storeId: scope.storeId, orderId: current.id, enforce: !options.byStaff });
+
+      const now = new Date().toISOString();
+      const code = await nextOrderCodeIn(tx, scope.storeId);
+
+      await tx.orders.updateOne({
+        data: { status: OrderStatus.Placed, code, placed_at: now, updated_at: now },
+        where: { id: current.id }
+      });
+
+      // The next order checks the limits again.
+      await tx.conversations.updateOne({
+        data: { draft_order_id: null, approved_reason: null },
+        where: { id: scope.conversationId }
+      });
+
+      if (cart.fulfillment === Fulfillment.Delivery && cart.address) {
+        await tx.customers.updateOne({
+          data: { last_address: cart.address, updated_at: now },
+          where: { id: scope.customerId }
+        });
+      }
+
+      return { code, first: true };
     });
 
-    await db.conversations.updateOne({ data: { draft_order_id: null }, where: { id: scope.conversationId } });
-
-    if (cart.fulfillment === Fulfillment.Delivery && cart.address) {
-      await db.customers.updateOne({
-        data: { last_address: cart.address, updated_at: now },
-        where: { id: scope.customerId }
-      });
-    }
-
-    return { ...cart, status: OrderStatus.Placed, review };
+    return { ...cart, status: OrderStatus.Placed, code: placed.code, review: placed.first && review };
   };
 
   /**
@@ -650,6 +1034,10 @@ export namespace OrderRepository {
         data: { status: input.status, updated_at: new Date().toISOString() },
         where: { id: input.orderId }
       });
+
+      if (input.status === OrderStatus.Canceled) {
+        await syncOrderStock(tx, { storeId: input.storeId, orderId: input.orderId, enforce: false, canceled: true });
+      }
 
       return { conversationId: order.conversation_id, fulfillment: order.fulfillment ?? null };
     });
@@ -721,10 +1109,259 @@ export namespace OrderRepository {
   export type PanelOrder = Awaited<ReturnType<typeof withDetails>>[number];
 
   /**
-   * Open: the kitchen queue, oldest first. Closed: the latest finished or canceled orders.
+   * Open: the kitchen queue, oldest first. Closed: the latest finished or canceled orders, plus the latest abandoned
+   * drafts that had items (stale drafts are marked first).
    */
   export const listForPanel = async (db: DbClient, storeId: string, scope: PanelOrderScope) => {
-    return withDetails(db, await findPanelOrders(db, storeId, scope));
+    if (scope === PanelOrderScope.Open) {
+      return withDetails(db, await findPanelOrders(db, storeId, scope));
+    }
+
+    await abandonStaleDrafts(db, new Date(), storeId);
+
+    const [closed, { records: abandoned }] = await Promise.all([
+      findPanelOrders(db, storeId, scope),
+      db.orders.findMany({
+        select: PANEL_ORDER_FIELDS,
+        where: { store_id: storeId, status: OrderStatus.Abandoned, subtotal_cents: { gt: 0 } },
+        order: { abandoned_at: Order.Desc },
+        take: PANEL_ABANDONED_LIMIT
+      })
+    ]);
+
+    return withDetails(db, [...closed, ...abandoned]);
+  };
+
+  /**
+   * The conversation's draft row (no cart recompute), for its progress in the panel.
+   */
+  export const findDraftRow = async (db: DbClient, conversationId: string) => {
+    const draftId = await findDraftId(db, conversationId);
+
+    return draftId
+      ? db.orders.findOne({
+          select: { subtotal_cents: true, fulfillment: true, address: true, payment_method: true },
+          where: { id: draftId }
+        })
+      : undefined;
+  };
+
+  /**
+   * A customer's placed orders in the store (any source), newest first, with what is needed to order them again.
+   */
+  export const listForCustomer = async (db: DbClient, storeId: string, customerIds: string[], limit: number) => {
+    if (!customerIds.length) {
+      return [];
+    }
+
+    const { records: orders } = await db.orders.findMany({
+      select: { id: true, code: true, status: true, source: true, placed_at: true, total_cents: true },
+      where: { store_id: storeId, customer_id: { isIn: customerIds }, placed_at: { isNull: false } },
+      order: { placed_at: Order.Desc },
+      take: limit
+    });
+
+    if (!orders.length) {
+      return [];
+    }
+
+    const { records: items } = await db.order_items.findMany({
+      select: { order_id: true, product_id: true, product_name: true, qty: true, options_snapshot: true, notes: true },
+      where: { order_id: { isIn: orders.map(({ id }) => id) } },
+      order: { created_at: Order.Asc }
+    });
+
+    return orders.map((order) => ({
+      code: displayOrderCode(order),
+      status: order.status,
+      source: order.source ?? null,
+      placedAt: order.placed_at!,
+      totalCents: order.total_cents,
+      items: items
+        .filter(({ order_id }) => order_id === order.id)
+        .map((item) => ({
+          productId: item.product_id,
+          name: item.product_name,
+          qty: item.qty,
+          options: describeOptions(item.options_snapshot),
+          selections: item.options_snapshot.map(({ group_id, options }) => ({
+            groupId: group_id,
+            optionIds: options.map(({ id }) => id)
+          })),
+          notes: item.notes ?? null
+        }))
+    }));
+  };
+
+  /**
+   * The conversation's orders as marks in its thread: placed ones (at `placed_at`) and abandoned drafts that had items
+   * (at the customer's last message), oldest first.
+   */
+  export const marksForConversation = async (db: DbClient, conversationId: string) => {
+    const select = {
+      id: true,
+      code: true,
+      status: true,
+      placed_at: true,
+      abandoned_at: true,
+      total_cents: true
+    } as const;
+
+    const [{ records: placed }, { records: abandoned }] = await Promise.all([
+      db.orders.findMany({ select, where: { conversation_id: conversationId, placed_at: { isNull: false } } }),
+      db.orders.findMany({
+        select,
+        where: { conversation_id: conversationId, status: OrderStatus.Abandoned, subtotal_cents: { gt: 0 } }
+      })
+    ]);
+
+    return [...placed, ...abandoned]
+      .map((order) => ({
+        id: order.id,
+        code: order.placed_at ? displayOrderCode(order) : null,
+        status: order.status,
+        at: (order.placed_at ?? order.abandoned_at)!,
+        totalCents: order.total_cents
+      }))
+      .filter(({ at }) => !!at)
+      .sort((a, b) => a.at.localeCompare(b.at));
+  };
+
+  /**
+   * A new empty draft that becomes the conversation's draft only if it has none (checked in the same update): the
+   * web order never writes into a draft someone else (the bot) started. Undefined when the conversation already had
+   * one.
+   */
+  export const claimNewDraft = async (db: DbClient, scope: DraftScope) => {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    await db.orders.insertOne({
+      data: {
+        id,
+        store_id: scope.storeId,
+        customer_id: scope.customerId,
+        conversation_id: scope.conversationId,
+        status: OrderStatus.Draft,
+        subtotal_cents: 0,
+        fee_cents: 0,
+        total_cents: 0,
+        created_at: now,
+        updated_at: now
+      }
+    });
+
+    await db.conversations.updateMany({
+      data: { draft_order_id: id },
+      where: { id: scope.conversationId, draft_order_id: null }
+    });
+
+    if ((await findDraftId(db, scope.conversationId)) === id) {
+      return id;
+    }
+
+    await db.orders.deleteMany({ where: { id } });
+
+    return undefined;
+  };
+
+  /**
+   * Deletes `orderId` and its items while it is still a draft (a web order that failed half-way), and unlinks it
+   * from the conversation only if it is still the conversation's draft.
+   */
+  export const discardDraft = async (db: DbClient, input: { conversationId: string; orderId: string }) => {
+    await db.conversations.updateMany({
+      data: { draft_order_id: null },
+      where: { id: input.conversationId, draft_order_id: input.orderId }
+    });
+
+    const order = await db.orders.findOne({ select: { status: true }, where: { id: input.orderId } });
+
+    if (order?.status !== OrderStatus.Draft) {
+      return;
+    }
+
+    await db.order_items.deleteMany({ where: { order_id: input.orderId } });
+    await db.orders.deleteMany({ where: { id: input.orderId, status: OrderStatus.Draft } });
+  };
+
+  /**
+   * Marks the draft abandoned: it leaves the conversation (the bot starts a new order) and keeps the time the customer
+   * stopped. Billing is untouched: a draft nobody handed off was never billed.
+   */
+  const abandonDraft = async (db: DbClient, draft: { id: string; conversation_id: string }, at: string) => {
+    await db.orders.updateOne({
+      data: { status: OrderStatus.Abandoned, abandoned_at: at, updated_at: new Date().toISOString() },
+      where: { id: draft.id, status: OrderStatus.Draft }
+    });
+
+    await db.conversations.updateOne({
+      data: { draft_order_id: null },
+      where: { id: draft.conversation_id, draft_order_id: draft.id }
+    });
+  };
+
+  /**
+   * The conversation's draft when the customer's previous activity (`lastActivity`, before the messages being answered
+   * now) is older than the order memory window: called by the turn before it reads the draft.
+   */
+  export const abandonIfStale = async (
+    db: DbClient,
+    input: { conversationId: string; lastActivity: string | undefined; memorySince: string }
+  ) => {
+    if (!input.lastActivity || Date.parse(input.lastActivity) >= Date.parse(input.memorySince)) {
+      return false;
+    }
+
+    const draftId = await findDraftId(db, input.conversationId);
+
+    if (!draftId) {
+      return false;
+    }
+
+    await abandonDraft(db, { id: draftId, conversation_id: input.conversationId }, input.lastActivity);
+
+    return true;
+  };
+
+  /**
+   * Every draft (of one store, or all) whose conversation got no message inside its store's memory window: the daily
+   * cron and the panel lists run it, so drafts of customers who never came back are marked too.
+   */
+  export const abandonStaleDrafts = async (db: DbClient, now: Date, storeId?: string) => {
+    const { records: drafts } = await db.orders.findMany({
+      select: { id: true, store_id: true, conversation_id: true },
+      where: { status: OrderStatus.Draft, ...(storeId && { store_id: storeId }) }
+    });
+
+    if (!drafts.length) {
+      return 0;
+    }
+
+    const [{ records: conversations }, { records: stores }] = await Promise.all([
+      db.conversations.findMany({
+        select: { id: true, last_message_at: true },
+        where: { id: { isIn: [...new Set(drafts.map(({ conversation_id }) => conversation_id))] } }
+      }),
+      db.stores.findMany({
+        select: { id: true, policy: true },
+        where: { id: { isIn: [...new Set(drafts.map(({ store_id }) => store_id))] } }
+      })
+    ]);
+
+    let abandoned = 0;
+
+    for (const draft of drafts) {
+      const lastMessageAt = conversations.find(({ id }) => id === draft.conversation_id)?.last_message_at;
+      const policy = stores.find(({ id }) => id === draft.store_id)?.policy;
+
+      if (lastMessageAt && Date.parse(lastMessageAt) < Date.parse(orderMemorySince(policy, now))) {
+        await abandonDraft(db, draft, lastMessageAt);
+        abandoned++;
+      }
+    }
+
+    return abandoned;
   };
 
   export const getForPanel = async (db: DbClient, storeId: string, orderId: string) => {

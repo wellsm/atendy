@@ -1,7 +1,7 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
-import type { PanelProvider } from '../provider';
+import type { PanelMenuProvider } from '../provider';
 import type { PanelIdentity } from '../types';
 
 import { HttpNotFoundError } from '@ez4/gateway';
@@ -24,18 +24,21 @@ export declare class DeleteProductResponse implements Http.Response {
 }
 
 /**
- * Hard delete: order items keep their own name, price and options snapshot.
+ * Hard delete: order items keep their own name, price and options snapshot. Groups other products still link stay.
  */
 export async function deleteProductHandler(
   request: Http.Incoming<DeleteProductRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db, productImages }: Service.Context<PanelMenuProvider>
 ): Promise<DeleteProductResponse> {
   const store = await requireStore(db, request.identity);
   const { productId } = request.parameters;
+  const imageKeys = await MenuRepository.deleteProduct(db, store.id, productId);
 
-  if (!(await MenuRepository.deleteProduct(db, store.id, productId))) {
+  if (!imageKeys) {
     throw new HttpNotFoundError('Product not found');
   }
+
+  await Promise.all(imageKeys.map((key) => productImages.delete(key)));
 
   return { status: 200, body: { id: productId } };
 }

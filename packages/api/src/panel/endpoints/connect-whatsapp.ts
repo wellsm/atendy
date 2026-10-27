@@ -1,6 +1,6 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
-import type { PanelProvider } from '../provider';
+import type { PanelWhatsAppProvider } from '../provider';
 import type { PanelIdentity } from '../types';
 
 import { requireStore } from '../store';
@@ -26,7 +26,7 @@ export declare class ConnectWhatsAppResponse implements Http.Response {
  */
 export async function connectWhatsAppHandler(
   request: Http.Incoming<ConnectWhatsAppRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db }: Service.Context<PanelWhatsAppProvider>
 ): Promise<ConnectWhatsAppResponse> {
   const store = await requireStore(db, request.identity);
   const qr = await withEvolutionErrors(() => StoreWhatsApp.connect(db, store.id, process.env));

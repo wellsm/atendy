@@ -1,10 +1,12 @@
 import type { String } from '@ez4/schema';
 import type { ConversationMode, MessageAuthor } from '../conversations/types';
 import type { PriceMode } from '../menu/types';
-import type { OrderRepository } from '../orders/repository';
-import type { Fulfillment, OrderStatus } from '../orders/types';
+import type { Cart, OrderRepository } from '../orders/repository';
+import type { Fulfillment, OrderSource, OrderStatus } from '../orders/types';
 import type { HourRange } from '../stores/hours';
-import type { DeliveryMode, PaymentMethod, StorePolicy } from '../stores/types';
+import type { DeliveryMode, NewOrderAfterStatus, PaymentMethod, PreviousAddress, StorePolicy } from '../stores/types';
+
+import { displayOrderCode } from '../orders/code';
 
 export type PanelIdentity = {
   userId: string;
@@ -61,10 +63,28 @@ export type PanelDeliveryZone = {
   feeCents: number;
 };
 
+export type PanelDeliveryBand = {
+  maxMeters: number;
+  feeCents: number;
+};
+
 export type PanelDelivery = {
   mode: DeliveryMode;
   flatFeeCents: number;
   zones: PanelDeliveryZone[];
+  /**
+   * `by_distance` only; the API always answers with the list (empty for the other modes).
+   */
+  bands?: PanelDeliveryBand[];
+};
+
+/**
+ * Store address as Google formatted it and its coordinates.
+ */
+export type PanelStoreLocation = {
+  address: string;
+  latitude: number;
+  longitude: number;
 };
 
 /**
@@ -77,7 +97,14 @@ export type PanelPolicy = {
   maxItemQty: number | null;
   newCustomerReviewCents: number | null;
   lastOrderMinutes: number | null;
+  deliveryMinMinutes: number | null;
+  deliveryMaxMinutes: number | null;
   sop: string | null;
+  previousAddress: PreviousAddress | null;
+  repeatOrderStatuses: OrderStatus[] | null;
+  newOrderAfterStatus: NewOrderAfterStatus | null;
+  addOnCategoryIds: string[] | null;
+  addOnExtraMinutes: number | null;
 };
 
 export const toPanelHours = (hours: HourRange[]): PanelHourRange[] =>
@@ -93,7 +120,14 @@ export const toPanelPolicy = (policy: StorePolicy): PanelPolicy => ({
   maxItemQty: policy.max_item_qty ?? null,
   newCustomerReviewCents: policy.new_customer_review_cents ?? null,
   lastOrderMinutes: policy.last_order_minutes ?? null,
-  sop: policy.sop ?? null
+  deliveryMinMinutes: policy.delivery_min_minutes ?? null,
+  deliveryMaxMinutes: policy.delivery_max_minutes ?? null,
+  sop: policy.sop ?? null,
+  previousAddress: policy.previous_address ?? null,
+  repeatOrderStatuses: policy.repeat_order_statuses ?? null,
+  newOrderAfterStatus: policy.new_order_after_status ?? null,
+  addOnCategoryIds: policy.add_on_category_ids ?? null,
+  addOnExtraMinutes: policy.add_on_extra_minutes ?? null
 });
 
 export type PanelCustomer = {
@@ -112,6 +146,10 @@ export type PanelOrderItem = {
 
 export type PanelOrder = {
   id: string;
+  /**
+   * `K7Q2MX` / `128` (no `#`).
+   */
+  code: string;
   status: OrderStatus;
   fulfillment: Fulfillment | null;
   address: string | null;
@@ -122,6 +160,11 @@ export type PanelOrder = {
   feeCents: number;
   totalCents: number;
   placedAt: string | null;
+  abandonedAt: string | null;
+  /**
+   * `web` when the customer ordered on the public menu; null for WhatsApp.
+   */
+  source: OrderSource | null;
   /**
    * Set when the customer changed the order after placing it ("pedido alterado").
    */
@@ -133,6 +176,7 @@ export type PanelOrder = {
 
 export const toPanelOrder = (order: OrderRepository.PanelOrder): PanelOrder => ({
   id: order.id,
+  code: displayOrderCode(order),
   status: order.status,
   fulfillment: order.fulfillment ?? null,
   address: order.address ?? null,
@@ -143,6 +187,8 @@ export const toPanelOrder = (order: OrderRepository.PanelOrder): PanelOrder => (
   feeCents: order.fee_cents,
   totalCents: order.total_cents,
   placedAt: order.placed_at ?? null,
+  abandonedAt: order.abandoned_at ?? null,
+  source: order.source ?? null,
   amendedAt: order.amended_at ?? null,
   conversationId: order.conversation_id,
   customer: order.customer,
@@ -156,26 +202,91 @@ export const toPanelOrder = (order: OrderRepository.PanelOrder): PanelOrder => (
   }))
 });
 
+export type PanelCartItem = {
+  itemId: string;
+  name: string;
+  qty: number;
+  options: string;
+  unitPriceCents: number;
+  lineTotalCents: number;
+  notes: string | null;
+};
+
+/**
+ * The conversation's draft as the attendant builds it; `missing` lists what placing still needs.
+ */
+export type PanelCart = {
+  orderId: string;
+  items: PanelCartItem[];
+  fulfillment: Fulfillment | null;
+  address: string | null;
+  neighborhood: string | null;
+  paymentMethod: PaymentMethod | null;
+  changeForCents: number | null;
+  subtotalCents: number;
+  feeCents: number;
+  totalCents: number;
+  distanceKm: number | null;
+  missing: string[];
+};
+
+export const toPanelCart = (cart: Cart): PanelCart => ({
+  orderId: cart.order_id,
+  items: cart.items.map((item) => ({
+    itemId: item.item_id,
+    name: item.name,
+    qty: item.qty,
+    options: item.options,
+    unitPriceCents: item.unit_price_cents,
+    lineTotalCents: item.line_total_cents,
+    notes: item.notes
+  })),
+  fulfillment: cart.fulfillment,
+  address: cart.address,
+  neighborhood: cart.neighborhood,
+  paymentMethod: cart.payment_method,
+  changeForCents: cart.change_for_cents,
+  subtotalCents: cart.subtotal_cents,
+  feeCents: cart.fee_cents,
+  totalCents: cart.total_cents,
+  distanceKm: cart.distance_km ?? null,
+  missing: cart.missing
+});
+
+export type PanelLastMessage = {
+  author: MessageAuthor;
+  body: string;
+};
+
 export type PanelConversation = {
   id: string;
   mode: ConversationMode;
   handoffReason: string | null;
+  /**
+   * The bot waits for the store to approve this (a limit or a suspected prank); null when it does not.
+   */
+  approvalReason: string | null;
   lastMessageAt: string;
   customer: PanelCustomer;
+  lastMessage?: PanelLastMessage | null;
 };
 
 export const toPanelConversation = (conversation: {
   id: string;
   mode: ConversationMode;
   handoff_reason?: string | null;
+  approval_reason?: string | null;
   last_message_at: string;
   customer: PanelCustomer;
+  last_message?: PanelLastMessage | null;
 }): PanelConversation => ({
   id: conversation.id,
   mode: conversation.mode,
   handoffReason: conversation.handoff_reason ?? null,
+  approvalReason: conversation.approval_reason ?? null,
   lastMessageAt: conversation.last_message_at,
-  customer: { name: conversation.customer.name, phone: conversation.customer.phone }
+  customer: { name: conversation.customer.name, phone: conversation.customer.phone },
+  ...(conversation.last_message !== undefined && { lastMessage: conversation.last_message })
 });
 
 export type PanelMessage = {
@@ -183,6 +294,14 @@ export type PanelMessage = {
   author: MessageAuthor;
   body: string;
   createdAt: string;
+  /**
+   * The customer's reaction to this message (emoji).
+   */
+  reaction: string | null;
+  /**
+   * Signed URL (1 h) of the saved voice note.
+   */
+  audioUrl: string | null;
 };
 
 export type PanelOptionInput = {
@@ -200,7 +319,7 @@ export type PanelOptionInput = {
 
 export type PanelGroupInput = {
   /**
-   * Absent for a new group; an existing one keeps its id.
+   * Absent for a new group; any group of the store keeps its id (a group of another product becomes shared).
    */
   id?: String.UUID;
   name: string;
@@ -209,6 +328,11 @@ export type PanelGroupInput = {
   priceMode: PriceMode;
   options: PanelOptionInput[];
 };
+
+/**
+ * A group's shared part, edited from the groups library.
+ */
+export type PanelGroupContentInput = Omit<PanelGroupInput, 'id' | 'min' | 'max'>;
 
 /**
  * A product saved whole, with its groups and options in display order.
@@ -230,6 +354,10 @@ export type PanelOption = {
   name: string;
   priceDeltaCents: number;
   active: boolean;
+  /**
+   * Signed read URL (1 h); null without a photo.
+   */
+  imageUrl: string | null;
 };
 
 export type PanelGroup = {
@@ -248,6 +376,10 @@ export type PanelProduct = {
   description: string | null;
   priceCents: number;
   active: boolean;
+  /**
+   * Signed read URL (1 h); null without a photo.
+   */
+  imageUrl: string | null;
   groups: PanelGroup[];
 };
 

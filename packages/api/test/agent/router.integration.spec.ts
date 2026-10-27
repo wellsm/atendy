@@ -4,7 +4,7 @@ import type { ToolContext } from '../../src/agent/tools';
 import type { Db } from '../../src/db';
 import type { StorePolicy } from '../../src/stores/types';
 
-import { equal } from 'node:assert/strict';
+import { deepEqual, equal } from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
 
 import { DatabaseTester } from '@ez4/local-database/test';
@@ -21,12 +21,15 @@ import {
   Q_QTY
 } from '../../src/agent/jev-router';
 import { OpenRouterClient } from '../../src/agent/openrouter-client';
+import { PROMPT_VERSION } from '../../src/agent/prompt-version';
 import { AgentRouter } from '../../src/agent/router';
 import { AiPath, AiProvider } from '../../src/agent/types';
 import { ConversationMode } from '../../src/conversations/types';
 import { OrderRepository } from '../../src/orders/repository';
 import { OrderStatus } from '../../src/orders/types';
 import { DeliveryMode, PaymentMethod, RouterType } from '../../src/stores/types';
+import { bodyForModel } from '../../src/whatsapp/location';
+import { formatReactionBody } from '../../src/whatsapp/reaction';
 import { groupIdOf, placeOrder, productByName, seedConversation, seedMenu, seedStore } from '../support/fixtures';
 
 describe('AgentRouter', () => {
@@ -130,6 +133,18 @@ describe('AgentRouter', () => {
     equal(jevCall?.intent, Intent.AddItem);
     equal(Number(jevCall?.cost_usd), 0.000042);
 
+    const {
+      records: [traced]
+    } = await db.ai_calls.findMany({
+      select: { tools: true, prompt_version: true },
+      where: { conversation_id: ctx.conversationId, provider: AiProvider.Jev }
+    });
+
+    equal(traced?.prompt_version, PROMPT_VERSION);
+    equal(traced?.tools?.length, 1);
+    equal(traced?.tools?.[0]?.name, 'add_item');
+    equal(traced?.tools?.[0]?.ok, true);
+
     const draftId = await OrderRepository.findDraftId(db, ctx.conversationId);
 
     equal((await OrderRepository.getCart(db, draftId!)).subtotal_cents, 2990);
@@ -143,7 +158,7 @@ describe('AgentRouter', () => {
 
     await AgentRouter.run({ ctx, env, store, cart: undefined, history: [], messages: ['me vê uma pizza'] });
 
-    equal((chat.mock.calls[0]!.arguments[0] as { tools?: unknown[] }).tools?.length, 9);
+    equal((chat.mock.calls[0]!.arguments[0] as { tools?: unknown[] }).tools?.length, 12);
     equal(await calls(ctx.conversationId, AiPath.LlmFallback, AiProvider.Jev), 1);
     equal(await calls(ctx.conversationId, AiPath.LlmFallback, AiProvider.OpenRouter), 1);
   });
@@ -175,7 +190,26 @@ describe('AgentRouter', () => {
     equal(evaluate.mock.callCount(), 0);
   });
 
-  it('only writes the reply when the direct tool handed the conversation to a human', async () => {
+  it('sends a reaction to the full agent instead of letting Jev act on it', async () => {
+    const { ctx, store } = await setup(RouterType.Jev);
+
+    const evaluate = jevAnswers({ [Q_INTENT]: Intent.AddItem });
+    const chat = textReply('Qual forma de pagamento você prefere: Pix, cartão ou dinheiro?');
+
+    await AgentRouter.run({
+      ctx,
+      env,
+      store,
+      cart: undefined,
+      history: [],
+      messages: [bodyForModel(formatReactionBody('👍', 'Vai ser Pix, cartão ou dinheiro?'))]
+    });
+
+    equal(evaluate.mock.callCount(), 0);
+    equal(chat.mock.callCount(), 1);
+  });
+
+  it('writes no reply when the direct tool asked the store to approve a limit', async () => {
     const { ctx, store } = await setup(RouterType.Jev, { max_item_qty: 1 });
 
     jevAnswers({ [Q_INTENT]: Intent.AddItem, [Q_PRODUCT]: 'Coca-Cola 2L (Bebidas)', [Q_QTY]: '2' });
@@ -191,18 +225,16 @@ describe('AgentRouter', () => {
       messages: ['quero 2 coca-cola']
     });
 
-    equal(text, 'Vou chamar um atendente para te ajudar.');
-    equal(chat.mock.callCount(), 1);
+    equal(text, '');
+    equal(chat.mock.callCount(), 0);
+    equal(ctx.awaitingApproval, true);
 
-    const input = chat.mock.calls[0]!.arguments[0] as { tools?: unknown; messages: { content: string }[] };
-    const state = JSON.parse(input.messages[1]!.content) as { action: { result: { error: string } } };
+    const conversation = await db.conversations.findOne({
+      select: { mode: true, approval_reason: true },
+      where: { id: ctx.conversationId }
+    });
 
-    equal(input.tools, undefined);
-    equal(state.action.result.error, 'needs_human');
-
-    const conversation = await db.conversations.findOne({ select: { mode: true }, where: { id: ctx.conversationId } });
-
-    equal(conversation?.mode, ConversationMode.Human);
+    deepEqual(conversation, { mode: ConversationMode.Bot, approval_reason: 'qty_limit' });
   });
 
   it('sends a change to an order the store already accepted to the LLM instead of a new Jev draft', async () => {
@@ -228,7 +260,9 @@ describe('AgentRouter', () => {
         total_cents: 1400,
         status: OrderStatus.Accepted,
         minutes_ago: 5,
-        editable: false
+        editable: false,
+        new_order_allowed: true,
+        add_on: null
       }
     });
 

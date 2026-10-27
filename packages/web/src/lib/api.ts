@@ -54,3 +54,33 @@ export const useApi = () => {
     [getToken]
   );
 };
+
+/**
+ * `fetch` against a public route (no session token).
+ */
+export const getPublic = async <T>(path: string): Promise<T> => {
+  const response = await fetch(`${API_URL}${path}`);
+
+  if (!response.ok) {
+    throw await readError(response);
+  }
+
+  return (await response.json()) as T;
+};
+
+/**
+ * `POST` to a public route (no session token): the menu checkout.
+ */
+export const postPublic = async <T>(path: string, body: unknown): Promise<T> => {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    throw await readError(response);
+  }
+
+  return (await response.json()) as T;
+};

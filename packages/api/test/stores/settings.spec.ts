@@ -116,7 +116,7 @@ describe('settings validators', () => {
         flatFeeCents: 0,
         zones: [{ neighborhood: ' Centro ', feeCents: 500 }]
       }),
-      { mode: DeliveryMode.ByZone, flatFeeCents: 0, zones: [{ neighborhood: 'Centro', feeCents: 500 }] }
+      { mode: DeliveryMode.ByZone, flatFeeCents: 0, zones: [{ neighborhood: 'Centro', feeCents: 500 }], bands: [] }
     );
   });
 
@@ -133,7 +133,7 @@ describe('settings validators', () => {
         flatFeeCents: 800,
         zones: [{ neighborhood: 'Centro', feeCents: 500 }]
       }),
-      { mode: DeliveryMode.Flat, flatFeeCents: 800, zones: [] }
+      { mode: DeliveryMode.Flat, flatFeeCents: 800, zones: [], bands: [] }
     );
   });
 
@@ -149,5 +149,27 @@ describe('settings validators', () => {
     equal(validateStoreName('  Pizzaria Boa  '), 'Pizzaria Boa');
     throws(() => validateStoreName('   '), failsOn('name'));
     throws(() => validateStoreName('x'.repeat(81)), failsOn('name'));
+  });
+
+  it('accepts distance bands and keeps one list per mode', () => {
+    const bands = [
+      { maxMeters: 2000, feeCents: 500 },
+      { maxMeters: 5000, feeCents: 800 }
+    ];
+
+    const byDistance = validateDelivery({
+      mode: DeliveryMode.ByDistance,
+      flatFeeCents: 0,
+      zones: [{ neighborhood: 'Centro', feeCents: 100 }],
+      bands
+    });
+
+    deepEqual(byDistance.zones, []);
+    deepEqual(byDistance.bands, bands);
+    deepEqual(validateDelivery({ mode: DeliveryMode.Flat, flatFeeCents: 500, zones: [], bands }).bands, []);
+    throws(
+      () => validateDelivery({ mode: DeliveryMode.ByDistance, flatFeeCents: 0, zones: [], bands: [] }),
+      failsOn('bands')
+    );
   });
 });

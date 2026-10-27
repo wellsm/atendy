@@ -8,6 +8,8 @@ export const enum PricingErrorCode {
   DuplicateGroup = 'duplicate_group',
   UnknownOption = 'unknown_option',
   OptionInactive = 'option_inactive',
+  SoldOut = 'sold_out',
+  OptionSoldOut = 'option_sold_out',
   DuplicateOption = 'duplicate_option',
   BelowMin = 'below_min',
   AboveMax = 'above_max',
@@ -17,7 +19,11 @@ export const enum PricingErrorCode {
 export class PricingError extends Error {
   constructor(
     public readonly code: PricingErrorCode,
-    message: string
+    message: string,
+    /**
+     * Sold out: the product or option name, so the web checkout can word the message itself.
+     */
+    public readonly subject?: string
   ) {
     super(message);
   }
@@ -28,6 +34,10 @@ export type PricingOption = {
   name: string;
   price_delta_cents: number;
   active: boolean;
+  /**
+   * Stock ran out (computed, never stored); `priceItem` refuses it unless the staff allows it.
+   */
+  sold_out?: boolean;
 };
 
 export type PricingGroup = {
@@ -44,6 +54,7 @@ export type PricingProduct = {
   name: string;
   price_cents: number;
   active: boolean;
+  sold_out?: boolean;
   groups: PricingGroup[];
 };
 
@@ -56,7 +67,13 @@ export type Selection = {
  * Price one unit of a product with the selected options and build the snapshot stored on the order item.
  * Throws `PricingError` when the selection is not valid for the product.
  */
-export const priceItem = (product: PricingProduct, selections: Selection[]) => {
+export const priceItem = (
+  product: PricingProduct,
+  selections: Selection[],
+  options: { allowSoldOut?: boolean } = {}
+) => {
+  const allowSoldOut = options.allowSoldOut ?? false;
+
   if (!product.active) {
     throw new PricingError(PricingErrorCode.ProductInactive, `${product.name} is not available`);
   }
@@ -64,6 +81,18 @@ export const priceItem = (product: PricingProduct, selections: Selection[]) => {
   for (const group of product.groups) {
     if (group.options.filter(({ active }) => active).length < group.min) {
       throw new PricingError(PricingErrorCode.ProductInactive, `${product.name} is not available`);
+    }
+  }
+
+  if (!allowSoldOut) {
+    if (product.sold_out) {
+      throw new PricingError(PricingErrorCode.SoldOut, `${product.name} is sold out`, product.name);
+    }
+
+    for (const group of product.groups) {
+      if (group.options.filter(({ active, sold_out }) => active && !sold_out).length < group.min) {
+        throw new PricingError(PricingErrorCode.SoldOut, `${product.name} is sold out`, product.name);
+      }
     }
   }
 
@@ -88,7 +117,7 @@ export const priceItem = (product: PricingProduct, selections: Selection[]) => {
   for (const group of product.groups) {
     const optionIds = selections.find(({ group_id }) => group_id === group.id)?.option_ids ?? [];
 
-    const chosen = pickOptions(group, optionIds);
+    const chosen = pickOptions(group, optionIds, allowSoldOut);
 
     if (!chosen.length) {
       continue;
@@ -112,7 +141,7 @@ export const priceItem = (product: PricingProduct, selections: Selection[]) => {
   };
 };
 
-const pickOptions = (group: PricingGroup, optionIds: string[]) => {
+const pickOptions = (group: PricingGroup, optionIds: string[], allowSoldOut: boolean) => {
   if (new Set(optionIds).size !== optionIds.length) {
     throw new PricingError(PricingErrorCode.DuplicateOption, `Repeated option in ${group.name}`);
   }
@@ -134,6 +163,10 @@ const pickOptions = (group: PricingGroup, optionIds: string[]) => {
 
     if (!option.active) {
       throw new PricingError(PricingErrorCode.OptionInactive, `${option.name} is not available`);
+    }
+
+    if (option.sold_out && !allowSoldOut) {
+      throw new PricingError(PricingErrorCode.OptionSoldOut, `${option.name} is sold out`, option.name);
     }
 
     return option;

@@ -13,6 +13,7 @@ import {
   Intent,
   NONE_OF_THESE,
   NOT_MENTIONED,
+  Q_FULFILLMENT,
   Q_HUMAN,
   Q_INTENT,
   Q_NOTES,
@@ -24,7 +25,7 @@ import {
 } from '../../src/agent/jev-router';
 import { ToolName } from '../../src/agent/tools';
 import { PriceMode } from '../../src/menu/types';
-import { OrderStatus } from '../../src/orders/types';
+import { Fulfillment, OrderStatus } from '../../src/orders/types';
 import { PaymentMethod } from '../../src/stores/types';
 
 const option = (id: string, name: string) => ({ id, name, price_delta_cents: 1000, active: true });
@@ -32,6 +33,7 @@ const option = (id: string, name: string) => ({ id, name, price_delta_cents: 100
 const grande: MenuProduct = {
   id: 'p-grande',
   name: 'Pizza Grande',
+  category_id: 'c-pizzas',
   category: 'Pizzas',
   description: null,
   price_cents: 0,
@@ -59,6 +61,7 @@ const grande: MenuProduct = {
 const broto: MenuProduct = {
   id: 'p-broto',
   name: 'Pizza Broto',
+  category_id: 'c-pizzas',
   category: 'Pizzas',
   description: null,
   price_cents: 0,
@@ -86,6 +89,7 @@ const broto: MenuProduct = {
 const coca: MenuProduct = {
   id: 'p-coca',
   name: 'Coca-Cola 2L',
+  category_id: 'c-bebidas',
   category: 'Bebidas',
   description: null,
   price_cents: 1400,
@@ -191,7 +195,9 @@ describe('buildJevPlan', () => {
       total_cents: 1400,
       status: OrderStatus.Placed,
       minutes_ago: 5,
-      editable: true
+      editable: true,
+      new_order_allowed: false,
+      add_on: null
     };
 
     const withOrder = buildJevPlan({
@@ -238,6 +244,42 @@ describe('decideJevAction', () => {
       tool: ToolName.AddItem,
       args: { product_id: 'p-broto', qty: 2, selections: [{ group_id: 'g-sabor', option_ids: ['o-bcal'] }] }
     });
+  });
+
+  it('falls back when the message also sets fulfillment or payment (one direct tool would drop it)', () => {
+    const addAndPickup = decide(plan(), {
+      [Q_INTENT]: [Intent.AddItem, 0.82],
+      [Q_PRODUCT]: ['Pizza Broto (Pizzas)', 0.9],
+      [groupQuestionId('g-sabor')]: ['Calabresa', 0.88],
+      [Q_FULFILLMENT]: [Fulfillment.Pickup, 0.9]
+    });
+    const payAndPickup = decide(plan(), {
+      [Q_INTENT]: [Intent.SetPayment, 0.9],
+      [Q_PAYMENT]: ['pix', 0.9],
+      [Q_FULFILLMENT]: [Fulfillment.Pickup, 0.9]
+    });
+    const confirmAndPay = decide(plan(), { [Q_INTENT]: [Intent.Confirm, 0.9], [Q_PAYMENT]: ['pix', 0.9] });
+
+    deepEqual(addAndPickup, { kind: 'fallback', reason: 'several_requests', intent: Intent.AddItem, confidence: 0.82 });
+    equal(payAndPickup.kind === 'fallback' && payAndPickup.reason, 'several_requests');
+    equal(confirmAndPay.kind === 'fallback' && confirmAndPay.reason, 'several_requests');
+  });
+
+  it('stays direct when the extra detail only repeats what the cart has', () => {
+    const current = buildJevPlan({
+      messages: ['sim, vou retirar, confirmo'],
+      history: [],
+      cart: { ...cart, fulfillment: Fulfillment.Pickup },
+      candidates: menu,
+      paymentMethods: [PaymentMethod.Pix]
+    });
+    const decision = decideJevAction(
+      current,
+      answers(current, { [Q_INTENT]: [Intent.Confirm, 0.9], [Q_FULFILLMENT]: [Fulfillment.Pickup, 0.9] }),
+      { menu, text: 'sim, vou retirar, confirmo' }
+    );
+
+    equal(decision.kind === 'direct' && decision.tool, ToolName.PlaceOrder);
   });
 
   it('falls back when the customer adds a note to the item', () => {

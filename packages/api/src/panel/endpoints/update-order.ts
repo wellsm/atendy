@@ -2,14 +2,15 @@ import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
 import type { OrderStatus } from '../../orders/types';
-import type { PanelProvider } from '../provider';
+import type { PanelSendProvider } from '../provider';
 import type { PanelIdentity, PanelOrder } from '../types';
 
 import { HttpConflictError, HttpNotFoundError } from '@ez4/gateway';
 
 import { ConversationRepository } from '../../conversations/repository';
 import { OrderRepository, OrderStatusError, OrderStatusErrorCode } from '../../orders/repository';
-import { statusNotification } from '../../orders/status';
+import { statusNotification, webStatusNotification } from '../../orders/status';
+import { OrderSource } from '../../orders/types';
 import { sendStaffMessage } from '../send';
 import { requireStore } from '../store';
 import { toPanelOrder } from '../types';
@@ -40,7 +41,7 @@ export declare class UpdateOrderResponse implements Http.Response {
  */
 export async function updateOrderHandler(
   request: Http.Incoming<UpdateOrderRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db }: Service.Context<PanelSendProvider>
 ): Promise<UpdateOrderResponse> {
   const store = await requireStore(db, request.identity);
   const { orderId } = request.parameters;
@@ -62,7 +63,15 @@ export async function updateOrderHandler(
     throw new HttpConflictError(error.message);
   }
 
-  const text = statusNotification(status, changed.fulfillment);
+  const order = await OrderRepository.getForPanel(db, store.id, orderId);
+
+  if (!order) {
+    throw new HttpNotFoundError('Order not found');
+  }
+
+  const base = statusNotification(status, { ...order, fulfillment: changed.fulfillment });
+  // Web orders repeat what was ordered on the accept: the customer never talked to the store.
+  const text = base && order.source === OrderSource.Web ? webStatusNotification(base, status, order) : base;
 
   let notified = false;
 
@@ -83,12 +92,6 @@ export async function updateOrderHandler(
     } catch {
       // Best effort: the panel shows that the customer was not told.
     }
-  }
-
-  const order = await OrderRepository.getForPanel(db, store.id, orderId);
-
-  if (!order) {
-    throw new HttpNotFoundError('Order not found');
   }
 
   return { status: 200, body: { order: toPanelOrder(order), notified } };

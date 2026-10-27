@@ -1,7 +1,7 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
-import type { PanelProvider } from '../provider';
+import type { PanelSendProvider } from '../provider';
 import type { PanelConversation, PanelIdentity } from '../types';
 
 import { HttpBadRequestError, HttpConflictError, HttpNotFoundError } from '@ez4/gateway';
@@ -37,7 +37,7 @@ const PANEL_REPLY_REASON = 'staff_replied_from_panel';
  */
 export async function sendMessageHandler(
   request: Http.Incoming<SendMessageRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db }: Service.Context<PanelSendProvider>
 ): Promise<SendMessageResponse> {
   const store = await requireStore(db, request.identity);
   const text = request.body.text.trim();
@@ -83,7 +83,8 @@ export async function sendMessageHandler(
       conversation: toPanelConversation({
         ...conversation,
         mode: ConversationMode.Human,
-        handoff_reason: takeOver ? PANEL_REPLY_REASON : conversation.handoff_reason
+        handoff_reason: takeOver ? PANEL_REPLY_REASON : conversation.handoff_reason,
+        approval_reason: null
       })
     }
   };

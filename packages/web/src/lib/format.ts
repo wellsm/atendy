@@ -43,6 +43,25 @@ export const formatPhone = (phone: string) => {
   return match ? `(${match[1]}) ${match[2]}-${match[3]}` : phone;
 };
 
+/**
+ * Mask while typing a Brazilian phone: `(11) 98888-7777` / `(11) 3333-4444`. A pasted `+55` is dropped.
+ */
+export const maskPhoneInput = (typed: string) => {
+  const all = typed.replace(/\D/g, '');
+  const digits = (all.length > 11 && all.startsWith('55') ? all.slice(2) : all).slice(0, 11);
+  const split = digits.length === 11 ? 7 : 6;
+
+  if (digits.length <= 2) {
+    return digits.length ? `(${digits}` : '';
+  }
+
+  if (digits.length <= split) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  }
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, split)}-${digits.slice(split)}`;
+};
+
 export const PAYMENT_LABEL: Record<string, string> = {
   pix: 'Pix',
   card: 'Cartão',
@@ -54,7 +73,8 @@ export const STATUS_LABEL: Record<string, string> = {
   accepted: 'Em preparo',
   out: 'Saiu',
   done: 'Concluído',
-  canceled: 'Cancelado'
+  canceled: 'Cancelado',
+  abandoned: 'Abandonado'
 };
 
 const HANDOFF_LABEL: Record<string, string> = {
@@ -73,5 +93,20 @@ const HANDOFF_LABEL: Record<string, string> = {
   staff_replied_from_panel: 'Respondida pelo painel',
   staff_took_over: 'Assumida pela loja'
 };
+
+/**
+ * Handoffs that only a person at the store causes: approvals become handoffs only when someone clicks "Assumir".
+ */
+const STAFF_REASONS = new Set([
+  'staff_took_over',
+  'staff_replied_from_panel',
+  'staff_replied_from_phone',
+  'order_limit',
+  'qty_limit',
+  'new_customer_review',
+  'suspected_prank'
+]);
+
+export const staffActed = (reason: string | null) => !!reason && STAFF_REASONS.has(reason);
 
 export const handoffLabel = (reason: string | null) => (reason && HANDOFF_LABEL[reason]) || 'Precisa de atendente';

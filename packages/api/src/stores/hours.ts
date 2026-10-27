@@ -34,11 +34,38 @@ const getLocalTime = (timeZone: string, now: Date) => {
  * A range with `closes_at <= opens_at` continues into the next weekday.
  */
 export const isStoreOpen = (hours: HourRange[], timeZone: string, now: Date) => {
+  return !!findOpenRange(hours, timeZone, now);
+};
+
+/**
+ * When the store closes (`HH:MM`), following ranges that start right where the previous one ends (`18:00–00:00` then
+ * `00:00–02:00` closes at 02:00). Null when closed now, or open around the clock.
+ */
+export const closesAt = (hours: HourRange[], timeZone: string, now: Date) => {
+  let range = findOpenRange(hours, timeZone, now);
+
+  for (let step = 0; range && step < 7; step++) {
+    const closeWeekday =
+      toMinutes(range.closes_at) > toMinutes(range.opens_at) ? range.weekday : (range.weekday + 1) % 7;
+    const end = range.closes_at;
+    const next = hours.find(({ weekday, opens_at }) => weekday === closeWeekday && opens_at === end);
+
+    if (!next) {
+      return end;
+    }
+
+    range = next;
+  }
+
+  return null;
+};
+
+const findOpenRange = (hours: HourRange[], timeZone: string, now: Date) => {
   const { weekday, minutes } = getLocalTime(timeZone, now);
 
   const previousWeekday = (weekday + 6) % 7;
 
-  return hours.some((range) => {
+  return hours.find((range) => {
     const opens = toMinutes(range.opens_at);
     const closes = toMinutes(range.closes_at);
 

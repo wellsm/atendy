@@ -1,4 +1,6 @@
+import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
+import type { AdminAuthProvider } from './provider';
 import type { AdminIdentity } from './types';
 
 import { HttpForbiddenError, HttpUnauthorizedError } from '@ez4/gateway';
@@ -24,7 +26,11 @@ const adminUserIds = () =>
 /**
  * Same Clerk login as the panel, restricted to the user ids in `ADMIN_USER_IDS` (comma-separated).
  */
-export async function adminAuthorizer(request: AdminAuthRequest): Promise<AdminAuthResponse> {
+export async function adminAuthorizer(
+  request: AdminAuthRequest,
+  // Only links the provider: its variables are this Lambda's env (read from `process.env`).
+  _context: Service.Context<AdminAuthProvider>
+): Promise<AdminAuthResponse> {
   const identity = await verifyClerkToken(request.headers.authorization);
 
   if (!identity) {
