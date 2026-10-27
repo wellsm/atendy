@@ -1,6 +1,7 @@
 import type { Environment, Service } from '@ez4/common';
 import type { Queue } from '@ez4/queue';
 import type { Db } from '../../db';
+import type { PanelEventsQueue } from '../../realtime/queues/panel-events';
 import type { SimulationQueue } from '../../simulations/queues/step';
 import type { VoiceNotes } from '../../storage';
 
@@ -9,6 +10,8 @@ import { TurnError } from '../../agent/errors';
 import { transcribeVoiceNotes } from '../../agent/transcription';
 import { TurnResponder } from '../../agent/turn';
 import { OrderRepository } from '../../orders/repository';
+import { notifyPanel } from '../../realtime/notify';
+import { PanelTrigger } from '../../realtime/types';
 import { SimulatorProvider } from '../../simulations/provider';
 import { isSimulatedJid, SimulationRepository } from '../../simulations/repository';
 import { storefrontUrl } from '../../storefront/url';
@@ -97,6 +100,7 @@ export declare class InboundQueue extends Queue.Ordered<InboundEvent> {
 
   services: {
     db: Environment.Service<Db>;
+    panelEvents: Environment.Service<PanelEventsQueue>;
     simulationQueue: Environment.Service<SimulationQueue>;
     voiceNotes: Environment.Service<VoiceNotes>;
     variables: Environment.ServiceVariables;
@@ -105,7 +109,7 @@ export declare class InboundQueue extends Queue.Ordered<InboundEvent> {
 
 export async function handler(
   request: Queue.Incoming<InboundEvent>,
-  { db, simulationQueue, voiceNotes, variables }: Service.Context<InboundQueue>
+  { db, simulationQueue, voiceNotes, panelEvents, variables }: Service.Context<InboundQueue>
 ) {
   const event = request.message;
 
@@ -116,6 +120,15 @@ export async function handler(
   }
 
   const { conversation, store, customerJid, hours } = context;
+
+  // The open panels refetch the conversation (and the orders when the turn changed one).
+  const notifyChanged = (orders: boolean) =>
+    notifyPanel(
+      panelEvents,
+      store.id,
+      orders ? [PanelTrigger.Orders, PanelTrigger.Conversations] : [PanelTrigger.Conversations],
+      conversation.id
+    );
 
   if (event.kind === InboundEventKind.Echo) {
     // Bot replies are stored before this echo is handled (same FIFO group), so an unknown id is either our own
@@ -150,6 +163,8 @@ export async function handler(
       body,
       providerMessageId: event.eventId
     });
+
+    await notifyChanged(false);
 
     return;
   }
@@ -188,6 +203,8 @@ export async function handler(
         { storeId: store.id, conversationId: conversation.id, customerId: conversation.customer_id },
         pin
       );
+
+      await notifyChanged(true);
     }
 
     await ConversationRepository.markProcessed(db, pendingIds);
@@ -258,6 +275,7 @@ export async function handler(
     }
 
     await ConversationRepository.markProcessed(db, pendingIds);
+    await notifyChanged(false);
     return;
   }
 
@@ -299,12 +317,14 @@ export async function handler(
   if (messages.every(({ body }) => isMediaOnly(body))) {
     await reply([...greeting, MEDIA_ONLY_REPLY]);
     await ConversationRepository.markProcessed(db, pendingIds);
+    await notifyChanged(false);
     return;
   }
 
   if (standalone) {
     await reply(greeting);
     await ConversationRepository.markProcessed(db, pendingIds);
+    await notifyChanged(false);
     return;
   }
 
@@ -339,6 +359,9 @@ export async function handler(
       `Atendy: erro técnico, conversa passada a atendente.\nLoja: ${store.slug}\nConversa: ${conversation.id}\nTentativa: ${request.attempt}/${request.maxAttempts}\nErro: ${error.message}`
     );
 
+    // A tool may have changed the order before the failure.
+    await notifyChanged(true);
+
     turn = { text: TECHNICAL_ERROR_REPLY, mutated: false };
     greeting = [];
   } finally {
@@ -351,6 +374,8 @@ export async function handler(
     if (isSimulatedJid(customerJid)) {
       await queueSimulationStep();
     }
+
+    await notifyChanged(turn.mutated);
 
     return;
   }
@@ -367,4 +392,5 @@ export async function handler(
   }
 
   await ConversationRepository.markProcessed(db, pendingIds);
+  await notifyChanged(turn.mutated);
 }

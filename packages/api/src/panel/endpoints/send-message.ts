@@ -8,6 +8,8 @@ import { HttpBadRequestError, HttpConflictError, HttpNotFoundError } from '@ez4/
 
 import { ConversationRepository } from '../../conversations/repository';
 import { ConversationMode } from '../../conversations/types';
+import { notifyPanel } from '../../realtime/notify';
+import { PanelTrigger } from '../../realtime/types';
 import { sendStaffMessage, StaffSendError } from '../send';
 import { requireStore } from '../store';
 import { toPanelConversation } from '../types';
@@ -37,7 +39,7 @@ const PANEL_REPLY_REASON = 'staff_replied_from_panel';
  */
 export async function sendMessageHandler(
   request: Http.Incoming<SendMessageRequest>,
-  { db }: Service.Context<PanelSendProvider>
+  { db, panelEvents }: Service.Context<PanelSendProvider>
 ): Promise<SendMessageResponse> {
   const store = await requireStore(db, request.identity);
   const text = request.body.text.trim();
@@ -70,12 +72,19 @@ export async function sendMessageHandler(
       text
     });
   } catch (error) {
+    // The takeover stays even though the send failed: the other tabs must see it.
+    if (takeOver) {
+      await notifyPanel(panelEvents, store.id, [PanelTrigger.Conversations], conversation.id);
+    }
+
     if (error instanceof StaffSendError) {
       throw new HttpConflictError(error.message);
     }
 
     throw error;
   }
+
+  await notifyPanel(panelEvents, store.id, [PanelTrigger.Conversations], conversation.id);
 
   return {
     status: 201,

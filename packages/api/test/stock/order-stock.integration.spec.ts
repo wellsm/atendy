@@ -212,6 +212,34 @@ describe('orders move stock', () => {
     equal(seqAfter, seqBefore);
   });
 
+  it('names only the option whose item ran out, not the rest of the line', async () => {
+    const { storeId, menu, itemId } = await setup(5);
+    const pizza = productByName(menu, 'Pizza Grande');
+    const calabresa = optionIdOf(pizza, 'Sabores', 'Calabresa');
+
+    const sausage = await StockRepository.createItem(db, storeId, {
+      name: 'Calabresa (g)',
+      unit: StockUnit.Gram,
+      barcode: null,
+      minQty: null
+    });
+
+    await StockRepository.setLinks(db, storeId, { productId: pizza.id }, [{ stockItemId: itemId, qty: 1 }]);
+    await StockRepository.setLinks(db, storeId, { optionId: calabresa }, [{ stockItemId: sausage.id, qty: 150 }]);
+
+    const scope = await scopeFor(storeId);
+
+    await OrderRepository.addItem(db, scope, {
+      product: pizza,
+      qty: 1,
+      selections: [{ group_id: groupIdOf(pizza, 'Sabores'), option_ids: [calabresa] }]
+    });
+    await OrderRepository.setFulfillment(db, scope, Fulfillment.Pickup);
+    await OrderRepository.setPayment(db, scope, { method: PaymentMethod.Pix });
+
+    await rejects(OrderRepository.place(db, scope), outOfStock('Calabresa'));
+  });
+
   it('refuses a bot edit of a placed order beyond the stock and keeps the order as it was', async () => {
     const { storeId, coca, itemId } = await setup(1);
     const scope = await scopeFor(storeId);

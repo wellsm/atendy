@@ -9,6 +9,8 @@ import { HttpNotFoundError } from '@ez4/gateway';
 import { InboundEventKind } from '../../conversations/queues/inbound';
 import { ConversationRepository } from '../../conversations/repository';
 import { ConversationMode } from '../../conversations/types';
+import { notifyPanel } from '../../realtime/notify';
+import { PanelTrigger } from '../../realtime/types';
 import { requireStore } from '../store';
 import { toPanelConversation } from '../types';
 
@@ -35,7 +37,7 @@ export declare class UpdateConversationResponse implements Http.Response {
  */
 export async function updateConversationHandler(
   request: Http.Incoming<UpdateConversationRequest>,
-  { db, inboundQueue }: Service.Context<PanelConversationProvider>
+  { db, inboundQueue, panelEvents }: Service.Context<PanelConversationProvider>
 ): Promise<UpdateConversationResponse> {
   const store = await requireStore(db, request.identity);
   const { conversationId } = request.parameters;
@@ -63,6 +65,8 @@ export async function updateConversationHandler(
       });
     }
   }
+
+  await notifyPanel(panelEvents, store.id, [PanelTrigger.Conversations], conversationId);
 
   return {
     status: 200,

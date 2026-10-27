@@ -2,10 +2,11 @@ import type { HttpError } from '@ez4/gateway';
 import type { Db } from '../../src/db';
 
 import { deepEqual, equal, rejects } from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { beforeEach, describe, it } from 'node:test';
 
 import { HttpBadRequestError, HttpConflictError, HttpForbiddenError } from '@ez4/gateway';
 import { DatabaseTester } from '@ez4/local-database/test';
+import { QueueTester } from '@ez4/local-queue/test';
 
 import { DEFAULT_WEB_ORDER_PERCENT } from '../../src/billing/progress';
 import { BillingOutcome } from '../../src/billing/types';
@@ -27,6 +28,12 @@ import { groupIdOf, optionIdOf, productByName, seedMenu, seedStore } from '../su
 
 describe('web orders (public menu)', () => {
   const db = DatabaseTester.getClient<Db>('Db');
+  // Ez4 restores client mocks after each test: take a fresh one per test.
+  let panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+
+  beforeEach(() => {
+    panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+  });
 
   const setup = async (overrides: Parameters<typeof seedStore>[1] = {}) => {
     const { storeId } = await seedStore(db, { flat_fee_cents: 500, ...overrides });
@@ -60,7 +67,7 @@ describe('web orders (public menu)', () => {
             ...body
           }
         } as never,
-        { db }
+        { db, panelEvents }
       );
 
     return { storeId, slug, items, order, broto };
@@ -78,7 +85,7 @@ describe('web orders (public menu)', () => {
 
     const { body } = await quoteWebOrderHandler(
       { parameters: { slug }, body: { items, delivery: { fulfillment: 'delivery' } } } as never,
-      { db }
+      { db, panelEvents }
     );
 
     equal(body.feeCents, 500);
@@ -100,14 +107,15 @@ describe('web orders (public menu)', () => {
     await StockRepository.setLinks(db, storeId, { productId: broto.id }, [{ stockItemId: item.id, qty: 1 }]);
 
     const refused = (error: HttpBadRequestError) => {
-      deepEqual(error.context, { field: 'items' });
+      deepEqual(error.context, { field: 'items', names: ['Pizza Broto'] });
       equal(error.message, 'Esgotado: Pizza Broto.');
       return true;
     };
 
     await rejects(
       quoteWebOrderHandler({ parameters: { slug }, body: { items, delivery: { fulfillment: 'delivery' } } } as never, {
-        db
+        db,
+        panelEvents
       }),
       refused
     );
@@ -129,8 +137,8 @@ describe('web orders (public menu)', () => {
     await StockRepository.recordEntry(db, storeId, { itemId: item.id, qty: 1, author: 'test' });
 
     await rejects(order(), (error: HttpBadRequestError) => {
-      deepEqual(error.context, { field: 'items' });
-      equal(error.message, 'Acabou: Pizza Broto, Calabresa.');
+      deepEqual(error.context, { field: 'items', names: ['Pizza Broto'] });
+      equal(error.message, 'Acabou: Pizza Broto.');
       return true;
     });
     equal(await db.orders.count({ where: { store_id: storeId } }), 0);
@@ -165,6 +173,10 @@ describe('web orders (public menu)', () => {
 
     equal(messages[0]?.body, `🛒 Pedido pelo site #${body.code}`);
     equal(!!messages[0]?.processed_at, true);
+    deepEqual(panelEvents.sendMessage.mock.calls.at(-1)?.arguments[0], {
+      storeId,
+      triggers: ['orders', 'conversations']
+    });
 
     // The same phone has an order waiting: no second one on top of it.
     await rejects(order(), (error: HttpConflictError) => {
@@ -299,7 +311,7 @@ describe('web orders (public menu)', () => {
     const quote = (location?: { latitude: number; longitude: number }) =>
       quoteWebOrderHandler(
         { parameters: { slug }, body: { items, delivery: { fulfillment: 'delivery', location } } } as never,
-        { db }
+        { db, panelEvents }
       );
 
     equal((await quote()).body.deliveryError, 'location_needed');

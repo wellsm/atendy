@@ -17,6 +17,7 @@ import { updateAdminStoreHandler } from '../../src/admin/endpoints/update-store'
 import { countProducts, DEMO_MENUS, DemoMenuKind } from '../../src/menu/demo-menus';
 import { MenuRepository } from '../../src/menu/repository';
 import { WhatsAppState } from '../../src/panel/whatsapp';
+import { StockRepository } from '../../src/stock/repository';
 import { LLM_MODELS } from '../../src/stores/models';
 import { DEFAULT_LLM_MODEL, StoreRepository } from '../../src/stores/repository';
 import { RouterType } from '../../src/stores/types';
@@ -152,6 +153,86 @@ describe('admin store endpoints', () => {
     });
 
     deepEqual(items, [{ product_name: 'Coca-Cola 2L', unit_price_cents: 1400 }]);
+  });
+
+  it('links every demo stock line to an item of its own menu, and every item to something sold', () => {
+    for (const [kind, demo] of Object.entries(DEMO_MENUS)) {
+      const items = new Set((demo.stock ?? []).map(({ name }) => name));
+      const used = new Set<string>();
+      const products = demo.categories.flatMap(({ products }) => products);
+      const links = products.flatMap((product) => [
+        ...(product.stock ?? []),
+        ...(product.groups ?? []).flatMap(({ options }) => options.flatMap(({ stock }) => stock ?? []))
+      ]);
+
+      equal(items.size, demo.stock?.length ?? 0, `${kind} item names`);
+
+      for (const { item, qty } of links) {
+        ok(items.has(item), `${kind} ${item}`);
+        ok(Number.isInteger(qty) && qty >= 1, `${kind} ${item} qty`);
+        used.add(item);
+      }
+
+      deepEqual(
+        [...items].filter((item) => !used.has(item)),
+        [],
+        `${kind} unused items`
+      );
+    }
+  });
+
+  it('seeds the tabacaria demo with its stock, and a reload never duplicates the items', async () => {
+    const { storeId } = await seedStore(db);
+    const demo = DEMO_MENUS[DemoMenuKind.TobaccoLiquor];
+
+    await seedDemo(storeId, { kind: DemoMenuKind.TobaccoLiquor });
+
+    const activeItems = () =>
+      db.stock_items.findMany({
+        select: { id: true, name: true, balance: true, min_qty: true, avg_cost_millicents: true },
+        where: { store_id: storeId, archived_at: { isNull: true } }
+      });
+
+    const { records: items } = await activeItems();
+    const item = (name: string) => items.find((row) => row.name === name)!;
+
+    equal(items.length, demo.stock!.length);
+    deepEqual(
+      { ...item('Whisky Johnnie Walker Red Label 1L'), id: undefined },
+      {
+        id: undefined,
+        name: 'Whisky Johnnie Walker Red Label 1L',
+        balance: 8000,
+        min_qty: 3000,
+        avg_cost_millicents: 8900
+      }
+    );
+    equal(await db.stock_movements.count({ where: { stock_item_id: item('Gin Tanqueray 750ml').id } }), 0);
+    equal(await db.stock_packages.count({ where: { stock_item_id: item('Cerveja Heineken lata 350ml').id } }), 1);
+
+    const { records: fardo } = await db.stock_links.findMany({
+      select: { qty: true },
+      where: { stock_item_id: item('Cerveja Heineken lata 350ml').id }
+    });
+
+    deepEqual(
+      fardo.map(({ qty }) => qty).sort((a, b) => a - b),
+      [1, 12]
+    );
+
+    // Tanqueray starts at zero: its bottle and its copão option are sold out, the copão itself is not.
+    const { soldOutProducts, soldOutOptions } = await StockRepository.availability(db, storeId);
+    const productId = async (name: string) =>
+      (await db.products.findMany({ select: { id: true }, where: { store_id: storeId, name } })).records[0]!.id;
+
+    ok(soldOutProducts.has(await productId('Gin Tanqueray 750ml')));
+    ok(!soldOutProducts.has(await productId('Copão de Gin 700ml')));
+    equal(soldOutOptions.size, 1);
+
+    await seedDemo(storeId, { kind: DemoMenuKind.TobaccoLiquor, replace: true });
+
+    equal((await activeItems()).records.length, demo.stock!.length);
+    equal(await db.stock_items.count({ where: { store_id: storeId } }), demo.stock!.length * 2);
   });
 
   it('keeps product and option names unique inside every demo menu', () => {

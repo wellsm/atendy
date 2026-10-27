@@ -8,19 +8,28 @@ export class ApiError extends Error {
      * Message of a 4xx error body (`{ message, context: { field } }`), when the API sent one.
      */
     public readonly detail?: string,
-    public readonly field?: string
+    public readonly field?: string,
+    /**
+     * `context.names` of an `items` error: the products/options that are sold out or ran out.
+     */
+    public readonly names?: string[]
   ) {
     super(`API request failed (${status})`);
   }
 }
 
 const readError = async (response: Response) => {
-  const body = (await response.json().catch(() => ({}))) as { message?: unknown; context?: { field?: unknown } };
+  const body = (await response.json().catch(() => ({}))) as {
+    message?: unknown;
+    context?: { field?: unknown; names?: unknown };
+  };
+  const names = body.context?.names;
 
   return new ApiError(
     response.status,
     typeof body.message === 'string' ? body.message : undefined,
-    typeof body.context?.field === 'string' ? body.context.field : undefined
+    typeof body.context?.field === 'string' ? body.context.field : undefined,
+    Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string') : undefined
   );
 };
 

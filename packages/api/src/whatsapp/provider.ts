@@ -2,10 +2,12 @@ import type { Environment } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { InboundQueue } from '../conversations/queues/inbound';
 import type { Db } from '../db';
+import type { PanelEventsQueue } from '../realtime/queues/panel-events';
 
 export declare class WebhookProvider implements Http.Provider {
   services: {
     db: Environment.Service<Db>;
+    panelEvents: Environment.Service<PanelEventsQueue>;
     inboundQueue: Environment.Service<InboundQueue>;
   };
 }

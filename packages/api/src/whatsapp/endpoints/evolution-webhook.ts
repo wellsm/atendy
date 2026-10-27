@@ -7,6 +7,8 @@ import { HttpUnauthorizedError } from '@ez4/gateway';
 
 import { InboundEventKind } from '../../conversations/queues/inbound';
 import { ConversationRepository } from '../../conversations/repository';
+import { notifyPanel } from '../../realtime/notify';
+import { PanelTrigger } from '../../realtime/types';
 import { phoneVariants } from '../../storefront/web-order';
 import { parseEvolutionEvent } from '../evolution-parser';
 import { formatReactionBody, isAnswerReaction } from '../reaction';
@@ -39,7 +41,7 @@ const isStockAlertPhone = (alertPhone: string | null | undefined, phone: string 
  */
 export async function evolutionWebhookHandler(
   request: Http.Incoming<EvolutionWebhookRequest>,
-  { db, inboundQueue }: Service.Context<WebhookProvider>
+  { db, inboundQueue, panelEvents }: Service.Context<WebhookProvider>
 ): Promise<EvolutionWebhookResponse> {
   const { storeId } = request.parameters;
 
@@ -82,6 +84,10 @@ export async function evolutionWebhookHandler(
 
     const applied = await ConversationRepository.applyReaction(db, { storeId, ...event });
 
+    if (applied) {
+      await notifyPanel(panelEvents, storeId, [PanelTrigger.Conversations], applied.reacted.conversation_id);
+    }
+
     // Only a reaction that answers the bot's latest question becomes a message for the bot.
     if (!applied || !isAnswerReaction({ emoji: event.emoji, ...applied })) {
       return { status: 200 };
@@ -101,6 +107,8 @@ export async function evolutionWebhookHandler(
         sentAt: event.sentAt
       }
     });
+
+    await notifyPanel(panelEvents, storeId, [PanelTrigger.Conversations], ingested.conversationId);
 
     if (!ingested.processed) {
       await inboundQueue.sendMessage({
@@ -139,6 +147,8 @@ export async function evolutionWebhookHandler(
   }
 
   const ingested = await ConversationRepository.ingestCustomerMessage(db, { storeId, message: event });
+
+  await notifyPanel(panelEvents, storeId, [PanelTrigger.Conversations], ingested.conversationId);
 
   if (!ingested.processed) {
     await inboundQueue.sendMessage({

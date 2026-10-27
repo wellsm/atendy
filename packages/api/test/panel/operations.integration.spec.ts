@@ -2,10 +2,11 @@ import type { Db } from '../../src/db';
 
 import { deepEqual, equal, ok, rejects } from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 
 import { HttpBadRequestError, HttpConflictError, HttpNotFoundError } from '@ez4/gateway';
 import { DatabaseTester } from '@ez4/local-database/test';
+import { QueueTester } from '@ez4/local-queue/test';
 
 import { ConversationRepository } from '../../src/conversations/repository';
 import { ConversationMode, MessageAuthor } from '../../src/conversations/types';
@@ -24,6 +25,12 @@ import { placeOrder, seedConversation, seedMenu, seedStore } from '../support/fi
 
 describe('panel operations endpoints', () => {
   const db = DatabaseTester.getClient<Db>('Db');
+  // Ez4 restores client mocks after each test: take a fresh one per test.
+  let panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+
+  beforeEach(() => {
+    panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+  });
 
   afterEach(() => mock.restoreAll());
 
@@ -69,8 +76,11 @@ describe('panel operations endpoints', () => {
     return records;
   };
 
+  // Every change here tells the store's open panels (`notifyPanel`).
+  const lastPanelEvent = (): unknown => panelEvents.sendMessage.mock.calls.at(-1)?.arguments[0];
+
   const updateOrder = (identity: object, orderId: string, status: OrderStatus) =>
-    updateOrderHandler({ identity, parameters: { orderId }, body: { status } } as never, { db });
+    updateOrderHandler({ identity, parameters: { orderId }, body: { status } } as never, { db, panelEvents });
 
   it('lists the open orders of the token org only', async () => {
     const { identity, orderId } = await setup();
@@ -97,7 +107,7 @@ describe('panel operations endpoints', () => {
   });
 
   it('accepts an order and tells the customer as staff', async () => {
-    const { identity, orderId, conversationId } = await setup();
+    const { identity, orderId, conversationId, storeId } = await setup();
     const sent = stubProvider();
 
     const response = await updateOrder(identity, orderId, OrderStatus.Accepted);
@@ -113,6 +123,8 @@ describe('panel operations endpoints', () => {
 
     equal(rows.length, 1);
     ok(rows[0]!.provider_message_id.startsWith('PANEL-SEND-'));
+
+    deepEqual(lastPanelEvent(), { storeId, triggers: ['orders', 'conversations'], conversationId });
   });
 
   it('keeps the status when the notification fails, and sends nothing on done', async () => {
@@ -185,7 +197,7 @@ describe('panel operations endpoints', () => {
   });
 
   it('takes over and gives back to the bot, which answers what nobody answered', async () => {
-    const { identity, conversationId } = await setup();
+    const { identity, conversationId, storeId } = await setup();
     const queued: Record<string, unknown>[] = [];
     const inboundQueue = { sendMessage: (event: Record<string, unknown>) => (queued.push(event), Promise.resolve()) };
 
@@ -194,7 +206,8 @@ describe('panel operations endpoints', () => {
         { identity, parameters: { conversationId }, body: { mode } } as never,
         {
           db,
-          inboundQueue
+          inboundQueue,
+          panelEvents
         } as never
       );
 
@@ -220,14 +233,18 @@ describe('panel operations endpoints', () => {
       queued.map(({ messageId, kind }) => ({ messageId, kind })),
       [{ messageId: pending[0]!.id, kind: 'customer' }]
     );
+    deepEqual(lastPanelEvent(), { storeId, triggers: ['conversations'], conversationId });
   });
 
   it('approves what the bot asked and queues the waiting messages', async () => {
-    const { identity, conversationId } = await setup();
+    const { identity, conversationId, storeId } = await setup();
     const queued: Record<string, unknown>[] = [];
     const inboundQueue = { sendMessage: (event: Record<string, unknown>) => (queued.push(event), Promise.resolve()) };
     const approve = () =>
-      approveConversationHandler({ identity, parameters: { conversationId } } as never, { db, inboundQueue } as never);
+      approveConversationHandler(
+        { identity, parameters: { conversationId } } as never,
+        { db, inboundQueue, panelEvents } as never
+      );
 
     await rejects(approve(), HttpConflictError);
 
@@ -241,6 +258,7 @@ describe('panel operations endpoints', () => {
 
     equal(response.body.conversation.approvalReason, null);
     equal(queued.length, 1);
+    deepEqual(lastPanelEvent(), { storeId, triggers: ['conversations'], conversationId });
 
     const conversation = await db.conversations.findOne({
       select: { approval_reason: true, approved_reason: true },
@@ -265,11 +283,11 @@ describe('panel operations endpoints', () => {
   });
 
   it('replies from the panel: takes over, sends and stores the staff message', async () => {
-    const { identity, conversationId } = await setup();
+    const { identity, conversationId, storeId } = await setup();
     const sent = stubProvider();
 
     const send = (text: string) =>
-      sendMessageHandler({ identity, parameters: { conversationId }, body: { text } } as never, { db });
+      sendMessageHandler({ identity, parameters: { conversationId }, body: { text } } as never, { db, panelEvents });
 
     const response = await send('  Já já sai!  ');
 
@@ -284,6 +302,7 @@ describe('panel operations endpoints', () => {
       (await staffRows(conversationId)).map(({ body }) => body),
       ['Já já sai!']
     );
+    deepEqual(lastPanelEvent(), { storeId, triggers: ['conversations'], conversationId });
 
     await rejects(send('   '), HttpBadRequestError);
   });
@@ -293,7 +312,10 @@ describe('panel operations endpoints', () => {
     stubProvider(new EvolutionRequestError('rejected', 400, true));
 
     await rejects(
-      sendMessageHandler({ identity, parameters: { conversationId }, body: { text: 'Oi' } } as never, { db }),
+      sendMessageHandler({ identity, parameters: { conversationId }, body: { text: 'Oi' } } as never, {
+        db,
+        panelEvents
+      }),
       HttpConflictError
     );
 
@@ -306,7 +328,10 @@ describe('panel operations endpoints', () => {
     await db.stores.updateOne({ data: { whatsapp_instance: null }, where: { id: storeId } });
 
     await rejects(
-      sendMessageHandler({ identity, parameters: { conversationId }, body: { text: 'Oi' } } as never, { db }),
+      sendMessageHandler({ identity, parameters: { conversationId }, body: { text: 'Oi' } } as never, {
+        db,
+        panelEvents
+      }),
       HttpConflictError
     );
 

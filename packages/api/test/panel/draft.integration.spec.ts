@@ -2,10 +2,11 @@ import type { Db } from '../../src/db';
 
 import { deepEqual, equal, rejects } from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { describe, it } from 'node:test';
+import { beforeEach, describe, it } from 'node:test';
 
 import { HttpBadRequestError, HttpConflictError } from '@ez4/gateway';
 import { DatabaseTester } from '@ez4/local-database/test';
+import { QueueTester } from '@ez4/local-queue/test';
 
 import { ConversationRepository } from '../../src/conversations/repository';
 import { ConversationMode } from '../../src/conversations/types';
@@ -20,6 +21,12 @@ import { groupIdOf, optionIdOf, productByName, seedConversation, seedMenu, seedS
 
 describe('attendant order (panel draft)', () => {
   const db = DatabaseTester.getClient<Db>('Db');
+  // Ez4 restores client mocks after each test: take a fresh one per test.
+  let panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+
+  beforeEach(() => {
+    panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+  });
 
   const setup = async () => {
     const orgId = `org_${randomUUID()}`;
@@ -34,7 +41,7 @@ describe('attendant order (panel draft)', () => {
     const identity = { userId: 'user_1', orgId };
     const parameters = { conversationId };
 
-    return { identity, parameters, menu, conversationId };
+    return { identity, parameters, menu, conversationId, storeId };
   };
 
   it('refuses to touch the order while the bot handles the conversation', async () => {
@@ -44,7 +51,7 @@ describe('attendant order (panel draft)', () => {
   });
 
   it('builds and places an order without the bot limits, review or billing', async () => {
-    const { identity, parameters, menu, conversationId } = await setup();
+    const { identity, parameters, menu, conversationId, storeId } = await setup();
 
     await ConversationRepository.setMode(db, {
       conversationId,
@@ -57,7 +64,8 @@ describe('attendant order (panel draft)', () => {
     deepEqual(empty.body, { cart: null, savedAddress: null });
 
     const broto = productByName(menu, 'Pizza Broto');
-    const add = (body: Record<string, unknown>) => addDraftItemHandler({ identity, parameters, body } as never, { db });
+    const add = (body: Record<string, unknown>) =>
+      addDraftItemHandler({ identity, parameters, body } as never, { db, panelEvents });
 
     await add({
       productId: broto.id,
@@ -81,13 +89,13 @@ describe('attendant order (panel draft)', () => {
 
     const removed = await removeDraftItemHandler(
       { identity, parameters: { ...parameters, itemId: added.body.cart.items[1]!.itemId } } as never,
-      { db }
+      { db, panelEvents }
     );
 
     equal(removed.body.cart.items.length, 1);
 
     const update = (body: Record<string, unknown>) =>
-      updateDraftHandler({ identity, parameters, body } as never, { db });
+      updateDraftHandler({ identity, parameters, body } as never, { db, panelEvents });
 
     await update({ fulfillment: 'pickup' });
 
@@ -96,7 +104,7 @@ describe('attendant order (panel draft)', () => {
     deepEqual(paid.body.cart.missing, []);
 
     // Inside the closing cutoff and above the new-customer review: both are for the bot only.
-    const placed = await placeDraftHandler({ identity, parameters } as never, { db });
+    const placed = await placeDraftHandler({ identity, parameters } as never, { db, panelEvents });
 
     equal(placed.body.cart.orderId, removed.body.cart.orderId);
 
@@ -104,6 +112,13 @@ describe('attendant order (panel draft)', () => {
 
     equal(order?.status, 'placed');
     equal(await db.billing_records.count({ where: { conversation_id: conversationId } }), 0);
+
+    // Every draft change told the open panels.
+    deepEqual(panelEvents.sendMessage.mock.calls.at(-1)?.arguments[0], {
+      storeId,
+      triggers: ['orders', 'conversations'],
+      conversationId
+    });
   });
 
   it('lets the attendant add a product whose required option is sold out', async () => {
@@ -139,7 +154,7 @@ describe('attendant order (panel draft)', () => {
           selections: [{ groupId: groupIdOf(broto, 'Sabor'), optionIds: [calabresa] }]
         }
       } as never,
-      { db }
+      { db, panelEvents }
     );
 
     equal(added.body.cart.items.length, 1);
@@ -159,12 +174,15 @@ describe('attendant order (panel draft)', () => {
         parameters,
         body: { productId: productByName(menu, 'Coca-Cola 2L').id, qty: 1, selections: [] }
       } as never,
-      { db }
+      { db, panelEvents }
     );
 
-    await rejects(placeDraftHandler({ identity, parameters } as never, { db }), (error: HttpBadRequestError) => {
-      deepEqual(error.context, { field: 'incomplete' });
-      return true;
-    });
+    await rejects(
+      placeDraftHandler({ identity, parameters } as never, { db, panelEvents }),
+      (error: HttpBadRequestError) => {
+        deepEqual(error.context, { field: 'incomplete' });
+        return true;
+      }
+    );
   });
 });

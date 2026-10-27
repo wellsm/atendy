@@ -36,6 +36,16 @@ const ERROR_TEXT: Record<string, string> = {
   unknown_product: 'Algum item ficou indisponível. Revise o carrinho.'
 };
 
+/**
+ * Whether a cart line has the product or one of the options an `items` error named (options text from `optionsText`).
+ */
+const namedIn = (names: string[], line: { name: string; options: string }) =>
+  names.includes(line.name) ||
+  line.options
+    .split('; ')
+    .flatMap((group) => group.slice(group.indexOf(': ') + 2).split(' / '))
+    .some((option) => names.includes(option));
+
 const errorText = (error: unknown) =>
   // Something in the cart ran out: the API message names what, so the customer knows which line to remove.
   (error instanceof ApiError && error.field === 'items' && error.detail) ||
@@ -206,6 +216,10 @@ export function Checkout(props: { store: StorefrontStore; slug: string; cart: Ca
     !method && 'pagamento'
   ].filter(Boolean);
 
+  const itemsError = [quote.error, send.error].find((error) => error instanceof ApiError && error.field === 'items') as
+    ApiError | undefined;
+  const soldOutNames = itemsError?.names ?? [];
+
   const blocked =
     !!missing.length || quote.data?.below_minimum || !!quote.data?.delivery_error || total == null || send.isPending;
 
@@ -270,7 +284,10 @@ export function Checkout(props: { store: StorefrontStore; slug: string; cart: Ca
         {!cart.lines.length && <p className="text-sm text-neutral-500">O carrinho está vazio.</p>}
         <ul className="flex flex-col divide-y divide-neutral-100">
           {cart.lines.map((line) => (
-            <li key={line.key} className="flex items-center gap-3 py-3">
+            <li
+              key={line.key}
+              className={`flex items-center gap-3 py-3 ${namedIn(soldOutNames, line) ? '-mx-2 rounded-lg bg-red-50 px-2' : ''}`}
+            >
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="text-[15px] font-medium">{line.name}</span>
                 {line.options && <span className="text-xs text-neutral-500">{line.options}</span>}

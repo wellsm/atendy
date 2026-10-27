@@ -2,6 +2,7 @@ import type { DbClient } from '../db';
 import type { PriceMode } from './types';
 import type { GroupContentDraft, GroupDraft, OptionDraft, ProductDraft } from './validation';
 import type { PricingProduct } from '../orders/pricing';
+import type { DemoStockItem, DemoStockLink, LinkTarget } from '../stock/types';
 
 import { randomUUID } from 'node:crypto';
 
@@ -420,17 +421,20 @@ export type MenuImport = {
       name: string;
       description?: string;
       price_cents: number;
-      /** Demo photo under `packages/web/public/demo-menu/` (e.g. `burger/x-bacon.webp`), saved as a `demo-menu/` key. */
+      /** Demo photo under `packages/web/demo-menu/` (e.g. `burger/x-bacon.webp`), saved as a `demo-menu/` key. */
       image?: string;
+      stock?: DemoStockLink[];
       groups?: {
         name: string;
         min: number;
         max: number;
         price_mode: PriceMode;
-        options: { name: string; price_delta_cents: number }[];
+        options: { name: string; price_delta_cents: number; stock?: DemoStockLink[] }[];
       }[];
     }[];
   }[];
+  /** Demo stock items; products and options link to them by name (`StockRepository.importDemoStock`). */
+  stock?: DemoStockItem[];
 };
 
 export namespace MenuRepository {
@@ -493,6 +497,7 @@ export namespace MenuRepository {
   export const importMenu = async (db: DbClient, storeId: string, menu: MenuImport) => {
     const now = new Date().toISOString();
     const sharedGroups = new Map<string, string>();
+    const stockLinks: { target: LinkTarget; stock: DemoStockLink[] }[] = [];
 
     for (const [categoryPosition, category] of menu.categories.entries()) {
       const categoryId = randomUUID();
@@ -519,6 +524,10 @@ export namespace MenuRepository {
           }
         });
 
+        if (product.stock) {
+          stockLinks.push({ target: { productId }, stock: product.stock });
+        }
+
         for (const [position, group] of (product.groups ?? []).entries()) {
           const key = JSON.stringify([group.name, group.price_mode, group.options]);
           const sharedId = sharedGroups.get(key);
@@ -539,9 +548,11 @@ export namespace MenuRepository {
             });
 
             for (const [optionPosition, option] of group.options.entries()) {
+              const optionId = randomUUID();
+
               await db.options.insertOne({
                 data: {
-                  id: randomUUID(),
+                  id: optionId,
                   store_id: storeId,
                   group_id: groupId,
                   name: option.name,
@@ -550,6 +561,10 @@ export namespace MenuRepository {
                   position: optionPosition
                 }
               });
+
+              if (option.stock) {
+                stockLinks.push({ target: { optionId }, stock: option.stock });
+              }
             }
           }
 
@@ -566,6 +581,10 @@ export namespace MenuRepository {
           });
         }
       }
+    }
+
+    if (menu.stock || stockLinks.length) {
+      await StockRepository.importDemoStock(db, storeId, menu.stock ?? [], stockLinks);
     }
   };
 

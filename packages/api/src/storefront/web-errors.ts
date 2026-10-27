@@ -13,6 +13,8 @@ const TOO_MANY = new Set([
 
 const BAD_REQUEST = new Set([WebOrderErrorCode.Phone, WebOrderErrorCode.CodeInvalid, WebOrderErrorCode.CodeExpired]);
 
+const soldOutContext = (subject?: string) => ({ field: 'items', names: subject ? [subject] : [] });
+
 /**
  * Runs a public order call; domain errors become HTTP errors whose `field` the checkout shows.
  */
@@ -40,17 +42,21 @@ export const withWebOrderErrors = async <T>(run: () => Promise<T>) => {
       throw new HttpConflictError(error.message, { field: error.code });
     }
 
-    // Sold out is about the cart's lines: the checkout shows the message next to the items, in Portuguese.
+    // Sold out is about the cart's lines: the checkout shows the message next to the items, in Portuguese, and
+    // marks the lines whose product or option is in `names`.
     if (error instanceof PricingError && error.code === PricingErrorCode.SoldOut) {
-      throw new HttpBadRequestError(`Esgotado: ${error.subject ?? 'item'}.`, { field: 'items' });
+      throw new HttpBadRequestError(`Esgotado: ${error.subject ?? 'item'}.`, soldOutContext(error.subject));
     }
 
     if (error instanceof PricingError && error.code === PricingErrorCode.OptionSoldOut) {
-      throw new HttpBadRequestError(`Esgotado: ${error.subject ?? 'opção'}.`, { field: 'items' });
+      throw new HttpBadRequestError(`Esgotado: ${error.subject ?? 'opção'}.`, soldOutContext(error.subject));
     }
 
     if (error instanceof OrderError && error.code === OrderErrorCode.OutOfStock) {
-      throw new HttpBadRequestError(`Acabou: ${error.names?.join(', ') ?? 'item'}.`, { field: 'items' });
+      throw new HttpBadRequestError(`Acabou: ${error.names?.join(', ') ?? 'item'}.`, {
+        field: 'items',
+        names: error.names ?? []
+      });
     }
 
     if (error instanceof OrderError || error instanceof PricingError) {

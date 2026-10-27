@@ -1,6 +1,7 @@
 import type { Environment } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { Db } from '../db';
+import type { PanelEventsQueue } from '../realtime/queues/panel-events';
 import type { ProductImages } from '../storage';
 
 export declare class StorefrontProvider implements Http.Provider {
@@ -43,5 +44,6 @@ export declare class StorefrontOrderProvider implements Http.Provider {
 
   services: {
     db: Environment.Service<Db>;
+    panelEvents: Environment.Service<PanelEventsQueue>;
   };
 }

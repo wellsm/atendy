@@ -10,6 +10,7 @@
     "build:dev": "dotenv -e dev.env -- vite build",
     "deploy:dev": "npm run typecheck && npm run build:dev && APP_STAGE=dev dotenv -e dev.env -- ez4 deploy",
     "output:dev": "APP_STAGE=dev dotenv -e dev.env -- ez4 output",
+    "demo-images:dev": "APP_STAGE=dev AWS_REGION=sa-east-1 aws-vault exec atendy -- sh scripts/sync-demo-images.sh",
     "destroy:dev": "APP_STAGE=dev dotenv -e dev.env -- ez4 destroy",
     "typecheck": "tsc --noEmit",
     "lint": "eslint --cache"

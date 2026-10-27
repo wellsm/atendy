@@ -6,6 +6,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { useRef } from 'react';
 
 import { ApiError, useApi } from './api';
+import { REALTIME_FALLBACK_MS, useRealtimeConnected } from './realtime';
 
 export type PanelStore = {
   id: string;
@@ -26,7 +27,8 @@ export type Me = {
 
 export type RouterType = 'jev' | 'llm';
 
-export type DemoMenuKind = 'pizzeria' | 'burger' | 'snack_bar' | 'pasta' | 'pastry' | 'acai' | 'lunchbox' | 'japanese';
+export type DemoMenuKind =
+  'pizzeria' | 'burger' | 'snack_bar' | 'pasta' | 'pastry' | 'acai' | 'lunchbox' | 'japanese' | 'tobacco_liquor';
 
 export type AdminStore = {
   id: string;
@@ -203,11 +205,12 @@ export type OrderMark = { id: string; code: string | null; status: OrderStatus; 
 
 export const useOrders = (scope: OrderScope) => {
   const api = useApi();
+  const realtime = useRealtimeConnected();
 
   return useQuery({
     queryKey: ['orders', scope],
     queryFn: () => api<{ orders: PanelOrder[] }>('GET', `/panel/orders?scope=${scope}`),
-    refetchInterval: scope === 'open' ? 5_000 : 30_000
+    refetchInterval: realtime ? REALTIME_FALLBACK_MS : scope === 'open' ? 5_000 : 30_000
   });
 };
 
@@ -257,16 +260,18 @@ export type PanelMessage = {
 
 export const useConversations = () => {
   const api = useApi();
+  const realtime = useRealtimeConnected();
 
   return useQuery({
     queryKey: ['conversations'],
     queryFn: () => api<{ conversations: PanelConversation[] }>('GET', '/panel/conversations'),
-    refetchInterval: 10_000
+    refetchInterval: realtime ? REALTIME_FALLBACK_MS : 10_000
   });
 };
 
 export const useConversation = (conversationId: string | undefined) => {
   const api = useApi();
+  const realtime = useRealtimeConnected();
 
   return useQuery({
     queryKey: ['conversation', conversationId],
@@ -281,7 +286,7 @@ export const useConversation = (conversationId: string | undefined) => {
         progress: OrderStep[] | null;
       }>('GET', `/panel/conversations/${conversationId}`),
     enabled: !!conversationId,
-    refetchInterval: 5_000
+    refetchInterval: realtime ? REALTIME_FALLBACK_MS : 5_000
   });
 };
 

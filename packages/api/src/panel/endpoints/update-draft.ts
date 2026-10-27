@@ -3,12 +3,14 @@ import type { Http } from '@ez4/gateway';
 import type { Integer, String } from '@ez4/schema';
 import type { Fulfillment } from '../../orders/types';
 import type { PaymentMethod } from '../../stores/types';
-import type { PanelGeocodingProvider } from '../provider';
+import type { PanelDraftProvider } from '../provider';
 import type { PanelCart, PanelIdentity } from '../types';
 
 import { HttpBadRequestError } from '@ez4/gateway';
 
 import { OrderRepository } from '../../orders/repository';
+import { notifyPanel } from '../../realtime/notify';
+import { PanelTrigger } from '../../realtime/types';
 import { locateWithGoogle } from '../../stores/geocoding';
 import { requireStaffDraft, withOrderErrors } from '../draft';
 import { requireStore } from '../store';
@@ -43,7 +45,7 @@ export declare class UpdateDraftResponse implements Http.Response {
  */
 export async function updateDraftHandler(
   request: Http.Incoming<UpdateDraftRequest>,
-  { db }: Service.Context<PanelGeocodingProvider>
+  { db, panelEvents }: Service.Context<PanelDraftProvider>
 ): Promise<UpdateDraftResponse> {
   const store = await requireStore(db, request.identity);
   const scope = await requireStaffDraft(db, store.id, request.parameters.conversationId);
@@ -77,6 +79,13 @@ export async function updateDraftHandler(
 
     throw new HttpBadRequestError('Nothing to change');
   });
+
+  await notifyPanel(
+    panelEvents,
+    store.id,
+    [PanelTrigger.Orders, PanelTrigger.Conversations],
+    request.parameters.conversationId
+  );
 
   return { status: 200, body: { cart: toPanelCart(cart) } };
 }

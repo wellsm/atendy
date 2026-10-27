@@ -101,6 +101,7 @@ export function StockLinksEditor({
       {creating ? (
         <div className="rounded-lg border border-line bg-surface-2 p-3">
           <ItemForm
+            nested
             initialName={createName}
             onCancel={() => setCreating(false)}
             onDone={(_id, item) => {

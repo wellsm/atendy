@@ -18,6 +18,7 @@ describe('evolution webhook', () => {
 
   const call = async (input: { storeId: string; secret?: string; body: unknown }) => {
     const inboundQueue = QueueTester.getClientMock('InboundQueue');
+    const panelEvents = QueueTester.getClientMock('PanelEventsQueue');
 
     const response = await evolutionWebhookHandler(
       {
@@ -25,16 +26,20 @@ describe('evolution webhook', () => {
         headers: { authorization: input.secret },
         body: input.body
       } as never,
-      { db, inboundQueue }
+      { db, inboundQueue, panelEvents }
     );
 
-    return { response, inboundQueue };
+    return { response, inboundQueue, panelEvents };
   };
 
   it('shows every customer reaction on its message, but sends the bot only answers to its latest question', async () => {
     const { storeId, secret, instance } = await seedStore(db);
 
-    await call({ storeId, secret, body: evolutionTextEvent({ instance, id: 'C1', text: 'oi' }) });
+    const { panelEvents } = await call({
+      storeId,
+      secret,
+      body: evolutionTextEvent({ instance, id: 'C1', text: 'oi' })
+    });
 
     const customer = await db.messages.findOne({
       select: { conversation_id: true },
@@ -42,6 +47,13 @@ describe('evolution webhook', () => {
     });
 
     const conversationId = customer!.conversation_id;
+
+    // The stored message tells the store's open panels.
+    deepEqual(panelEvents.sendMessage.mock.calls.at(-1)?.arguments[0], {
+      storeId,
+      triggers: ['conversations'],
+      conversationId
+    });
 
     const outbound = async (providerMessageId: string, author: MessageAuthor, body: string, at: string) =>
       db.messages.insertOne({
@@ -341,5 +353,24 @@ describe('evolution webhook', () => {
     equal(response.status, 200);
     equal(inboundQueue.sendMessage.mock.callCount(), 0);
     equal(await db.messages.count({ where: { store_id: storeId } }), 0);
+  });
+
+  it('stores and queues the message even when the panel event cannot be sent', async () => {
+    const { storeId, secret, instance } = await seedStore(db);
+    const inboundQueue = QueueTester.getClientMock('InboundQueue');
+    const panelEvents = { sendMessage: () => Promise.reject(new Error('queue down')) };
+
+    const response = await evolutionWebhookHandler(
+      {
+        parameters: { storeId },
+        headers: { authorization: secret },
+        body: evolutionTextEvent({ instance, id: 'Q1', text: 'oi' })
+      } as never,
+      { db, inboundQueue, panelEvents } as never
+    );
+
+    deepEqual(response, { status: 200 });
+    equal(await db.messages.count({ where: { store_id: storeId, provider_message_id: 'Q1' } }), 1);
+    equal(inboundQueue.sendMessage.mock.callCount(), 1);
   });
 });

@@ -33,7 +33,8 @@ export const isImageUpload = (type: string, size: number) =>
   (IMAGE_TYPES as readonly string[]).includes(type) && size > 0 && size <= MAX_IMAGE_BYTES;
 
 /**
- * Key prefix of demo menu photos. They ship with the web app (`packages/web/public/demo-menu/`), never with the bucket.
+ * Key prefix of demo menu photos. They live with the web app (`packages/web/demo-menu/`, its `DemoMenuFiles` bucket on
+ * deployed stages), never in this bucket.
  */
 export const DEMO_IMAGE_PREFIX = 'demo-menu/';
 

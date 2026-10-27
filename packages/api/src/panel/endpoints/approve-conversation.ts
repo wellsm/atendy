@@ -8,6 +8,8 @@ import { HttpConflictError, HttpNotFoundError } from '@ez4/gateway';
 
 import { InboundEventKind } from '../../conversations/queues/inbound';
 import { ConversationRepository } from '../../conversations/repository';
+import { notifyPanel } from '../../realtime/notify';
+import { PanelTrigger } from '../../realtime/types';
 import { requireStore } from '../store';
 import { toPanelConversation } from '../types';
 
@@ -31,7 +33,7 @@ export declare class ApproveConversationResponse implements Http.Response {
  */
 export async function approveConversationHandler(
   request: Http.Incoming<ApproveConversationRequest>,
-  { db, inboundQueue }: Service.Context<PanelConversationProvider>
+  { db, inboundQueue, panelEvents }: Service.Context<PanelConversationProvider>
 ): Promise<ApproveConversationResponse> {
   const store = await requireStore(db, request.identity);
   const { conversationId } = request.parameters;
@@ -60,6 +62,8 @@ export async function approveConversationHandler(
       messageId
     });
   }
+
+  await notifyPanel(panelEvents, store.id, [PanelTrigger.Conversations], conversationId);
 
   return { status: 200, body: { conversation: toPanelConversation({ ...conversation, approval_reason: null }) } };
 }

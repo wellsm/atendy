@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react';
+import type { KeyboardEvent } from 'react';
 import type { StockItem, StockItemInput, StockPackage } from '../../lib/queries';
 import type { StockUnit } from '../../lib/stock';
 
@@ -42,13 +42,15 @@ const draftOf = (pack?: StockPackage): PackageDraft => ({
 
 /**
  * Create (`item` absent) or edit a stock item with its purchase packages. The unit of an item cannot change
- * once it exists, so the factors keep meaning the same.
+ * once it exists, so the factors keep meaning the same. `nested` renders it without a `<form>`, for use inside
+ * another form (React bubbles a submit up the component tree, so the outer form would save too).
  */
 export function ItemForm({
   item,
   packages,
   initialBarcode,
   initialName,
+  nested,
   onDone,
   onCancel
 }: {
@@ -56,6 +58,7 @@ export function ItemForm({
   packages?: StockPackage[];
   initialBarcode?: string;
   initialName?: string;
+  nested?: boolean;
   onDone: (id: string, item?: StockItem) => void;
   onCancel: () => void;
 }) {
@@ -74,8 +77,12 @@ export function ItemForm({
   const patchDraft = (key: string, patch: Partial<PackageDraft>) =>
     setDrafts((current) => current.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)));
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: { preventDefault: () => void }) => {
     event.preventDefault();
+
+    if (saving || !valid) {
+      return;
+    }
 
     const input: StockItemInput = {
       name: name.trim(),
@@ -97,8 +104,15 @@ export function ItemForm({
     }
   };
 
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-5">
+  // Without a form, Enter in a field would submit the outer one: it saves this item instead.
+  const submitOnEnter = (event: KeyboardEvent) => {
+    if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+      submit(event);
+    }
+  };
+
+  const fields = (
+    <>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Nome
         <input value={name} onChange={(event) => setName(event.target.value)} className={INPUT} />
@@ -197,7 +211,8 @@ export function ItemForm({
 
       <div className="flex flex-wrap items-center gap-3">
         <button
-          type="submit"
+          type={nested ? 'button' : 'submit'}
+          onClick={nested ? submit : undefined}
           disabled={saving || !valid}
           className="h-10 rounded-lg bg-accent px-5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
         >
@@ -223,6 +238,16 @@ export function ItemForm({
           </button>
         )}
       </div>
+    </>
+  );
+
+  return nested ? (
+    <div onKeyDown={submitOnEnter} className="flex flex-col gap-5">
+      {fields}
+    </div>
+  ) : (
+    <form onSubmit={submit} className="flex flex-col gap-5">
+      {fields}
     </form>
   );
 }

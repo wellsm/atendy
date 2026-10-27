@@ -7,6 +7,7 @@ import { Loading } from '../components/loading';
 import { PanelShell } from '../components/panel-shell';
 import { SignedIn } from '../components/signed-in';
 import { useMe, useMyStores } from '../lib/queries';
+import { RealtimeProvider } from '../lib/realtime';
 
 export const Route = createFileRoute('/panel/$slug')({
   component: () => (
@@ -60,9 +61,11 @@ function Panel() {
 
   if (current) {
     return (
-      <PanelShell store={me.data.store!}>
-        <Outlet />
-      </PanelShell>
+      <RealtimeProvider slug={slug}>
+        <PanelShell store={me.data.store!}>
+          <Outlet />
+        </PanelShell>
+      </RealtimeProvider>
     );
   }
 

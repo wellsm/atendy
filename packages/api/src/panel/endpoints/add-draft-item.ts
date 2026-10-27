@@ -1,13 +1,15 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { Integer, String } from '@ez4/schema';
-import type { PanelProvider } from '../provider';
+import type { PanelDraftProvider } from '../provider';
 import type { PanelCart, PanelIdentity } from '../types';
 
 import { HttpBadRequestError } from '@ez4/gateway';
 
 import { MenuRepository } from '../../menu/repository';
 import { OrderRepository } from '../../orders/repository';
+import { notifyPanel } from '../../realtime/notify';
+import { PanelTrigger } from '../../realtime/types';
 import { requireStaffDraft, withOrderErrors } from '../draft';
 import { requireStore } from '../store';
 import { toPanelCart } from '../types';
@@ -37,7 +39,7 @@ export declare class AddDraftItemResponse implements Http.Response {
  */
 export async function addDraftItemHandler(
   request: Http.Incoming<AddDraftItemRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db, panelEvents }: Service.Context<PanelDraftProvider>
 ): Promise<AddDraftItemResponse> {
   const store = await requireStore(db, request.identity);
   const scope = await requireStaffDraft(db, store.id, request.parameters.conversationId);
@@ -58,6 +60,13 @@ export async function addDraftItemHandler(
       skipLimits: true,
       byStaff: true
     })
+  );
+
+  await notifyPanel(
+    panelEvents,
+    store.id,
+    [PanelTrigger.Orders, PanelTrigger.Conversations],
+    request.parameters.conversationId
   );
 
   return { status: 200, body: { cart: toPanelCart(cart) } };

@@ -1,5 +1,5 @@
 import type { DbClient } from '../db';
-import type { LinkTarget, StockUnit, StockUsage } from './types';
+import type { DemoStockItem, DemoStockLink, LinkTarget, StockUnit, StockUsage } from './types';
 import type { StockItemInput, StockPackageInput } from './validation';
 
 import { randomUUID } from 'node:crypto';
@@ -160,6 +160,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const DEFAULT_MOVEMENTS_PAGE = 50;
 
 const MAX_MOVEMENTS_PAGE = 100;
+
+const DEMO_STOCK_AUTHOR = 'demo';
 
 export type StockMove = {
   itemId: string;
@@ -898,6 +900,87 @@ export namespace StockRepository {
   /**
    * Products and options whose linked items do not cover one unit. Archived items have no links.
    */
+  /**
+   * Demo stock (`importMenu` only): items, packages, the opening balance as a purchase and the links by item name, in
+   * one transaction. Active items named like a demo item are archived first, so loading the demo again never
+   * duplicates them.
+   */
+  export const importDemoStock = async (
+    db: DbClient,
+    storeId: string,
+    items: DemoStockItem[],
+    links: { target: LinkTarget; stock: DemoStockLink[] }[]
+  ) => {
+    const now = new Date().toISOString();
+    const ids = new Map(items.map(({ name }) => [name, randomUUID()]));
+
+    await db.transaction(async (tx) => {
+      const { records: current } = await tx.stock_items.findMany({
+        select: { id: true, name: true },
+        where: { store_id: storeId, archived_at: { isNull: true } }
+      });
+
+      for (const { id, name } of current) {
+        if (ids.has(name)) {
+          await tx.stock_links.deleteMany({ where: { stock_item_id: id } });
+          await tx.stock_items.updateOne({ data: { archived_at: now, updated_at: now }, where: { id } });
+        }
+      }
+
+      for (const item of items) {
+        const id = ids.get(item.name)!;
+
+        await tx.stock_items.insertOne({
+          data: {
+            id,
+            store_id: storeId,
+            name: item.name,
+            unit: item.unit,
+            barcode: null,
+            balance: 0,
+            min_qty: item.min_qty,
+            created_at: now,
+            updated_at: now
+          }
+        });
+
+        for (const { name, factor } of item.packages ?? []) {
+          await tx.stock_packages.insertOne({
+            data: { id: randomUUID(), store_id: storeId, stock_item_id: id, name, factor, barcode: null }
+          });
+        }
+      }
+
+      await applyMovements(
+        tx,
+        storeId,
+        items
+          .filter(({ balance }) => balance > 0)
+          .map((item) => ({
+            itemId: ids.get(item.name)!,
+            delta: item.balance,
+            kind: StockMovementKind.Purchase,
+            unitCost: item.unit_cost_millicents,
+            author: DEMO_STOCK_AUTHOR
+          }))
+      );
+
+      for (const { target, stock } of links) {
+        for (const { item, qty } of stock) {
+          const stockItemId = ids.get(item);
+
+          if (!stockItemId) {
+            throw new Error(`Demo stock item not found: ${item}`);
+          }
+
+          await tx.stock_links.insertOne({
+            data: { id: randomUUID(), store_id: storeId, stock_item_id: stockItemId, ...targetWhere(target), qty }
+          });
+        }
+      }
+    });
+  };
+
   export const availability = async (db: DbClient, storeId: string) => {
     const [items, links] = await Promise.all([
       db.stock_items.findMany({

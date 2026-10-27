@@ -50,7 +50,8 @@ const DEMO_MENU_LABEL: Record<DemoMenuKind, string> = {
   pastry: 'Pastelaria',
   acai: 'Açaí',
   lunchbox: 'Marmitaria',
-  japanese: 'Japonês'
+  japanese: 'Japonês',
+  tobacco_liquor: 'Tabacaria e Adega'
 };
 
 function AdminStorePage() {

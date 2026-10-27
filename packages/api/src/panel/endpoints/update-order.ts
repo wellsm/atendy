@@ -11,6 +11,8 @@ import { ConversationRepository } from '../../conversations/repository';
 import { OrderRepository, OrderStatusError, OrderStatusErrorCode } from '../../orders/repository';
 import { statusNotification, webStatusNotification } from '../../orders/status';
 import { OrderSource } from '../../orders/types';
+import { notifyPanel } from '../../realtime/notify';
+import { PanelTrigger } from '../../realtime/types';
 import { sendStaffMessage } from '../send';
 import { requireStore } from '../store';
 import { toPanelOrder } from '../types';
@@ -41,7 +43,7 @@ export declare class UpdateOrderResponse implements Http.Response {
  */
 export async function updateOrderHandler(
   request: Http.Incoming<UpdateOrderRequest>,
-  { db }: Service.Context<PanelSendProvider>
+  { db, panelEvents }: Service.Context<PanelSendProvider>
 ): Promise<UpdateOrderResponse> {
   const store = await requireStore(db, request.identity);
   const { orderId } = request.parameters;
@@ -93,6 +95,8 @@ export async function updateOrderHandler(
       // Best effort: the panel shows that the customer was not told.
     }
   }
+
+  await notifyPanel(panelEvents, store.id, [PanelTrigger.Orders, PanelTrigger.Conversations], changed.conversationId);
 
   return { status: 200, body: { order: toPanelOrder(order), notified } };
 }

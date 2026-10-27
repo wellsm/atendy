@@ -1,6 +1,6 @@
 import type { Environment } from '@ez4/common';
 import type { Cdn } from '@ez4/distribution';
-import type { WebFiles } from './storage';
+import type { DemoMenuFiles, WebFiles } from './storage';
 
 /**
  * Panel SPA. No custom domain yet: served on the `*.cloudfront.net` domain (`npm run output:dev`).
@@ -20,6 +20,14 @@ export declare class WebCdn extends Cdn.Service {
       }>
     ];
   }>;
+
+  // Demo menu photos keep the path the API returns (`/demo-menu/...`), so the bucket keys start with `demo-menu/`.
+  origins: [
+    Cdn.UseOrigin<{
+      path: 'demo-menu/*';
+      bucket: Environment.Service<DemoMenuFiles>;
+    }>
+  ];
 
   // Routes are all rewritten to `/` and cached that way: a new deploy must drop the old shell.
   invalidations: ['/*'];

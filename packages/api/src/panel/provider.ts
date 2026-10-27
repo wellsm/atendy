@@ -2,6 +2,7 @@ import type { Environment } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { InboundQueue } from '../conversations/queues/inbound';
 import type { Db } from '../db';
+import type { PanelEventsQueue } from '../realtime/queues/panel-events';
 import type { ProductImages, VoiceNotes } from '../storage';
 
 export declare class PanelProvider implements Http.Provider {
@@ -36,6 +37,7 @@ export declare class PanelThreadProvider implements Http.Provider {
 export declare class PanelConversationProvider implements Http.Provider {
   services: {
     db: Environment.Service<Db>;
+    panelEvents: Environment.Service<PanelEventsQueue>;
     inboundQueue: Environment.Service<InboundQueue>;
   };
 }
@@ -79,11 +81,12 @@ export declare class PanelSendProvider implements Http.Provider {
 
   services: {
     db: Environment.Service<Db>;
+    panelEvents: Environment.Service<PanelEventsQueue>;
   };
 }
 
 /**
- * Store location and attendant draft addresses (distance delivery).
+ * Store location (distance delivery).
  */
 export declare class PanelGeocodingProvider implements Http.Provider {
   variables: {
@@ -95,6 +98,20 @@ export declare class PanelGeocodingProvider implements Http.Provider {
 
   services: {
     db: Environment.Service<Db>;
+  };
+}
+
+/**
+ * Attendant drafts: addresses are geocoded (distance delivery) and every change tells the open panels.
+ */
+export declare class PanelDraftProvider implements Http.Provider {
+  variables: {
+    GOOGLE_MAPS_API_KEY: Environment.Variable<'GOOGLE_MAPS_API_KEY'>;
+  };
+
+  services: {
+    db: Environment.Service<Db>;
+    panelEvents: Environment.Service<PanelEventsQueue>;
   };
 }
 

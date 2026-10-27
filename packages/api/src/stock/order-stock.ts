@@ -20,7 +20,7 @@ export const syncOrderStock = async (
 ) => {
   const [{ records: lines }, { records: movements }] = await Promise.all([
     tx.order_items.findMany({
-      select: { product_name: true, qty: true, options_snapshot: true, stock_usage: true },
+      select: { product_id: true, product_name: true, qty: true, options_snapshot: true, stock_usage: true },
       where: { order_id: input.orderId }
     }),
     tx.stock_movements.findMany({
@@ -72,12 +72,25 @@ export const syncOrderStock = async (
     }
 
     if (short.length) {
+      // Names only the product or options whose current links use a short item; a line whose links changed after
+      // its usage was frozen falls back to the product name.
+      const { records: links } = await tx.stock_links.findMany({
+        select: { product_id: true, option_id: true },
+        where: { store_id: input.storeId, stock_item_id: { isIn: short } }
+      });
+
+      const linked = new Set(links.map(({ product_id, option_id }) => product_id ?? option_id));
+
       const names = lines
         .filter(({ stock_usage }) => stock_usage?.some(({ stock_item_id }) => short.includes(stock_item_id)))
-        .flatMap(({ product_name, options_snapshot }) => [
-          product_name,
-          ...options_snapshot.flatMap(({ options }) => options.map(({ name }) => name))
-        ]);
+        .flatMap(({ product_id, product_name, options_snapshot }) => {
+          const options = options_snapshot.flatMap(({ options }) => options).filter(({ id }) => linked.has(id));
+
+          return [
+            ...(linked.has(product_id) || !options.length ? [product_name] : []),
+            ...options.map(({ name }) => name)
+          ];
+        });
 
       const unique = [...new Set(names)];
 

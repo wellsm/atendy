@@ -1,9 +1,10 @@
 import type { Db } from '../../src/db';
 
 import assert, { deepEqual, equal, ok } from 'node:assert/strict';
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 
 import { DatabaseTester } from '@ez4/local-database/test';
+import { QueueTester } from '@ez4/local-queue/test';
 
 import { TurnError } from '../../src/agent/errors';
 import { OpenRouterClient } from '../../src/agent/openrouter-client';
@@ -20,6 +21,12 @@ import { placeOrder, seedMenu, seedStore } from '../support/fixtures';
 
 describe('inbound queue handler', () => {
   const db = DatabaseTester.getClient<Db>('Db');
+  // Ez4 restores client mocks after each test: take a fresh one per test.
+  let panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+
+  beforeEach(() => {
+    panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+  });
 
   afterEach(() => mock.restoreAll());
 
@@ -118,7 +125,13 @@ describe('inbound queue handler', () => {
   };
 
   const run = (event: Record<string, unknown>, attempt = 1, maxAttempts = 3) =>
-    handler({ message: event, attempt, maxAttempts } as never, { db, simulationQueue, voiceNotes, variables });
+    handler({ message: event, attempt, maxAttempts } as never, {
+      db,
+      simulationQueue,
+      voiceNotes,
+      panelEvents,
+      variables
+    });
 
   const customerEvent = (ingested: { conversationId: string; messageId: string }, eventId: string) => ({
     conversationId: ingested.conversationId,
@@ -155,6 +168,13 @@ describe('inbound queue handler', () => {
       ['oi', 'quero pizza', 'grande']
     );
     deepEqual(await ConversationRepository.pendingInbound(db, third.conversationId), []);
+
+    // The reply tells the store's open panels.
+    deepEqual(panelEvents.sendMessage.mock.calls.at(-1)?.arguments[0], {
+      storeId,
+      triggers: ['conversations'],
+      conversationId: third.conversationId
+    });
   });
 
   it('welcomes a new customer who only said hello in three messages, without a model turn', async () => {

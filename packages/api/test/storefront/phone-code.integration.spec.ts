@@ -2,10 +2,11 @@ import type { HttpError } from '@ez4/gateway';
 import type { Db } from '../../src/db';
 
 import { deepEqual, equal, ok, rejects } from 'node:assert/strict';
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 
 import { HttpForbiddenError } from '@ez4/gateway';
 import { DatabaseTester } from '@ez4/local-database/test';
+import { QueueTester } from '@ez4/local-queue/test';
 
 import { createWebOrderHandler } from '../../src/storefront/endpoints/create-order';
 import { sendPhoneCodeHandler } from '../../src/storefront/endpoints/send-phone-code';
@@ -32,6 +33,12 @@ const rejectsWith = (promise: Promise<unknown>, status: number, field: WebOrderE
 
 describe('web order phone codes', () => {
   const db = DatabaseTester.getClient<Db>('Db');
+  // Ez4 restores client mocks after each test: take a fresh one per test.
+  let panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+
+  beforeEach(() => {
+    panelEvents = QueueTester.getClientMock('PanelEventsQueue');
+  });
 
   afterEach(() => mock.restoreAll());
 
@@ -214,7 +221,7 @@ describe('web order phone codes', () => {
             payment: { method: 'pix' }
           }
         } as never,
-        { db }
+        { db, panelEvents }
       );
 
     await rejects(order(null), HttpForbiddenError);

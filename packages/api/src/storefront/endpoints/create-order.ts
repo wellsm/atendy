@@ -7,6 +7,8 @@ import type { WebOrderDeliveryInput, WebOrderItemInput } from '../types';
 
 import { HttpNotFoundError } from '@ez4/gateway';
 
+import { notifyPanel } from '../../realtime/notify';
+import { PanelTrigger } from '../../realtime/types';
 import { locateWithGoogle } from '../../stores/geocoding';
 import { isPhoneVerified, linkVerificationToOrder } from '../phone-code';
 import { toWebItems } from '../types';
@@ -47,7 +49,7 @@ export declare class CreateWebOrderResponse implements Http.Response {
  */
 export async function createWebOrderHandler(
   request: Http.Incoming<CreateWebOrderRequest>,
-  { db }: Service.Context<StorefrontOrderProvider>
+  { db, panelEvents }: Service.Context<StorefrontOrderProvider>
 ): Promise<CreateWebOrderResponse> {
   const { name, phone, items, delivery, payment, phoneToken, website } = request.body;
 
@@ -79,6 +81,8 @@ export async function createWebOrderHandler(
     );
 
     await linkVerificationToOrder(db, placed.phone, placed.orderId);
+
+    await notifyPanel(panelEvents, store.id, [PanelTrigger.Orders, PanelTrigger.Conversations]);
 
     return { status: 201, body: { code: placed.code, totalCents: placed.totalCents } };
   });
