@@ -168,7 +168,7 @@ describe('web orders (public menu)', () => {
 
     const { records: messages } = await db.messages.findMany({
       select: { body: true, processed_at: true },
-      where: { conversation_id: placed.conversation_id }
+      where: { conversation_id: placed.conversation_id! }
     });
 
     equal(messages[0]?.body, `🛒 Pedido pelo site #${body.code}`);

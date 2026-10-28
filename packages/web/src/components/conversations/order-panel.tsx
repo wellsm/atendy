@@ -23,7 +23,15 @@ const nextAction = (order: PanelOrder): { status: OrderStatus; label: string } |
     case 'placed':
       return { status: 'accepted', label: 'Aceitar pedido' };
     case 'accepted':
-      return { status: 'out', label: order.fulfillment === 'pickup' ? 'Pronto para retirada' : 'Saiu para entrega' };
+      return {
+        status: 'out',
+        label:
+          order.source === 'pos'
+            ? 'Pronto'
+            : order.fulfillment === 'pickup'
+              ? 'Pronto para retirada'
+              : 'Saiu para entrega'
+      };
     case 'out':
       return { status: 'done', label: 'Concluir' };
     default:
@@ -89,7 +97,12 @@ export function StatusChip({ status, className = '' }: { status: OrderStatus; cl
 
 function Steps({ order }: { order: PanelOrder }) {
   const current = OPEN_STATUSES.indexOf(order.status);
-  const labels = ['Novo', 'Em preparo', order.fulfillment === 'pickup' ? 'Pronto' : 'Saiu', 'Concluído'];
+  const labels = [
+    'Novo',
+    'Em preparo',
+    order.fulfillment === 'pickup' || order.source === 'pos' ? 'Pronto' : 'Saiu',
+    'Concluído'
+  ];
 
   return (
     <ol className="grid grid-cols-4 gap-1">
@@ -130,17 +143,21 @@ export function Summary({ order, withTotals }: { order: PanelOrder; withTotals: 
   return (
     <dl className="space-y-1.5 text-[13px]">
       <div className="flex justify-between gap-3">
-        <dt className="text-muted">{order.fulfillment === 'pickup' ? 'Retirada' : 'Entrega'}</dt>
+        <dt className="text-muted">
+          {order.source === 'pos' ? 'Balcão' : order.fulfillment === 'pickup' ? 'Retirada' : 'Entrega'}
+        </dt>
         <dd className="text-right">
-          {order.fulfillment === 'delivery'
-            ? [order.address, order.neighborhood].filter(Boolean).join(' · ')
-            : 'Cliente retira na loja'}
+          {order.source === 'pos'
+            ? 'Venda no balcão'
+            : order.fulfillment === 'delivery'
+              ? [order.address, order.neighborhood].filter(Boolean).join(' · ')
+              : 'Cliente retira na loja'}
         </dd>
       </div>
       <div className="flex justify-between gap-3">
         <dt className="text-muted">Pagamento</dt>
         <dd className="text-right">
-          {order.payment_method ? PAYMENT_LABEL[order.payment_method] : '—'}
+          {order.payment_method ? PAYMENT_LABEL[order.payment_method] : order.source === 'pos' ? 'Pago no balcão' : '—'}
           {order.change_for_cents != null && ` (troco para ${formatMoney(order.change_for_cents)})`}
         </dd>
       </div>
@@ -189,7 +206,8 @@ export function Actions({
         </button>
       )}
 
-      {!confirmCancel ? (
+      {/* A paid counter sale is canceled from the POS (reason, refunds); the board's cancel would get a 409. */}
+      {order.source === 'pos' ? null : !confirmCancel ? (
         <button
           type="button"
           disabled={pending}

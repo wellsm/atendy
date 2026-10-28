@@ -17,6 +17,7 @@ import {
   useMenu,
   useRenameCategory,
   useReorderCategories,
+  useSetCategoryPreparation,
   useSetOptionActive,
   useSetProductActive
 } from '../../lib/queries';
@@ -355,6 +356,7 @@ function CategoryCard({ category, products }: { category: MenuCategory; products
   const slug = usePanelSlug();
   const rename = useRenameCategory();
   const remove = useDeleteCategory();
+  const setPreparation = useSetCategoryPreparation();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -397,6 +399,14 @@ function CategoryCard({ category, products }: { category: MenuCategory; products
             <h2 className="min-w-0 flex-1 break-words font-semibold">
               {category.name} <span className="text-sm font-normal text-faint">· {category.products.length}</span>
             </h2>
+            <label className="flex items-center gap-2 text-sm text-muted">
+              <Toggle
+                checked={category.needs_preparation}
+                label="Precisa de preparo"
+                onChange={(needsPreparation) => setPreparation.mutate({ id: category.id, needsPreparation })}
+              />
+              Precisa de preparo
+            </label>
             <button type="button" onClick={() => setEditing(true)} className="text-sm text-muted">
               Renomear
             </button>

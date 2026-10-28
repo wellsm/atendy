@@ -38,7 +38,9 @@ const cart = (patch: Partial<Cart> = {}): Cart => ({
   payment_method: PaymentMethod.Cash,
   change_for_cents: 10000,
   subtotal_cents: 8290,
+  discount_cents: 0,
   fee_cents: 690,
+  surcharge_cents: 0,
   total_cents: 8980,
   missing: [],
   ...patch

@@ -119,7 +119,9 @@ const cart: Cart = {
   payment_method: null,
   change_for_cents: null,
   subtotal_cents: 1400,
+  discount_cents: 0,
   fee_cents: 0,
+  surcharge_cents: 0,
   total_cents: 1400,
   missing: []
 };

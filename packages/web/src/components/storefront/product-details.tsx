@@ -10,20 +10,31 @@ import { groupRule } from '../../lib/storefront';
 
 /**
  * Details of a product: phone full screen, desktop modal. Closes on Esc or a click outside. With `onAdd` (the store
- * takes orders now) the options become choices, with quantity, notes and "Adicionar".
+ * takes orders now) the options become choices, with quantity, notes and "Adicionar". `allowSoldOut` (staff, the POS)
+ * lets sold-out products and options be chosen; `preselected` starts with those options chosen, `initialQty` with
+ * that quantity.
  */
 export function ProductDetails({
   product,
   onClose,
-  onAdd
+  onAdd,
+  allowSoldOut = false,
+  preselected = {},
+  initialQty = 1
 }: {
   product: StorefrontProduct;
   onClose: () => void;
   onAdd?: (line: Omit<CartLine, 'key'>) => void;
+  allowSoldOut?: boolean;
+  preselected?: Record<string, string[]>;
+  initialQty?: number;
 }) {
   const price = startingPrice(product);
-  const [chosen, setChosen] = useState<Record<string, string[]>>({});
-  const [qty, setQty] = useState(1);
+  const [chosen, setChosen] = useState<Record<string, string[]>>(preselected);
+  const choosable = (option: { active: boolean; sold_out?: boolean }) =>
+    allowSoldOut ? option.active : isAvailable(option);
+  const soldOut = product.sold_out && !allowSoldOut;
+  const [qty, setQty] = useState(initialQty);
   const [notes, setNotes] = useState('');
   const short = product.groups.find((group) => (chosen[group.id]?.length ?? 0) < group.min);
   const unit = unitPrice(product, chosen);
@@ -129,12 +140,12 @@ export function ProductDetails({
                   {group.options.map((option) => (
                     <li
                       key={option.id}
-                      role={onAdd && isAvailable(option) ? 'button' : undefined}
+                      role={onAdd && choosable(option) ? 'button' : undefined}
                       aria-pressed={
-                        onAdd && isAvailable(option) ? (chosen[group.id]?.includes(option.id) ?? false) : undefined
+                        onAdd && choosable(option) ? (chosen[group.id]?.includes(option.id) ?? false) : undefined
                       }
-                      onClick={onAdd && isAvailable(option) ? () => toggle(group.id, option.id, group.max) : undefined}
-                      className={`flex min-h-14 items-center gap-3 border-b border-neutral-100 px-4 py-3 md:px-6 ${isAvailable(option) ? '' : 'opacity-45'} ${onAdd && isAvailable(option) ? 'cursor-pointer hover:bg-neutral-50' : ''}`}
+                      onClick={onAdd && choosable(option) ? () => toggle(group.id, option.id, group.max) : undefined}
+                      className={`flex min-h-14 items-center gap-3 border-b border-neutral-100 px-4 py-3 md:px-6 ${isAvailable(option) ? '' : 'opacity-45'} ${onAdd && choosable(option) ? 'cursor-pointer hover:bg-neutral-50' : ''}`}
                     >
                       {option.image_url && (
                         <img
@@ -155,7 +166,7 @@ export function ProductDetails({
                         </span>
                       </div>
                       {!isAvailable(option) && <span className="text-xs text-neutral-500">Esgotado</span>}
-                      {onAdd && isAvailable(option) && (
+                      {onAdd && choosable(option) && (
                         <span
                           className={`flex size-5.5 shrink-0 items-center justify-center border-2 text-xs text-white ${group.max === 1 ? 'rounded-full' : 'rounded-md'} ${chosen[group.id]?.includes(option.id) ? 'border-red-600 bg-red-600' : 'border-neutral-300'}`}
                         >
@@ -206,15 +217,11 @@ export function ProductDetails({
               </div>
               <button
                 type="button"
-                disabled={!!short || product.sold_out}
+                disabled={!!short || soldOut}
                 onClick={add}
                 className="h-11 flex-1 rounded-lg bg-red-600 px-4 text-[15px] font-semibold text-white disabled:opacity-50"
               >
-                {product.sold_out
-                  ? 'Esgotado'
-                  : short
-                    ? `Escolha: ${short.name}`
-                    : `Adicionar · ${formatMoney(unit * qty)}`}
+                {soldOut ? 'Esgotado' : short ? `Escolha: ${short.name}` : `Adicionar · ${formatMoney(unit * qty)}`}
               </button>
             </div>
           )}

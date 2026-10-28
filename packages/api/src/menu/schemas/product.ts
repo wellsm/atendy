@@ -13,6 +13,10 @@ export interface ProductSchema extends Database.Schema {
    * Object key in `ProductImages` (`products/<storeId>/<productId>/<uuid>`); null = no photo.
    */
   image_key?: string | null;
+  /**
+   * Overrides the category's flag; null = inherit.
+   */
+  needs_preparation?: boolean | null;
   created_at: String.DateTime;
   updated_at: String.DateTime;
 }

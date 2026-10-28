@@ -130,9 +130,12 @@ export const toPanelPolicy = (policy: StorePolicy): PanelPolicy => ({
   addOnExtraMinutes: policy.add_on_extra_minutes ?? null
 });
 
+/**
+ * Both null on a POS sale without a customer (name: the typed one, if any).
+ */
 export type PanelCustomer = {
   name: string | null;
-  phone: string;
+  phone: string | null;
 };
 
 export type PanelOrderItem = {
@@ -162,14 +165,17 @@ export type PanelOrder = {
   placedAt: string | null;
   abandonedAt: string | null;
   /**
-   * `web` when the customer ordered on the public menu; null for WhatsApp.
+   * `web` when the customer ordered on the public menu, `pos` for a counter sale; null for WhatsApp.
    */
   source: OrderSource | null;
   /**
    * Set when the customer changed the order after placing it ("pedido alterado").
    */
   amendedAt: string | null;
-  conversationId: string;
+  /**
+   * Null on POS sales.
+   */
+  conversationId: string | null;
   customer: PanelCustomer;
   items: PanelOrderItem[];
 };
@@ -190,7 +196,7 @@ export const toPanelOrder = (order: OrderRepository.PanelOrder): PanelOrder => (
   abandonedAt: order.abandoned_at ?? null,
   source: order.source ?? null,
   amendedAt: order.amended_at ?? null,
-  conversationId: order.conversation_id,
+  conversationId: order.conversation_id ?? null,
   customer: order.customer,
   items: order.items.map((item) => ({
     id: item.id,
@@ -346,6 +352,7 @@ export type PanelProductInput = {
    * Same rule as the options: absent keeps the stored value.
    */
   active?: boolean;
+  needsPreparation?: boolean | null;
   groups: PanelGroupInput[];
 };
 
@@ -376,6 +383,7 @@ export type PanelProduct = {
   description: string | null;
   priceCents: number;
   active: boolean;
+  needsPreparation: boolean | null;
   /**
    * Signed read URL (1 h); null without a photo.
    */
@@ -389,5 +397,6 @@ export type PanelCategory = {
 };
 
 export type PanelMenuCategory = PanelCategory & {
+  needsPreparation: boolean;
   products: PanelProduct[];
 };

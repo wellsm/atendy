@@ -160,7 +160,8 @@ describe('StoreRepository', () => {
       paymentMethods: [PaymentMethod.Pix],
       policy: { min_order_cents: 3000 },
       stockAlertPhone: null,
-      stockAlertHour: null
+      stockAlertHour: null,
+      pos: { layout: 'grid', cashControl: true, blindClose: false, receiptWidth: 80 }
     });
   });
 

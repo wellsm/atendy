@@ -33,6 +33,7 @@ import type { setOptionActiveHandler } from './endpoints/set-option-active';
 import type { setProductActiveHandler } from './endpoints/set-product-active';
 import type { startImageHandler } from './endpoints/start-image';
 import type { updateBillingCardHandler } from './endpoints/update-billing-card';
+import type { updateCategoryPreparationHandler } from './endpoints/update-category-preparation';
 import type { updateConversationHandler } from './endpoints/update-conversation';
 import type { updateDeliveryHandler } from './endpoints/update-delivery';
 import type { updateDraftHandler } from './endpoints/update-draft';
@@ -41,10 +42,24 @@ import type { updateHoursHandler } from './endpoints/update-hours';
 import type { updateOrderHandler } from './endpoints/update-order';
 import type { updatePaymentHandler } from './endpoints/update-payment';
 import type { updatePolicyHandler } from './endpoints/update-policy';
+import type { updatePosSettingsHandler } from './endpoints/update-pos-settings';
 import type { updateProductHandler } from './endpoints/update-product';
 import type { updateStockAlertHandler } from './endpoints/update-stock-alert';
 import type { updateStoreHandler } from './endpoints/update-store';
 import type { updateStoreLocationHandler } from './endpoints/update-store-location';
+import type { addPosSaleItemHandler } from '../pos/endpoints/add-item';
+import type { cancelPosSaleHandler } from '../pos/endpoints/cancel-sale';
+import type { createPosSaleHandler } from '../pos/endpoints/create-sale';
+import type { discardPosSaleHandler } from '../pos/endpoints/discard-sale';
+import type { finalizePosSaleHandler } from '../pos/endpoints/finalize-sale';
+import type { findPosBarcodeHandler } from '../pos/endpoints/find-barcode';
+import type { getPosMenuHandler } from '../pos/endpoints/get-menu';
+import type { getPosSaleHandler } from '../pos/endpoints/get-sale';
+import type { listPosSalesHandler } from '../pos/endpoints/list-sales';
+import type { removePosSaleItemHandler } from '../pos/endpoints/remove-item';
+import type { sendPosReceiptHandler } from '../pos/endpoints/send-receipt';
+import type { updatePosSaleItemHandler } from '../pos/endpoints/update-item';
+import type { updatePosSaleHandler } from '../pos/endpoints/update-sale';
 
 export type PanelRoutes = [
   Http.UseRoute<{
@@ -91,6 +106,11 @@ export type PanelRoutes = [
     path: 'PUT /panel/settings/stock-alert';
     authorizer: typeof panelAuthorizer;
     handler: typeof updateStockAlertHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'PUT /panel/settings/pos';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updatePosSettingsHandler;
   }>,
   Http.UseRoute<{
     path: 'PATCH /panel/settings/policy';
@@ -193,6 +213,11 @@ export type PanelRoutes = [
     handler: typeof renameCategoryHandler;
   }>,
   Http.UseRoute<{
+    path: 'PUT /panel/menu/categories/{categoryId}/preparation';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updateCategoryPreparationHandler;
+  }>,
+  Http.UseRoute<{
     path: 'PUT /panel/menu/categories/order';
     authorizer: typeof panelAuthorizer;
     handler: typeof reorderCategoriesHandler;
@@ -271,5 +296,70 @@ export type PanelRoutes = [
     path: 'POST /panel/billing/card';
     authorizer: typeof panelAuthorizer;
     handler: typeof updateBillingCardHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /panel/pos/menu';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof getPosMenuHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /panel/pos/barcode/{code}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof findPosBarcodeHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /panel/pos/sales';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof listPosSalesHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'PUT /panel/pos/sales/{saleId}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof createPosSaleHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /panel/pos/sales/{saleId}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof getPosSaleHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'PATCH /panel/pos/sales/{saleId}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updatePosSaleHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'DELETE /panel/pos/sales/{saleId}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof discardPosSaleHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/pos/sales/{saleId}/items';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof addPosSaleItemHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'PATCH /panel/pos/sales/{saleId}/items/{itemId}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updatePosSaleItemHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'DELETE /panel/pos/sales/{saleId}/items/{itemId}';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof removePosSaleItemHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/pos/sales/{saleId}/finalize';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof finalizePosSaleHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/pos/sales/{saleId}/cancel';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof cancelPosSaleHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /panel/pos/sales/{saleId}/receipt';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof sendPosReceiptHandler;
   }>
 ];

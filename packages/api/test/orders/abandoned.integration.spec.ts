@@ -1,12 +1,13 @@
 import type { Db } from '../../src/db';
 
 import { deepEqual, equal } from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import { DatabaseTester } from '@ez4/local-database/test';
 
 import { OrderRepository, PanelOrderScope } from '../../src/orders/repository';
-import { Fulfillment, OrderStatus } from '../../src/orders/types';
+import { Fulfillment, OrderSource, OrderStatus } from '../../src/orders/types';
 import { minutesAgo, placeOrder, productByName, seedConversation, seedMenu, seedStore } from '../support/fixtures';
 
 describe('abandoned drafts', () => {
@@ -104,5 +105,31 @@ describe('abandoned drafts', () => {
     const closed = await OrderRepository.listForPanel(db, storeId, PanelOrderScope.Closed);
 
     deepEqual(closed, []);
+  });
+
+  it('never abandons POS drafts', async () => {
+    const { storeId } = await setup();
+    const id = randomUUID();
+    const createdAt = minutesAgo(3 * 24 * 60);
+
+    // A held counter sale: no conversation, no customer.
+    await db.orders.insertOne({
+      data: {
+        id,
+        store_id: storeId,
+        customer_id: null,
+        conversation_id: null,
+        source: OrderSource.Pos,
+        status: OrderStatus.Draft,
+        subtotal_cents: 1000,
+        fee_cents: 0,
+        total_cents: 1000,
+        created_at: createdAt,
+        updated_at: createdAt
+      }
+    });
+
+    equal(await OrderRepository.abandonStaleDrafts(db, new Date(), storeId), 0);
+    equal((await statusOf(id)).status, OrderStatus.Draft);
   });
 });

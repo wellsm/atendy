@@ -19,7 +19,8 @@ export const enum DeliveryMode {
 export const enum PaymentMethod {
   Pix = 'pix',
   Card = 'card',
-  Cash = 'cash'
+  Cash = 'cash',
+  Voucher = 'voucher'
 }
 
 /**
@@ -103,6 +104,13 @@ export type StorePolicy = {
 /**
  * Order statuses after which a store lets the customer start another order (values of `OrderStatus`).
  */
+export type PosSettings = {
+  layout: 'grid' | 'search';
+  cashControl: boolean;
+  blindClose: boolean;
+  receiptWidth: 58 | 80;
+};
+
 export const enum NewOrderAfterStatus {
   Accepted = 'accepted',
   Out = 'out',

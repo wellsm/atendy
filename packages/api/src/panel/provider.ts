@@ -116,6 +116,16 @@ export declare class PanelDraftProvider implements Http.Provider {
 }
 
 /**
+ * POS finalize and cancel: they change the orders board.
+ */
+export declare class PanelPosProvider implements Http.Provider {
+  services: {
+    db: Environment.Service<Db>;
+    panelEvents: Environment.Service<PanelEventsQueue>;
+  };
+}
+
+/**
  * Store card registration on Asaas.
  */
 export declare class PanelBillingProvider implements Http.Provider {

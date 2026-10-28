@@ -44,6 +44,12 @@ export const formatPhone = (phone: string) => {
 };
 
 /**
+ * Who an order is for: the name, else the phone; a counter sale without either is "Balcão".
+ */
+export const orderCustomerName = ({ customer }: { customer: { name: string | null; phone: string | null } }) =>
+  customer.name ?? (customer.phone ? formatPhone(customer.phone) : 'Balcão');
+
+/**
  * Mask while typing a Brazilian phone: `(11) 98888-7777` / `(11) 3333-4444`. A pasted `+55` is dropped.
  */
 export const maskPhoneInput = (typed: string) => {
@@ -65,7 +71,8 @@ export const maskPhoneInput = (typed: string) => {
 export const PAYMENT_LABEL: Record<string, string> = {
   pix: 'Pix',
   card: 'Cartão',
-  cash: 'Dinheiro'
+  cash: 'Dinheiro',
+  voucher: 'Vale-refeição/alimentação'
 };
 
 export const STATUS_LABEL: Record<string, string> = {

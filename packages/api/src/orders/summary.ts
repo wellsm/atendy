@@ -11,7 +11,12 @@ const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 
 export const formatCents = (cents: number) => BRL.format(cents / 100);
 
-const PAYMENT_TEXT: Record<string, string> = { pix: 'Pix', card: 'Cartão', cash: 'Dinheiro' };
+export const PAYMENT_TEXT: Record<string, string> = {
+  pix: 'Pix',
+  card: 'Cartão',
+  cash: 'Dinheiro',
+  voucher: 'Vale-refeição/alimentação'
+};
 
 type SummaryItem = {
   qty: number;

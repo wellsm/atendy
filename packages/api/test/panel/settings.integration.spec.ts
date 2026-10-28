@@ -4,9 +4,10 @@ import { deepEqual, equal, rejects } from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 
-import { HttpBadRequestError } from '@ez4/gateway';
+import { HttpBadRequestError, HttpConflictError } from '@ez4/gateway';
 import { DatabaseTester } from '@ez4/local-database/test';
 
+import { CashRepository } from '../../src/cash/repository';
 import { Fulfillment } from '../../src/orders/types';
 import { getMeHandler } from '../../src/panel/endpoints/get-me';
 import { getSettingsHandler } from '../../src/panel/endpoints/get-settings';
@@ -14,6 +15,7 @@ import { updateDeliveryHandler } from '../../src/panel/endpoints/update-delivery
 import { updateHoursHandler } from '../../src/panel/endpoints/update-hours';
 import { updatePaymentHandler } from '../../src/panel/endpoints/update-payment';
 import { updatePolicyHandler } from '../../src/panel/endpoints/update-policy';
+import { updatePosSettingsHandler } from '../../src/panel/endpoints/update-pos-settings';
 import { updateStockAlertHandler } from '../../src/panel/endpoints/update-stock-alert';
 import { updateStoreHandler } from '../../src/panel/endpoints/update-store';
 import { resolveDeliveryFee } from '../../src/stores/delivery';
@@ -35,6 +37,8 @@ describe('panel settings endpoints', () => {
 
   const badField = (field: string) => (error: unknown) =>
     error instanceof HttpBadRequestError && error.context?.field === field;
+  const conflictField = (field: string) => (error: unknown) =>
+    error instanceof HttpConflictError && error.context?.field === field;
 
   it('renames the store and flips accepting orders for the token org only', async () => {
     const { identity, storeId } = await setup();
@@ -89,6 +93,39 @@ describe('panel settings endpoints', () => {
     });
 
     deepEqual(stored, { stock_alert_phone: null, stock_alert_hour: null });
+  });
+
+  it('defaults and round-trips the POS settings and refuses a bad receipt width', async () => {
+    const { identity } = await setup();
+    const save = (body: object) => updatePosSettingsHandler({ identity, body } as never, { db });
+    const defaults = { layout: 'grid', cashControl: true, blindClose: false, receiptWidth: 80 };
+
+    deepEqual((await getSettingsHandler({ identity } as never, { db })).body.pos, defaults);
+
+    const next = { layout: 'search', cashControl: false, blindClose: true, receiptWidth: 58 };
+
+    deepEqual((await save(next)).body, next);
+    deepEqual((await getSettingsHandler({ identity } as never, { db })).body.pos, next);
+
+    await rejects(save({ ...next, receiptWidth: 70 }), badField('pos_receipt_width'));
+    await rejects(save({ ...next, layout: 'list' }), badField('pos_layout'));
+  });
+
+  it('refuses turning cash control off while a cash session is open', async () => {
+    const { identity, storeId } = await setup();
+    const save = (cashControl: boolean) =>
+      updatePosSettingsHandler(
+        { identity, body: { layout: 'grid', cashControl, blindClose: false, receiptWidth: 80 } } as never,
+        { db }
+      );
+
+    const session = await CashRepository.open(db, storeId, { floatCents: 1000, author: 'user_1' });
+
+    await rejects(save(false), conflictField('pos_cash_control'));
+    equal((await save(true)).body.cashControl, true);
+
+    await CashRepository.close(db, storeId, session.id, { countedCents: 1000, author: 'user_1' });
+    equal((await save(false)).body.cashControl, false);
   });
 
   it('refuses a stock alert hour outside 0-23 or a phone that is not Brazilian', async () => {
@@ -146,7 +183,8 @@ describe('panel settings endpoints', () => {
       },
       storeLocation: null,
       stockAlertPhone: null,
-      stockAlertHour: null
+      stockAlertHour: null,
+      pos: { layout: 'grid', cashControl: true, blindClose: false, receiptWidth: 80 }
     });
   });
 
@@ -272,6 +310,17 @@ describe('panel settings endpoints', () => {
       PaymentMethod.Card,
       PaymentMethod.Cash
     ]);
+  });
+
+  it('saves voucher as a payment method', async () => {
+    const { identity, storeId } = await setup();
+
+    await updatePaymentHandler(
+      { identity, body: { paymentMethods: [PaymentMethod.Pix, PaymentMethod.Voucher] } } as never,
+      { db }
+    );
+
+    deepEqual((await StoreRepository.getSettings(db, storeId))?.paymentMethods, ['pix', 'voucher']);
   });
 
   it('merges the policy, clears a limit with null and keeps admin-only keys', async () => {

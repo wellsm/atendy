@@ -6,4 +6,8 @@ export interface CategorySchema extends Database.Schema {
   store_id: String.UUID;
   name: string;
   position: Integer.Min<0>;
+  /**
+   * Its sales go to the kitchen board; null = false.
+   */
+  needs_preparation?: boolean | null;
 }

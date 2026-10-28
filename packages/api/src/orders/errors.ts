@@ -29,7 +29,11 @@ export const enum OrderErrorCode {
   /**
    * A tracked stock item cannot cover what the write adds; the message names the products/options.
    */
-  OutOfStock = 'out_of_stock'
+  OutOfStock = 'out_of_stock',
+  /**
+   * A POS sale is canceled from the POS (reason, refund), never from the board.
+   */
+  PosCancel = 'pos_cancel'
 }
 
 export class OrderError extends Error {

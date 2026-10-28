@@ -27,8 +27,16 @@ export async function getMenuHandler(
 ): Promise<GetMenuResponse> {
   const store = await requireStore(db, request.identity);
 
+  const menu = await MenuRepository.loadPanel(db, store.id);
+  const categories = await withImageUrls(productImages, menu);
+
   return {
     status: 200,
-    body: { categories: await withImageUrls(productImages, await MenuRepository.loadPanel(db, store.id)) }
+    body: {
+      categories: categories.map((category, index) => ({
+        ...category,
+        needsPreparation: menu[index]!.needsPreparation
+      }))
+    }
   };
 }

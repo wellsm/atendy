@@ -9,6 +9,7 @@ import type {
   OrderStatus,
   PaymentMethod,
   PolicySettings,
+  PosSettings,
   PreviousAddress,
   Settings,
   StoreLocation
@@ -30,6 +31,7 @@ import {
   useUpdateHours,
   useUpdatePayment,
   useUpdatePolicy,
+  useUpdatePosSettings,
   useUpdateStockAlert,
   useUpdateStore
 } from '../../lib/queries';
@@ -52,10 +54,16 @@ const FIELD_ERROR: Record<string, string> = {
   payment_methods: 'Escolha pelo menos uma forma de pagamento.',
   sop: 'As instruções podem ter no máximo 2000 caracteres.',
   stock_alert_phone: 'Confira o WhatsApp: DDD e número.',
-  stock_alert_hour: 'O horário precisa ser uma hora de 0 a 23.'
+  stock_alert_hour: 'O horário precisa ser uma hora de 0 a 23.',
+  pos_layout: 'Escolha o layout padrão: grade ou busca.',
+  pos_receipt_width: 'A largura do comprovante precisa ser 58 mm ou 80 mm.'
 };
 
 const errorText = (error: unknown) => {
+  if (error instanceof ApiError && error.status === 409 && error.field === 'pos_cash_control') {
+    return 'Feche o caixa antes de desligar o controle.';
+  }
+
   if (error instanceof ApiError && error.status === 400) {
     return (error.field && FIELD_ERROR[error.field]) || 'Algum valor não é válido. Confira e tente de novo.';
   }
@@ -69,7 +77,8 @@ const SECTIONS: [SettingsTab, string][] = [
   ['delivery', 'Entrega'],
   ['payment', 'Pagamento'],
   ['policy', 'Regras'],
-  ['stock', 'Estoque']
+  ['stock', 'Estoque'],
+  ['pos', 'PDV']
 ];
 
 /**
@@ -130,6 +139,8 @@ function ActiveSection({ tab, settings }: { tab: SettingsTab; settings: Settings
       return <PolicySection policy={settings.policy} />;
     case 'stock':
       return <StockAlertSection phone={settings.stock_alert_phone} hour={settings.stock_alert_hour} />;
+    case 'pos':
+      return <PosSection pos={settings.pos} />;
   }
 }
 
@@ -312,6 +323,71 @@ function StockAlertSection({ phone, hour }: { phone: string | null; hour: number
           update.reset();
         }}
       />
+    </Section>
+  );
+}
+
+function PosSection({ pos }: { pos: PosSettings }) {
+  const update = useUpdatePosSettings();
+  const [value, setValue] = useState(pos);
+  const change = (patch: Partial<PosSettings>) => {
+    setValue({ ...value, ...patch });
+    update.reset();
+  };
+
+  return (
+    <Section
+      title="PDV"
+      description="Padrões do ponto de venda no balcão."
+      onSubmit={() => update.mutate(value)}
+      saving={update.isPending}
+      saved={update.isSuccess}
+      error={update.error}
+    >
+      <label className="block text-sm font-medium" htmlFor="pos-layout">
+        Layout padrão
+      </label>
+      <select
+        id="pos-layout"
+        value={value.layout}
+        onChange={(event) => change({ layout: event.target.value as PosSettings['layout'] })}
+        className={`mt-1.5 w-full ${INPUT}`}
+      >
+        <option value="grid">Grade (comida)</option>
+        <option value="search">Busca (produtos)</option>
+      </select>
+
+      <label className="mt-4 flex items-center gap-2 text-sm font-medium">
+        <input
+          type="checkbox"
+          checked={value.cash_control}
+          onChange={(event) => change({ cash_control: event.target.checked })}
+        />
+        Controlar caixa
+      </label>
+
+      <label className="mt-4 flex items-center gap-2 text-sm font-medium">
+        <input
+          type="checkbox"
+          checked={value.blind_close}
+          onChange={(event) => change({ blind_close: event.target.checked })}
+        />
+        Fechamento cego
+      </label>
+      <p className="mt-1 text-xs text-muted">O operador não vê o valor esperado antes de contar</p>
+
+      <label className="mt-4 block text-sm font-medium" htmlFor="pos-receipt-width">
+        Largura do comprovante
+      </label>
+      <select
+        id="pos-receipt-width"
+        value={value.receipt_width}
+        onChange={(event) => change({ receipt_width: Number(event.target.value) as PosSettings['receipt_width'] })}
+        className={`mt-1.5 w-full ${INPUT}`}
+      >
+        <option value={58}>58 mm</option>
+        <option value={80}>80 mm</option>
+      </select>
     </Section>
   );
 }
@@ -777,7 +853,7 @@ function StoreLocationField({ location }: { location: StoreLocation | null }) {
   );
 }
 
-const PAYMENT_METHODS: PaymentMethod[] = ['pix', 'card', 'cash'];
+const PAYMENT_METHODS: PaymentMethod[] = ['pix', 'card', 'cash', 'voucher'];
 
 function PaymentSection({ methods }: { methods: PaymentMethod[] }) {
   const update = useUpdatePayment();

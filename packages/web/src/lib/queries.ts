@@ -176,7 +176,7 @@ export type PanelOrder = {
   fulfillment: 'delivery' | 'pickup' | null;
   address: string | null;
   neighborhood: string | null;
-  payment_method: 'pix' | 'card' | 'cash' | null;
+  payment_method: 'pix' | 'card' | 'cash' | 'voucher' | null;
   change_for_cents: number | null;
   subtotal_cents: number;
   fee_cents: number;
@@ -188,11 +188,17 @@ export type PanelOrder = {
   abandoned_at: string | null;
   amended_at: string | null;
   /**
-   * `web`: the customer ordered on the public menu.
+   * `web`: the customer ordered on the public menu; `pos`: a counter sale.
    */
-  source: 'web' | null;
-  conversation_id: string;
-  customer: { name: string | null; phone: string };
+  source: 'web' | 'pos' | null;
+  /**
+   * Null on counter sales.
+   */
+  conversation_id: string | null;
+  /**
+   * Counter sales may have no customer: name is the typed one, phone null.
+   */
+  customer: { name: string | null; phone: string | null };
   items: { id: string; name: string; qty: number; options: string; notes: string | null; unit_price_cents: number }[];
 };
 
@@ -455,7 +461,7 @@ export const useUpdateStore = () => {
   });
 };
 
-export type PaymentMethod = 'pix' | 'card' | 'cash';
+export type PaymentMethod = 'pix' | 'card' | 'cash' | 'voucher';
 
 export type DeliveryMode = 'flat' | 'by_zone' | 'by_distance';
 
@@ -534,6 +540,14 @@ export type Settings = {
    * Hour (0-23, store time) the summary goes out; null = the default.
    */
   stock_alert_hour: number | null;
+  pos: PosSettings;
+};
+
+export type PosSettings = {
+  layout: 'grid' | 'search';
+  cash_control: boolean;
+  blind_close: boolean;
+  receipt_width: 58 | 80;
 };
 
 export const useSettings = () => {
@@ -575,6 +589,8 @@ export const useUpdateStockAlert = () =>
     { stock_alert_phone: string | null; stock_alert_hour: number | null },
     { stock_alert_phone: string | null; stock_alert_hour: number | null }
   >('PUT', '/panel/settings/stock-alert');
+
+export const useUpdatePosSettings = () => useSettingsMutation<PosSettings, PosSettings>('PUT', '/panel/settings/pos');
 
 export const useUpdatePolicy = () =>
   useSettingsMutation<Partial<PolicySettings>, { policy: PolicySettings }>('PATCH', '/panel/settings/policy');
@@ -701,6 +717,10 @@ export type MenuProduct = {
   active: boolean;
   sold_out: boolean;
   /**
+   * Kitchen flag; null = inherit the category's.
+   */
+  needs_preparation: boolean | null;
+  /**
    * Signed URL, valid for about an hour; null without a photo.
    */
   image_url: string | null;
@@ -710,6 +730,7 @@ export type MenuProduct = {
 export type MenuCategory = {
   id: string;
   name: string;
+  needs_preparation: boolean;
   products: MenuProduct[];
 };
 
@@ -755,6 +776,13 @@ export const useCreateCategory = () =>
 export const useRenameCategory = () =>
   useMenuMutation((api, { id, name }: { id: string; name: string }) =>
     api<{ category: { id: string; name: string } }>('PATCH', `/panel/menu/categories/${id}`, { name })
+  );
+
+export const useSetCategoryPreparation = () =>
+  useMenuMutation((api, { id, needsPreparation }: { id: string; needsPreparation: boolean }) =>
+    api<{ needs_preparation: boolean }>('PUT', `/panel/menu/categories/${id}/preparation`, {
+      needs_preparation: needsPreparation
+    })
   );
 
 export const useReorderCategories = () =>
@@ -1811,3 +1839,344 @@ export const useSaveStockLinks = () =>
       }
     }
   });
+
+export type PosMenuProduct = Omit<MenuProduct, 'category_id' | 'active'>;
+
+export type PosMenuCategory = { id: string; name: string; needs_preparation: boolean; products: PosMenuProduct[] };
+
+/**
+ * Integer cents (`value`) or an integer percentage (`percent`, 1–100).
+ */
+export type Discount = { kind: 'value' | 'percent'; value: number };
+
+export type PosSaleItem = {
+  item_id: string;
+  name: string;
+  qty: number;
+  options: string;
+  unit_price_cents: number;
+  /**
+   * After the line's own discount.
+   */
+  line_total_cents: number;
+  notes: string | null;
+  discount: Discount | null;
+};
+
+export type PosPayment = {
+  id: string;
+  method: PaymentMethod;
+  amount_cents: number;
+  received_cents: number | null;
+  change_cents: number | null;
+};
+
+export type PosSale = {
+  id: string;
+  status: OrderStatus | 'draft';
+  code: string | null;
+  label: string | null;
+  notes: string | null;
+  customer: { id: string | null; name: string | null; phone: string | null } | null;
+  items: PosSaleItem[];
+  discount: Discount | null;
+  subtotal_cents: number;
+  discount_cents: number;
+  surcharge_cents: number;
+  total_cents: number;
+  payments: PosPayment[];
+  needs_preparation: boolean;
+  created_at: string;
+  placed_at: string | null;
+};
+
+/**
+ * A held sale, or a finalized one (code, times) in the `finalized` list.
+ */
+export type PosHeldSale = {
+  id: string;
+  label: string | null;
+  code: string | null;
+  status: OrderStatus | 'draft';
+  total_cents: number;
+  items_count: number;
+  created_at: string;
+  placed_at: string | null;
+  canceled_at: string | null;
+};
+
+export type PosSalePatch = {
+  label?: string | null;
+  notes?: string | null;
+  discount?: Discount | null;
+  surcharge_cents?: number | null;
+  customer?: { name?: string | null; phone?: string | null } | null;
+};
+
+export type PosLineInput = {
+  product_id: string;
+  qty: number;
+  selections: { group_id: string; option_ids: string[] }[];
+  notes?: string | null;
+};
+
+export type PosLinePatch = { qty?: number; notes?: string | null; discount?: Discount | null };
+
+export type PosBarcodeCandidate = {
+  product_id: string;
+  product_name: string;
+  selection: { group_id: string; option_id: string; option_name: string } | null;
+};
+
+export const usePosMenu = () => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['pos', 'menu'],
+    queryFn: () => api<{ categories: PosMenuCategory[] }>('GET', '/panel/pos/menu')
+  });
+};
+
+/**
+ * Held sales (every POS draft of the store).
+ */
+export const usePosSales = () => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['pos', 'sales'],
+    queryFn: () => api<{ sales: PosHeldSale[] }>('GET', '/panel/pos/sales')
+  });
+};
+
+/**
+ * Sales paid in the open cash session (or today, without cash control), canceled ones included.
+ */
+export const useFinalizedPosSales = () => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['pos', 'sales', 'finalized'],
+    queryFn: () => api<{ sales: PosHeldSale[] }>('GET', '/panel/pos/sales?status=finalized')
+  });
+};
+
+export const usePosSale = (id: string | undefined) => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['pos', 'sale', id],
+    enabled: !!id,
+    queryFn: () => api<{ sale: PosSale }>('GET', `/panel/pos/sales/${id}`)
+  });
+};
+
+/**
+ * Every sale write answers the whole sale: it replaces the cached one, then the sale and the held list refetch (two
+ * quick writes may answer out of order; a failed write may mean the sale was finalized or discarded elsewhere).
+ */
+const usePosSaleMutation = <TInput extends { sale_id: string }>(
+  request: (api: ReturnType<typeof useApi>, input: TInput) => Promise<{ sale: PosSale }>,
+  /**
+   * Also refetched once the write settles (paying or canceling moves the drawer, the stock and the board).
+   */
+  also: string[][] = []
+) => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: TInput) => request(api, input),
+    onSuccess: (data) => queryClient.setQueryData(['pos', 'sale', data.sale.id], data),
+    onSettled: (_data, _error, input) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['pos', 'sales'] }),
+        queryClient.invalidateQueries({ queryKey: ['pos', 'sale', input.sale_id] }),
+        ...also.map((queryKey) => queryClient.invalidateQueries({ queryKey }))
+      ])
+  });
+};
+
+/**
+ * Idempotent: the browser picks the id (`crypto.randomUUID()`).
+ */
+export const useCreatePosSale = () =>
+  usePosSaleMutation((api, input: { sale_id: string; label?: string | null }) =>
+    api<{ sale: PosSale }>('PUT', `/panel/pos/sales/${input.sale_id}`, { label: input.label ?? null })
+  );
+
+export const useUpdatePosSale = () =>
+  usePosSaleMutation((api, input: { sale_id: string; patch: PosSalePatch }) =>
+    api<{ sale: PosSale }>('PATCH', `/panel/pos/sales/${input.sale_id}`, input.patch)
+  );
+
+export const useAddPosSaleItem = () =>
+  usePosSaleMutation((api, input: { sale_id: string; line: PosLineInput }) =>
+    api<{ sale: PosSale }>('POST', `/panel/pos/sales/${input.sale_id}/items`, input.line)
+  );
+
+export const useUpdatePosSaleItem = () =>
+  usePosSaleMutation((api, input: { sale_id: string; item_id: string; patch: PosLinePatch }) =>
+    api<{ sale: PosSale }>('PATCH', `/panel/pos/sales/${input.sale_id}/items/${input.item_id}`, input.patch)
+  );
+
+export const useRemovePosSaleItem = () =>
+  usePosSaleMutation((api, input: { sale_id: string; item_id: string }) =>
+    api<{ sale: PosSale }>('DELETE', `/panel/pos/sales/${input.sale_id}/items/${input.item_id}`)
+  );
+
+export const useDiscardPosSale = () => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => api<{ id: string }>('DELETE', `/panel/pos/sales/${id}`),
+    onSuccess: ({ id }) => queryClient.removeQueries({ queryKey: ['pos', 'sale', id] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['pos', 'sales'] })
+  });
+};
+
+const PAID_KEYS = [['cash'], ['pos', 'menu'], ['orders']];
+
+export type PosPaymentInput = { method: PaymentMethod; amount_cents: number; received_cents?: number | null };
+
+/**
+ * Idempotent: a retry of a sale already paid (or canceled meanwhile) answers that sale as it is.
+ */
+export const useFinalizePosSale = () =>
+  usePosSaleMutation(
+    (api, input: { sale_id: string; payments: PosPaymentInput[] }) =>
+      api<{ sale: PosSale }>('POST', `/panel/pos/sales/${input.sale_id}/finalize`, { payments: input.payments }),
+    PAID_KEYS
+  );
+
+export const useCancelPosSale = () =>
+  usePosSaleMutation(
+    (api, input: { sale_id: string; reason: string }) =>
+      api<{ sale: PosSale }>('POST', `/panel/pos/sales/${input.sale_id}/cancel`, { reason: input.reason }),
+    PAID_KEYS
+  );
+
+export const useSendPosReceipt = () => {
+  const api = useApi();
+
+  return useMutation({
+    mutationFn: (saleId: string) => api<{ sent: boolean }>('POST', `/panel/pos/sales/${saleId}/receipt`)
+  });
+};
+
+export const usePosBarcode = () => {
+  const api = useApi();
+
+  return (code: string) =>
+    api<{ candidates: PosBarcodeCandidate[] }>('GET', `/panel/pos/barcode/${encodeURIComponent(code)}`);
+};
+
+export type CashSession = {
+  id: string;
+  opened_by: string;
+  opened_at: string;
+  float_cents: number;
+  closed_by: string | null;
+  closed_at: string | null;
+  counted_cents: number | null;
+  expected_cents: number | null;
+};
+
+export type MethodTotals = Record<PaymentMethod, number>;
+
+/**
+ * "Resumo do caixa". `expected_cash_cents`/`difference_cents` are null on an open session under blind close.
+ */
+export type CashReport = {
+  float_cents: number;
+  by_method: MethodTotals;
+  refunds_by_method: MethodTotals;
+  order_cash_cents: number;
+  sangria_cents: number;
+  suprimento_cents: number;
+  expected_cash_cents: number | null;
+  sales_count: number;
+  sales_cents: number;
+  canceled_count: number;
+  discounts_cents: number;
+  surcharges_cents: number;
+  counted_cents: number | null;
+  difference_cents: number | null;
+};
+
+export type CashMovement = {
+  id: string;
+  kind: 'refund' | 'order_cash' | 'sangria' | 'suprimento';
+  method: PaymentMethod;
+  amount_cents: number;
+  reason: string | null;
+  author: string;
+  order_id: string | null;
+  created_at: string;
+};
+
+/**
+ * The open cash session with its live report, or nulls while the drawer is closed.
+ */
+export const useCashCurrent = () => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['cash', 'current'],
+    queryFn: () => api<{ session: CashSession | null; report: CashReport | null }>('GET', '/panel/cash/current')
+  });
+};
+
+const useCashMutation = <TInput, TOutput>(path: (input: TInput) => string, body: (input: TInput) => unknown) => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: TInput) => api<TOutput>('POST', path(input), body(input)),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['cash'] })
+  });
+};
+
+export const useOpenCash = () =>
+  useCashMutation<{ float_cents: number }, { session: CashSession }>(
+    () => '/panel/cash/sessions',
+    (input) => input
+  );
+
+/**
+ * Answers the full report (expected and difference, even under blind close).
+ */
+export const useCloseCash = () =>
+  useCashMutation<{ session_id: string; counted_cents: number }, { report: CashReport }>(
+    (input) => `/panel/cash/sessions/${input.session_id}/close`,
+    (input) => ({ counted_cents: input.counted_cents })
+  );
+
+export const useCashMovement = () =>
+  useCashMutation<{ kind: 'sangria' | 'suprimento'; amount_cents: number; reason: string }, { movement: CashMovement }>(
+    () => '/panel/cash/movements',
+    (input) => input
+  );
+
+/**
+ * Sessions newest first (the latest page; `next` would page back).
+ */
+export const useCashSessions = () => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['cash', 'sessions'],
+    queryFn: () => api<{ sessions: CashSession[]; next: string | null }>('GET', '/panel/cash/sessions')
+  });
+};
+
+export const useCashSession = (id: string | undefined) => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['cash', 'session', id],
+    enabled: !!id,
+    queryFn: () => api<{ session: CashSession; report: CashReport }>('GET', `/panel/cash/sessions/${id}`)
+  });
+};

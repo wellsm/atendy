@@ -8,6 +8,7 @@ import type { PanelIdentity, PanelOrder } from '../types';
 import { HttpConflictError, HttpNotFoundError } from '@ez4/gateway';
 
 import { ConversationRepository } from '../../conversations/repository';
+import { OrderError, OrderErrorCode } from '../../orders/errors';
 import { OrderRepository, OrderStatusError, OrderStatusErrorCode } from '../../orders/repository';
 import { statusNotification, webStatusNotification } from '../../orders/status';
 import { OrderSource } from '../../orders/types';
@@ -54,6 +55,10 @@ export async function updateOrderHandler(
   try {
     changed = await OrderRepository.setStatus(db, { storeId: store.id, orderId, status });
   } catch (error) {
+    if (error instanceof OrderError && error.code === OrderErrorCode.PosCancel) {
+      throw new HttpConflictError(error.message);
+    }
+
     if (!(error instanceof OrderStatusError)) {
       throw error;
     }
@@ -77,7 +82,8 @@ export async function updateOrderHandler(
 
   let notified = false;
 
-  if (text) {
+  // POS sales have no conversation: nobody to tell.
+  if (text && changed.conversationId) {
     const conversation = await ConversationRepository.findForStore(db, store.id, changed.conversationId);
 
     try {
@@ -96,7 +102,12 @@ export async function updateOrderHandler(
     }
   }
 
-  await notifyPanel(panelEvents, store.id, [PanelTrigger.Orders, PanelTrigger.Conversations], changed.conversationId);
+  await notifyPanel(
+    panelEvents,
+    store.id,
+    [PanelTrigger.Orders, PanelTrigger.Conversations],
+    changed.conversationId ?? undefined
+  );
 
   return { status: 200, body: { order: toPanelOrder(order), notified } };
 }

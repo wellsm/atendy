@@ -733,6 +733,19 @@ export namespace StockRepository {
 
     return found && row ? { item: toItemView(row), package: toPackageView(found) } : undefined;
   };
+
+  /**
+   * Targets that consume exactly `qty` of the item per unit sold (what a scan of that item or package stands for).
+   */
+  export const linksForQty = async (db: DbClient, storeId: string, stockItemId: string, qty: number) => {
+    const { records } = await db.stock_links.findMany({
+      select: { product_id: true, option_id: true },
+      where: { store_id: storeId, stock_item_id: stockItemId, qty }
+    });
+
+    return records.map((link) => ({ productId: link.product_id ?? null, optionId: link.option_id ?? null }));
+  };
+
   const targetWhere = (target: LinkTarget) =>
     'productId' in target ? { product_id: target.productId } : { option_id: target.optionId };
 

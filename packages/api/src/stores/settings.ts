@@ -1,6 +1,6 @@
 import type { DeliveryBand } from './geo';
 import type { HourRange } from './hours';
-import type { PaymentMethod, StorePolicy } from './types';
+import type { PaymentMethod, PosSettings, StorePolicy } from './types';
 
 import { normalizeNeighborhood } from './delivery';
 import { parsePolicyPatch, PolicyError } from './policy';
@@ -218,6 +218,28 @@ export const validateStockAlert = (input: { phone: string | null; hour: number |
   }
 
   return { phone, hour: input.hour };
+};
+
+export const validatePosSettings = (input: {
+  layout: string;
+  cashControl: boolean;
+  blindClose: boolean;
+  receiptWidth: number;
+}): PosSettings => {
+  if (input.layout !== 'grid' && input.layout !== 'search') {
+    throw new SettingsError('pos_layout', 'The POS layout must be grid or search.');
+  }
+
+  if (input.receiptWidth !== 58 && input.receiptWidth !== 80) {
+    throw new SettingsError('pos_receipt_width', 'The receipt width must be 58 or 80 mm.');
+  }
+
+  return {
+    layout: input.layout,
+    cashControl: input.cashControl,
+    blindClose: input.blindClose,
+    receiptWidth: input.receiptWidth
+  };
 };
 
 export const validateStoreName = (name: string) => {

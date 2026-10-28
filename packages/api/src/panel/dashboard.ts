@@ -3,7 +3,7 @@ import type { DbClient } from '../db';
 import { BillingStep, DEFAULT_ORDER_PRICE_CENTS, stepsFromOrder } from '../billing/progress';
 import { BillingOutcome } from '../billing/types';
 import { OrderRepository } from '../orders/repository';
-import { OrderStatus } from '../orders/types';
+import { OrderSource, OrderStatus } from '../orders/types';
 import { localDay, localMonth, monthCycle } from '../payments/cycle';
 
 /**
@@ -110,7 +110,12 @@ export const buildDashboard = async (db: DbClient, storeId: string, month: strin
     }),
     db.orders.findMany({
       select: { id: true, status: true, placed_at: true },
-      where: { store_id: storeId, placed_at: period }
+      // Counter sales are not WhatsApp orders (`not` alone drops null sources).
+      where: {
+        store_id: storeId,
+        placed_at: period,
+        OR: [{ source: { isNull: true } }, { source: { not: OrderSource.Pos } }]
+      }
     })
   ]);
 

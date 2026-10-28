@@ -11,7 +11,7 @@ import { QueueTester } from '@ez4/local-queue/test';
 import { ConversationRepository } from '../../src/conversations/repository';
 import { ConversationMode, MessageAuthor } from '../../src/conversations/types';
 import { PanelOrderScope } from '../../src/orders/repository';
-import { OrderStatus } from '../../src/orders/types';
+import { OrderSource, OrderStatus } from '../../src/orders/types';
 import { approveConversationHandler } from '../../src/panel/endpoints/approve-conversation';
 import { getConversationHandler } from '../../src/panel/endpoints/get-conversation';
 import { listConversationsHandler } from '../../src/panel/endpoints/list-conversations';
@@ -158,6 +158,63 @@ describe('panel operations endpoints', () => {
     await rejects(updateOrder(identity, orderId, OrderStatus.Done), HttpConflictError);
     await rejects(updateOrder(other.identity, orderId, OrderStatus.Accepted), HttpNotFoundError);
     await rejects(updateOrder({ userId: 'user_1' }, orderId, OrderStatus.Accepted), HttpNotFoundError);
+  });
+
+  // POS endpoints come later: the sale row is written as they will write it.
+  const insertPosOrder = async (storeId: string, status: OrderStatus) => {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    await db.orders.insertOne({
+      data: {
+        id,
+        store_id: storeId,
+        customer_id: null,
+        conversation_id: null,
+        customer_name: 'Ana',
+        source: OrderSource.Pos,
+        status,
+        code: '7',
+        subtotal_cents: 1000,
+        fee_cents: 0,
+        total_cents: 1000,
+        placed_at: now,
+        created_at: now,
+        updated_at: now
+      }
+    });
+
+    return id;
+  };
+
+  it('refuses a board cancel of a POS order', async () => {
+    const { identity, storeId } = await setup();
+    const orderId = await insertPosOrder(storeId, OrderStatus.Accepted);
+
+    await rejects(updateOrder(identity, orderId, OrderStatus.Canceled), HttpConflictError);
+
+    const order = await db.orders.findOne({ select: { status: true }, where: { id: orderId } });
+
+    equal(order?.status, OrderStatus.Accepted);
+  });
+
+  it('moves a POS order on the board without messaging anyone', async () => {
+    const { identity, storeId } = await setup();
+    const orderId = await insertPosOrder(storeId, OrderStatus.Accepted);
+    const sent = stubProvider();
+
+    const out = await updateOrder(identity, orderId, OrderStatus.Out);
+
+    equal(out.body.notified, false);
+    equal(out.body.order.conversationId, null);
+    deepEqual(out.body.order.customer, { name: 'Ana', phone: null });
+    deepEqual(lastPanelEvent(), { storeId, triggers: ['orders', 'conversations'] });
+
+    const done = await updateOrder(identity, orderId, OrderStatus.Done);
+
+    equal(done.body.notified, false);
+    equal(done.body.order.status, OrderStatus.Done);
+    equal(sent.length, 0);
   });
 
   it('lists conversations and opens one with its messages', async () => {

@@ -1,6 +1,6 @@
 import { useOrganizationList } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, Link, Navigate, Outlet } from '@tanstack/react-router';
+import { createFileRoute, Link, Navigate, Outlet, useMatch } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 
 import { Loading } from '../components/loading';
@@ -28,6 +28,8 @@ function Panel() {
   const queryClient = useQueryClient();
   const activating = useRef<string | undefined>(undefined);
   const [failed, setFailed] = useState(false);
+  // The POS is full screen: no sidebar or header.
+  const pos = !!useMatch({ from: '/panel/$slug/pos', shouldThrow: false });
 
   const current = me.data?.store?.slug === slug;
   const target = current ? undefined : stores.data?.find((store) => store.slug === slug);
@@ -62,9 +64,13 @@ function Panel() {
   if (current) {
     return (
       <RealtimeProvider slug={slug}>
-        <PanelShell store={me.data.store!}>
+        {pos ? (
           <Outlet />
-        </PanelShell>
+        ) : (
+          <PanelShell store={me.data.store!}>
+            <Outlet />
+          </PanelShell>
+        )}
       </RealtimeProvider>
     );
   }

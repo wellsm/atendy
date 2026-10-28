@@ -1,4 +1,4 @@
-import type { OptionsSnapshot } from './types';
+import type { Discount, OptionsSnapshot } from './types';
 
 import { PriceMode } from '../menu/types';
 
@@ -173,13 +173,45 @@ const pickOptions = (group: PricingGroup, optionIds: string[], allowSoldOut: boo
   });
 };
 
-export const computeTotals = (items: { qty: number; unit_price_cents: number }[], feeCents: number) => {
-  const subtotalCents = items.reduce((total, { qty, unit_price_cents }) => total + qty * unit_price_cents, 0);
+type TotalsItem = { qty: number; unit_price_cents: number; discount?: Discount | null };
+
+/**
+ * What a discount takes off `cents`, never more than `cents`.
+ */
+const discountCents = (cents: number, discount: Discount | null | undefined) => {
+  if (!discount) {
+    return 0;
+  }
+
+  const off = discount.kind === 'percent' ? Math.round((cents * discount.value) / 100) : discount.value;
+
+  return Math.min(cents, Math.max(0, off));
+};
+
+/**
+ * Line total of one order item, after its own discount.
+ */
+export const lineTotal = ({ qty, unit_price_cents, discount }: TotalsItem) => {
+  const cents = qty * unit_price_cents;
+
+  return cents - discountCents(cents, discount);
+};
+
+export const computeTotals = (
+  items: TotalsItem[],
+  feeCents: number,
+  order: { discount?: Discount | null; surchargeCents?: number | null } = {}
+) => {
+  const subtotalCents = items.reduce((total, item) => total + lineTotal(item), 0);
+  const orderDiscountCents = discountCents(subtotalCents, order.discount);
+  const surchargeCents = order.surchargeCents ?? 0;
 
   return {
     subtotal_cents: subtotalCents,
+    discount_cents: orderDiscountCents,
     fee_cents: feeCents,
-    total_cents: subtotalCents + feeCents
+    surcharge_cents: surchargeCents,
+    total_cents: subtotalCents - orderDiscountCents + feeCents + surchargeCents
   };
 };
 

@@ -1,6 +1,6 @@
 import type { DbClient } from '../db';
 import type { PricingProduct, Selection } from './pricing';
-import type { OptionsSnapshot } from './types';
+import type { Discount, OptionsSnapshot } from './types';
 import type { Coordinates } from '../stores/geo';
 import type { StorePolicy } from '../stores/types';
 
@@ -11,9 +11,10 @@ import { Order } from '@ez4/database';
 import { displayOrderCode, nextOrderCodeIn } from './code';
 import { OrderError, OrderErrorCode } from './errors';
 import { addOnCategories, canStartNewOrder, DEFAULT_NEW_ORDER_AFTER_STATUS } from './in-progress';
-import { computeTotals, priceItem, validateChange } from './pricing';
+import { computeTotals, lineTotal, priceItem, validateChange } from './pricing';
 import { canTransition } from './status';
-import { Fulfillment, OrderStatus } from './types';
+import { Fulfillment, OrderSource, OrderStatus } from './types';
+import { CashRepository } from '../cash/repository';
 import { syncOrderStock } from '../stock/order-stock';
 import { StockRepository } from '../stock/repository';
 import { resolveDeliveryFee } from '../stores/delivery';
@@ -71,6 +72,9 @@ export type CartItem = {
   qty: number;
   options: string;
   unit_price_cents: number;
+  /**
+   * After the line's own discount.
+   */
   line_total_cents: number;
   notes: string | null;
 };
@@ -85,7 +89,9 @@ export type Cart = {
   payment_method: PaymentMethod | null;
   change_for_cents: number | null;
   subtotal_cents: number;
+  discount_cents: number;
   fee_cents: number;
+  surcharge_cents: number;
   total_cents: number;
   /**
    * Straight-line distance to the store, one decimal; only in distance delivery once known.
@@ -135,7 +141,8 @@ const PANEL_ORDER_FIELDS = {
   placed_at: true,
   abandoned_at: true,
   amended_at: true,
-  source: true
+  source: true,
+  customer_name: true
 } as const;
 
 const OPEN_ORDER_STATUSES = [OrderStatus.Placed, OrderStatus.Accepted, OrderStatus.Out, OrderStatus.Done];
@@ -153,11 +160,15 @@ const checkChange = (totalCents: number, changeForCents: number | null, policy: 
   }
 };
 
-type NewLine = {
+export type NewLine = {
   product: PricingProduct;
   qty: number;
   selections: Selection[];
   notes?: string | null;
+  /**
+   * POS: the line's own discount.
+   */
+  discount?: Discount | null;
   skipLimits?: boolean;
   /**
    * The attendant writes it: stock never refuses it (the balance may go negative).
@@ -169,12 +180,12 @@ type NewLine = {
  * Prices one new line and checks the store limits on it. The returned `write` checks the order total against the
  * stored items again and inserts the line (run it inside the order's write).
  */
-const prepareLine = async (db: DbClient, scope: DraftScope, input: NewLine) => {
+export const prepareLine = async (db: DbClient, storeId: string, input: NewLine) => {
   const { unit_price_cents, options_snapshot } = priceItem(input.product, input.selections, {
     allowSoldOut: input.byStaff
   });
 
-  const policy: StorePolicy = input.skipLimits ? {} : await StoreRepository.getPolicy(db, scope.storeId);
+  const policy: StorePolicy = input.skipLimits ? {} : await StoreRepository.getPolicy(db, storeId);
   const lineCents = unit_price_cents * input.qty;
   const maxOrderCents = policy.max_order_cents;
 
@@ -194,7 +205,7 @@ const prepareLine = async (db: DbClient, scope: DraftScope, input: NewLine) => {
   }
 
   // What one unit uses now, frozen on the line: later link changes never move this order's stock.
-  const stockUsage = await StockRepository.usageFor(db, scope.storeId, {
+  const stockUsage = await StockRepository.usageFor(db, storeId, {
     productId: input.product.id,
     optionIds: options_snapshot.flatMap(({ options }) => options.map(({ id }) => id))
   });
@@ -207,7 +218,7 @@ const prepareLine = async (db: DbClient, scope: DraftScope, input: NewLine) => {
     await client.order_items.insertOne({
       data: {
         id: randomUUID(),
-        store_id: scope.storeId,
+        store_id: storeId,
         order_id: orderId,
         product_id: input.product.id,
         product_name: input.product.name,
@@ -215,6 +226,7 @@ const prepareLine = async (db: DbClient, scope: DraftScope, input: NewLine) => {
         unit_price_cents,
         options_snapshot,
         notes: input.notes ?? null,
+        discount: input.discount ?? null,
         stock_usage: stockUsage,
         created_at: new Date().toISOString()
       }
@@ -224,7 +236,7 @@ const prepareLine = async (db: DbClient, scope: DraftScope, input: NewLine) => {
 
 const sumSubtotal = async (db: DbClient, orderId: string) => {
   const { records } = await db.order_items.findMany({
-    select: { qty: true, unit_price_cents: true },
+    select: { qty: true, unit_price_cents: true, discount: true },
     where: { order_id: orderId }
   });
 
@@ -418,7 +430,9 @@ export namespace OrderRepository {
         neighborhood: true,
         payment_method: true,
         change_for_cents: true,
-        distance_meters: true
+        distance_meters: true,
+        discount: true,
+        surcharge_cents: true
       },
       where: { id: orderId }
     });
@@ -434,6 +448,7 @@ export namespace OrderRepository {
           product_name: true,
           qty: true,
           unit_price_cents: true,
+          discount: true,
           options_snapshot: true,
           notes: true
         },
@@ -472,7 +487,10 @@ export namespace OrderRepository {
             neighborhood: order.neighborhood
           });
 
-    const totals = computeTotals(items, fee ?? 0);
+    const totals = computeTotals(items, fee ?? 0, {
+      discount: order.discount,
+      surchargeCents: order.surcharge_cents
+    });
 
     const missing: CartMissing[] = [];
 
@@ -510,7 +528,12 @@ export namespace OrderRepository {
     // Totals of an order the store already took stay as they were.
     if (order.status === OrderStatus.Draft || order.status === OrderStatus.Placed) {
       await db.orders.updateOne({
-        data: { ...totals, updated_at: new Date().toISOString() },
+        data: {
+          subtotal_cents: totals.subtotal_cents,
+          fee_cents: totals.fee_cents,
+          total_cents: totals.total_cents,
+          updated_at: new Date().toISOString()
+        },
         where: { id: orderId }
       });
     }
@@ -524,7 +547,7 @@ export namespace OrderRepository {
         qty: item.qty,
         options: describeOptions(item.options_snapshot),
         unit_price_cents: item.unit_price_cents,
-        line_total_cents: item.qty * item.unit_price_cents,
+        line_total_cents: lineTotal(item),
         notes: item.notes ?? null
       })),
       fulfillment: order.fulfillment ?? null,
@@ -543,7 +566,7 @@ export namespace OrderRepository {
    * the store approved going over them for this order.
    */
   export const addItem = async (db: DbClient, scope: DraftScope, input: NewLine) => {
-    const writeLine = await prepareLine(db, scope, input);
+    const writeLine = await prepareLine(db, scope.storeId, input);
     const orderId = await writeCurrentOrder(db, scope, true, writeLine, { byStaff: input.byStaff });
 
     return getCart(db, orderId);
@@ -613,7 +636,7 @@ export namespace OrderRepository {
       );
     }
 
-    const writeLine = await prepareLine(db, scope, input);
+    const writeLine = await prepareLine(db, scope.storeId, input);
 
     await db.transaction(async (tx) => {
       const order = await tx.orders.findOne({ select: { status: true }, where: { id: last.id }, lock: true });
@@ -798,7 +821,9 @@ export namespace OrderRepository {
         store_id: scope.storeId,
         customer_id: scope.customerId,
         status: { isIn: statuses },
-        subtotal_cents: { gt: 0 }
+        subtotal_cents: { gt: 0 },
+        // Counter sales are not the customer's WhatsApp history.
+        OR: [{ source: { isNull: true } }, { source: { not: OrderSource.Pos } }]
       },
       order: { created_at: Order.Desc },
       take: 1
@@ -1013,7 +1038,15 @@ export namespace OrderRepository {
   export const setStatus = async (db: DbClient, input: { storeId: string; orderId: string; status: OrderStatus }) => {
     return db.transaction(async (tx) => {
       const order = await tx.orders.findOne({
-        select: { store_id: true, status: true, conversation_id: true, fulfillment: true },
+        select: {
+          store_id: true,
+          status: true,
+          source: true,
+          conversation_id: true,
+          fulfillment: true,
+          payment_method: true,
+          total_cents: true
+        },
         where: { id: input.orderId },
         lock: true
       });
@@ -1021,6 +1054,11 @@ export namespace OrderRepository {
       // A draft is still the customer's cart: the panel never sees it.
       if (!order || order.store_id !== input.storeId || order.status === OrderStatus.Draft) {
         throw new OrderStatusError(OrderStatusErrorCode.NotFound, 'Order not found');
+      }
+
+      // A POS sale is canceled from the POS (reason, refund).
+      if (order.source === OrderSource.Pos && input.status === OrderStatus.Canceled) {
+        throw new OrderError(OrderErrorCode.PosCancel, 'A counter sale is canceled from the POS');
       }
 
       if (!canTransition(order.status, input.status)) {
@@ -1039,7 +1077,21 @@ export namespace OrderRepository {
         await syncOrderStock(tx, { storeId: input.storeId, orderId: input.orderId, enforce: false, canceled: true });
       }
 
-      return { conversationId: order.conversation_id, fulfillment: order.fulfillment ?? null };
+      // The driver or the pickup brings a WhatsApp/web order's cash to the drawer.
+      if (
+        input.status === OrderStatus.Done &&
+        order.source !== OrderSource.Pos &&
+        order.payment_method === PaymentMethod.Cash &&
+        (await StoreRepository.getPosSettings(tx, input.storeId)).cashControl
+      ) {
+        await CashRepository.recordOrderCash(tx, input.storeId, {
+          orderId: input.orderId,
+          amountCents: order.total_cents,
+          author: 'system'
+        });
+      }
+
+      return { conversationId: order.conversation_id ?? null, fulfillment: order.fulfillment ?? null };
     });
   };
 
@@ -1082,7 +1134,7 @@ export namespace OrderRepository {
       }),
       db.customers.findMany({
         select: { id: true, name: true, phone: true },
-        where: { id: { isIn: [...new Set(orders.map(({ customer_id }) => customer_id))] } }
+        where: { id: { isIn: [...new Set(orders.flatMap(({ customer_id }) => (customer_id ? [customer_id] : [])))] } }
       })
     ]);
 
@@ -1091,7 +1143,8 @@ export namespace OrderRepository {
 
       return {
         ...order,
-        customer: { name: customer?.name ?? null, phone: customer?.phone ?? '' },
+        // POS sales may have no customer row, only a typed name.
+        customer: { name: customer?.name ?? order.customer_name ?? null, phone: customer?.phone ?? null },
         items: items
           .filter(({ order_id }) => order_id === order.id)
           .map((item) => ({
@@ -1329,10 +1382,15 @@ export namespace OrderRepository {
    * cron and the panel lists run it, so drafts of customers who never came back are marked too.
    */
   export const abandonStaleDrafts = async (db: DbClient, now: Date, storeId?: string) => {
-    const { records: drafts } = await db.orders.findMany({
+    const { records } = await db.orders.findMany({
       select: { id: true, store_id: true, conversation_id: true },
-      where: { status: OrderStatus.Draft, ...(storeId && { store_id: storeId }) }
+      // POS held sales have no conversation and never expire.
+      where: { status: OrderStatus.Draft, conversation_id: { isNull: false }, ...(storeId && { store_id: storeId }) }
     });
+
+    const drafts = records.flatMap(({ conversation_id, ...draft }) =>
+      conversation_id ? [{ ...draft, conversation_id }] : []
+    );
 
     if (!drafts.length) {
       return 0;

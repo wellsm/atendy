@@ -2,7 +2,7 @@ import type { CostRow } from './cost';
 import type { DbClient } from '../../db';
 
 import { BillingOutcome } from '../../billing/types';
-import { OrderStatus } from '../../orders/types';
+import { OrderSource, OrderStatus } from '../../orders/types';
 
 type ReportScope = {
   /**
@@ -112,7 +112,9 @@ export namespace CostReportRepository {
       select: { status: true },
       where: {
         ...(scope.storeId && { store_id: scope.storeId }),
-        placed_at: { gte: scope.startIso, lte: scope.endIso }
+        placed_at: { gte: scope.startIso, lte: scope.endIso },
+        // Counter sales never went through the bot or an attendant (`not` alone drops null sources).
+        OR: [{ source: { isNull: true } }, { source: { not: OrderSource.Pos } }]
       }
     });
 

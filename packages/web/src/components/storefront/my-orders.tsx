@@ -13,7 +13,7 @@ import { savePhoneToken } from '../../lib/phone-token';
 type MyOrder = {
   code: string;
   status: 'placed' | 'accepted' | 'out' | 'done' | 'canceled';
-  source: 'web' | null;
+  source: 'web' | 'pos' | null;
   placed_at: string;
   total_cents: number;
   items: (PastItem & { options: string })[];
@@ -100,7 +100,8 @@ export function MyOrders(props: {
                 <span className="text-xs text-neutral-500">{WHEN.format(new Date(order.placed_at))}</span>
               </div>
               <span className="text-xs font-medium text-neutral-600">
-                {STATUS_TEXT[order.status]} · {order.source === 'web' ? 'pelo site' : 'pelo WhatsApp'}
+                {STATUS_TEXT[order.status]} ·{' '}
+                {order.source === 'web' ? 'pelo site' : order.source === 'pos' ? 'no balcão' : 'pelo WhatsApp'}
               </span>
               <ul className="flex flex-col gap-0.5 text-sm text-neutral-700">
                 {order.items.map((item, index) => (

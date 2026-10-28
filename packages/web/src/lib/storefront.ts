@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { getPublic } from './api';
 
-export type PaymentMethod = 'pix' | 'card' | 'cash';
+export type PaymentMethod = 'pix' | 'card' | 'cash' | 'voucher';
 
 export type StorefrontStore = {
   name: string;
@@ -41,7 +41,12 @@ export const useStorefront = (slug: string) =>
     retry: false
   });
 
-export const PAYMENT_LABELS: Record<PaymentMethod, string> = { pix: 'Pix', card: 'Cartão', cash: 'Dinheiro' };
+export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+  pix: 'Pix',
+  card: 'Cartão',
+  cash: 'Dinheiro',
+  voucher: 'Vale-refeição/alimentação'
+};
 
 const options = (count: number) => `${count} ${count === 1 ? 'opção' : 'opções'}`;
 

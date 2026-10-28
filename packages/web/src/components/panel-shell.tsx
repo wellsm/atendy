@@ -209,6 +209,7 @@ function SheetButton({
 }
 
 function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
+  const slug = usePanelSlug();
   const menu = useMenu();
   const whatsapp = useWhatsAppState(false);
   const billing = useBilling();
@@ -241,6 +242,18 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
       <MonthCard onPick={onPick} />
 
       <nav className="flex flex-col gap-1.5 px-3 py-3.5">
+        <Link
+          to="/panel/$slug/pos"
+          params={{ slug }}
+          onClick={onPick}
+          className="flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3 py-2.5 hover:bg-hover"
+        >
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-sm font-medium">PDV</span>
+            <span className="truncate text-xs text-muted">Venda no balcão</span>
+          </span>
+          <span className="text-faint">›</span>
+        </Link>
         <SheetButton
           sheet="menu"
           title="Cardápio"

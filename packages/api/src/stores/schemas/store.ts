@@ -74,6 +74,13 @@ export interface StoreSchema extends Database.Schema {
   stock_alert_phone?: string | null;
   stock_alert_hour?: Integer.Range<0, 23> | null;
   stock_alert_sent_on?: string | null;
+  /**
+   * Counter POS defaults; null = grid layout, cash control on, blind close off, 80 mm receipt (only 58 or 80 are valid).
+   */
+  pos_layout?: 'grid' | 'search' | null;
+  pos_cash_control?: boolean | null;
+  pos_blind_close?: boolean | null;
+  pos_receipt_width?: Integer.Range<58, 80> | null;
   created_at: String.DateTime;
   updated_at: String.DateTime;
 }

@@ -185,9 +185,10 @@ export const quoteWebOrder = async (
 };
 
 /**
- * The customer (by phone, also its old 8-digit form) and its conversation; created when new.
+ * The store's customer with this phone (also its old 8-digit form), created when new; a known customer without a name
+ * gets `name`. Returns its id.
  */
-const customerConversation = async (db: DbClient, storeId: string, phone: string, name: string) => {
+export const findOrCreateCustomer = async (db: DbClient, storeId: string, phone: string, name?: string | null) => {
   const now = new Date().toISOString();
 
   const {
@@ -207,14 +208,24 @@ const customerConversation = async (db: DbClient, storeId: string, phone: string
         store_id: storeId,
         phone,
         whatsapp_jid: `${phone}@s.whatsapp.net`,
-        name,
+        name: name ?? null,
         created_at: now,
         updated_at: now
       }
     });
-  } else if (!existing.name) {
+  } else if (!existing.name && name) {
     await db.customers.updateOne({ data: { name, updated_at: now }, where: { id: customerId } });
   }
+
+  return customerId;
+};
+
+/**
+ * The customer (by phone, also its old 8-digit form) and its conversation; created when new.
+ */
+export const customerConversation = async (db: DbClient, storeId: string, phone: string, name: string) => {
+  const now = new Date().toISOString();
+  const customerId = await findOrCreateCustomer(db, storeId, phone, name);
 
   const { record: conversation } = await db.conversations.upsertOne({
     select: { id: true },

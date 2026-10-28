@@ -1,6 +1,6 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
-import type { PaymentMethod } from '../../stores/types';
+import type { PaymentMethod, PosSettings } from '../../stores/types';
 import type { PanelProvider } from '../provider';
 import type { PanelDelivery, PanelHourRange, PanelIdentity, PanelPolicy, PanelStoreLocation } from '../types';
 
@@ -30,6 +30,7 @@ export declare class GetSettingsResponse implements Http.Response {
      */
     stockAlertPhone: string | null;
     stockAlertHour: number | null;
+    pos: PosSettings;
   };
 }
 
@@ -53,7 +54,8 @@ export async function getSettingsHandler(
       policy: toPanelPolicy(settings.policy),
       storeLocation: settings.storeLocation,
       stockAlertPhone: settings.stockAlertPhone,
-      stockAlertHour: settings.stockAlertHour
+      stockAlertHour: settings.stockAlertHour,
+      pos: settings.pos
     }
   };
 }

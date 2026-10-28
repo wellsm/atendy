@@ -158,7 +158,10 @@ export const TOOL_DEFINITIONS: LlmTool[] = [
     ToolName.SetPayment,
     'Set the payment method. For cash, change_for_cents is the bill the customer pays with, in cents.',
     {
-      method: { type: 'string', enum: [PaymentMethod.Pix, PaymentMethod.Card, PaymentMethod.Cash] },
+      method: {
+        type: 'string',
+        enum: [PaymentMethod.Pix, PaymentMethod.Card, PaymentMethod.Cash, PaymentMethod.Voucher]
+      },
       change_for_cents: { type: 'integer', minimum: 0 }
     },
     ['method']
@@ -432,7 +435,12 @@ const run = async (ctx: ToolContext, name: string, args: Record<string, unknown>
     }
 
     case ToolName.SetPayment: {
-      const method = requireEnum(args, 'method', [PaymentMethod.Pix, PaymentMethod.Card, PaymentMethod.Cash]);
+      const method = requireEnum(args, 'method', [
+        PaymentMethod.Pix,
+        PaymentMethod.Card,
+        PaymentMethod.Cash,
+        PaymentMethod.Voucher
+      ]);
 
       return {
         cart: await OrderRepository.setPayment(db, ctx, {

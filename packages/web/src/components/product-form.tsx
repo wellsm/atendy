@@ -81,6 +81,7 @@ type Form = {
   description: string;
   price: string;
   active: boolean;
+  needsPreparation: boolean | null;
   loadedActive?: boolean;
   groups: GroupForm[];
 };
@@ -91,6 +92,7 @@ const toForm = (product: MenuProduct | undefined, categoryId: string): Form => (
   description: product?.description ?? '',
   price: product ? centsToInput(product.price_cents) : '',
   active: product?.active ?? true,
+  needsPreparation: product?.needs_preparation ?? null,
   ...(product && { loadedActive: product.active }),
   groups: product?.groups.map((group) => toGroupForm(group, true)) ?? []
 });
@@ -144,6 +146,7 @@ const toInput = (
       name: form.name,
       description: form.description.trim() || null,
       price_cents: price,
+      needs_preparation: form.needsPreparation,
       ...(form.active !== form.loadedActive && { active: form.active }),
       groups
     }
@@ -381,6 +384,24 @@ export function ProductForm(props: {
                       {name}
                     </option>
                   ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-sm">
+                Preparo
+                <select
+                  value={String(form.needsPreparation)}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      needsPreparation: event.target.value === 'null' ? null : event.target.value === 'true'
+                    })
+                  }
+                  className={INPUT}
+                >
+                  <option value="null">Igual à categoria</option>
+                  <option value="true">Sim</option>
+                  <option value="false">Não</option>
                 </select>
               </label>
 

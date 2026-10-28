@@ -176,13 +176,18 @@ export const optionIdOf = (product: MenuProduct, groupName: string, optionName: 
 export const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
 /**
- * Places a pickup order with one Coca-Cola 2L paid by Pix (the store must accept Pix). Returns the order id.
- * Call once per conversation: while that order is `placed`, later items go into it.
+ * Places a pickup order with one Coca-Cola 2L paid by Pix, or `method` (the store must accept it). Returns the order
+ * id. Call once per conversation: while that order is `placed`, later items go into it.
  */
-export const placeOrder = async (db: DbClient, scope: DraftScope, menu: MenuProduct[]) => {
+export const placeOrder = async (
+  db: DbClient,
+  scope: DraftScope,
+  menu: MenuProduct[],
+  method: PaymentMethod = PaymentMethod.Pix
+) => {
   await OrderRepository.addItem(db, scope, { product: productByName(menu, 'Coca-Cola 2L'), qty: 1, selections: [] });
   await OrderRepository.setFulfillment(db, scope, Fulfillment.Pickup);
-  await OrderRepository.setPayment(db, scope, { method: PaymentMethod.Pix });
+  await OrderRepository.setPayment(db, scope, { method });
 
   return (await OrderRepository.place(db, scope)).order_id;
 };

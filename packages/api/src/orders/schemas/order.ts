@@ -1,13 +1,19 @@
 import type { Database } from '@ez4/database';
 import type { Integer, String } from '@ez4/schema';
 import type { PaymentMethod } from '../../stores/types';
-import type { Fulfillment, OrderSource, OrderStatus } from '../types';
+import type { Discount, Fulfillment, OrderSource, OrderStatus } from '../types';
 
 export interface OrderSchema extends Database.Schema {
   id: String.UUID;
   store_id: String.UUID;
-  customer_id: String.UUID;
-  conversation_id: String.UUID;
+  /**
+   * Null only on POS sales without a customer.
+   */
+  customer_id?: String.UUID | null;
+  /**
+   * Null only on POS sales.
+   */
+  conversation_id?: String.UUID | null;
   status: OrderStatus;
   /**
    * Shown to the store and the customer (`#K7Q2MX` / `#128`), given when first placed; null on drafts and on orders
@@ -34,9 +40,34 @@ export interface OrderSchema extends Database.Schema {
   location_pinned?: boolean | null;
   payment_method?: PaymentMethod | null;
   change_for_cents?: Integer.Min<0> | null;
+  /**
+   * Line totals after their discounts; `total` = subtotal − order discount + fee + surcharge.
+   */
   subtotal_cents: Integer.Min<0>;
   fee_cents: Integer.Min<0>;
   total_cents: Integer.Min<0>;
+  discount?: Discount | null;
+  surcharge_cents?: Integer.Min<0> | null;
+  /**
+   * POS: name typed for a sale without a customer row.
+   */
+  customer_name?: string | null;
+  /**
+   * POS: label of a held sale.
+   */
+  pos_label?: string | null;
+  notes?: string | null;
+  cash_session_id?: String.UUID | null;
+  canceled_reason?: string | null;
+  canceled_by?: string | null;
+  /**
+   * POS: when the sale was canceled (a closed cash session keeps sales canceled after its close as sold).
+   */
+  canceled_at?: String.DateTime | null;
+  /**
+   * POS: the Clerk user who rang the sale.
+   */
+  created_by?: string | null;
   placed_at?: String.DateTime | null;
   /**
    * Abandoned drafts: the customer's last message before the order memory window ran out.

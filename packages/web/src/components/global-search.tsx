@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { customerInitials, customerName } from './conversations/customer';
 import { STATUS_CHIP } from './conversations/order-panel';
-import { formatMoney, formatPhone, formatWhen, handoffLabel, STATUS_LABEL } from '../lib/format';
+import { formatMoney, formatPhone, formatWhen, handoffLabel, orderCustomerName, STATUS_LABEL } from '../lib/format';
 import { usePanelNavigate } from '../lib/panel-search';
 
 const normalize = (text: string | null | undefined) =>
@@ -28,7 +28,7 @@ export function GlobalSearch({ conversations, orders }: { conversations: PanelCo
   const [open, setOpen] = useState(false);
   const search = normalize(query.trim()).replace(/^#/, '');
   const digits = query.replace(/\D/g, '');
-  const phoneMatch = (phone: string) => digits.length >= 3 && phone.includes(digits);
+  const phoneMatch = (phone: string | null) => digits.length >= 3 && !!phone?.includes(digits);
 
   const orderResults = search
     ? orders
@@ -54,10 +54,14 @@ export function GlobalSearch({ conversations, orders }: { conversations: PanelCo
 
   const first = orderResults[0]?.conversation_id ?? customerResults[0]?.id;
 
-  const pick = (conversationId: string) => {
+  // Counter sales have no conversation to open.
+  const pick = (conversationId: string | null | undefined) => {
     setQuery('');
     setOpen(false);
-    void navigate({ c: conversationId });
+
+    if (conversationId) {
+      void navigate({ c: conversationId });
+    }
   };
 
   return (
@@ -138,9 +142,7 @@ export function GlobalSearch({ conversations, orders }: { conversations: PanelCo
                 >
                   <span className="w-[52px] shrink-0 font-mono text-[13px] font-semibold text-fg-2">#{order.code}</span>
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-sm font-medium">
-                      {order.customer.name ?? formatPhone(order.customer.phone)}
-                    </span>
+                    <span className="truncate text-sm font-medium">{orderCustomerName(order)}</span>
                     <span className="truncate text-xs text-muted">
                       {place(order)} · {formatWhen(order.placed_at)}
                     </span>

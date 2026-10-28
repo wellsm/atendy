@@ -71,7 +71,8 @@ const INTENT_CRITERIA: Record<Intent, string> = {
 const PAYMENT_CRITERIA: Record<PaymentMethod, string> = {
   [PaymentMethod.Pix]: 'Pays with Pix.',
   [PaymentMethod.Card]: 'Pays with a credit or debit card.',
-  [PaymentMethod.Cash]: 'Pays with cash (dinheiro).'
+  [PaymentMethod.Cash]: 'Pays with cash (dinheiro).',
+  [PaymentMethod.Voucher]: 'Pays with a meal or food voucher (vale-refeição, vale-alimentação).'
 };
 
 export type JevPlan = {

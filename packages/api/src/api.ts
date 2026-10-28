@@ -1,6 +1,7 @@
 import type { Http } from '@ez4/gateway';
 import type { NamingStyle } from '@ez4/schema';
 import type { AdminRoutes } from './admin/routes';
+import type { CashRoutes } from './cash/routes';
 import type { PanelRoutes } from './panel/routes';
 import type { PaymentsRoutes } from './payments/routes';
 import type { ProspectingRoutes } from './prospecting/routes';
@@ -22,6 +23,7 @@ export declare class Api extends Http.Service {
     ...PaymentsRoutes,
     ...PanelRoutes,
     ...StockRoutes,
+    ...CashRoutes,
     ...AdminRoutes,
     ...StorefrontRoutes,
     ...ProspectingRoutes

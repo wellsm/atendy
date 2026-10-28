@@ -28,8 +28,9 @@ export type PanelMenuGroup = Omit<GroupDraft, 'id' | 'options'> & {
   options: PanelMenuOption[];
 };
 
-export type PanelMenuProduct = Omit<ProductDraft, 'active' | 'groups'> & {
+export type PanelMenuProduct = Omit<ProductDraft, 'active' | 'groups' | 'needsPreparation'> & {
   id: string;
+  needsPreparation: boolean | null;
   soldOut: boolean;
   active: boolean;
   /**
@@ -42,6 +43,7 @@ export type PanelMenuProduct = Omit<ProductDraft, 'active' | 'groups'> & {
 export type PanelMenuCategory = {
   id: string;
   name: string;
+  needsPreparation: boolean;
   products: PanelMenuProduct[];
 };
 
@@ -58,6 +60,7 @@ type ProductRow = {
   description?: string | null;
   price_cents: number;
   active: boolean;
+  needs_preparation?: boolean | null;
   image_key?: string | null;
 };
 
@@ -166,6 +169,7 @@ const mapProducts = async (db: DbClient, storeId: string, products: ProductRow[]
       active: product.active,
       soldOut: soldOutProducts.has(product.id),
       imageKey: product.image_key ?? null,
+      needsPreparation: product.needs_preparation ?? null,
       groups: groupsOf(product.id).map((group) => ({
         id: group.id,
         name: group.name,
@@ -185,7 +189,8 @@ const PRODUCT_FIELDS = {
   description: true,
   price_cents: true,
   active: true,
-  image_key: true
+  image_key: true,
+  needs_preparation: true
 } as const;
 
 const findStoreProduct = async (db: DbClient, storeId: string, productId: string) => {
@@ -609,15 +614,19 @@ export namespace MenuRepository {
    */
   export const loadPanel = async (db: DbClient, storeId: string): Promise<PanelMenuCategory[]> => {
     const [{ records: categories }, { records: products }] = await Promise.all([
-      db.categories.findMany({ select: { id: true, name: true, position: true }, where: { store_id: storeId } }),
+      db.categories.findMany({
+        select: { id: true, name: true, position: true, needs_preparation: true },
+        where: { store_id: storeId }
+      }),
       db.products.findMany({ select: PRODUCT_FIELDS, where: { store_id: storeId } })
     ]);
 
     const panelProducts = await mapProducts(db, storeId, products);
 
-    return [...categories].sort(byPosition).map(({ id, name }) => ({
+    return [...categories].sort(byPosition).map(({ id, name, needs_preparation }) => ({
       id,
       name,
+      needsPreparation: needs_preparation ?? false,
       products: panelProducts.filter(({ categoryId }) => categoryId === id)
     }));
   };
@@ -704,6 +713,16 @@ export namespace MenuRepository {
     return updated.length > 0;
   };
 
+  export const setCategoryPreparation = async (db: DbClient, storeId: string, categoryId: string, value: boolean) => {
+    const updated = await db.categories.updateMany({
+      select: { id: true },
+      data: { needs_preparation: value },
+      where: { id: categoryId, store_id: storeId }
+    });
+
+    return updated.length > 0;
+  };
+
   /**
    * `ids` must be exactly the store categories, in the new order.
    */
@@ -758,6 +777,7 @@ export namespace MenuRepository {
           description: draft.description,
           price_cents: draft.priceCents,
           active: draft.active ?? true,
+          needs_preparation: draft.needsPreparation ?? null,
           created_at: now,
           updated_at: now
         }
@@ -790,6 +810,7 @@ export namespace MenuRepository {
           description: draft.description,
           price_cents: draft.priceCents,
           ...(draft.active !== undefined && { active: draft.active }),
+          needs_preparation: draft.needsPreparation ?? null,
           updated_at: new Date().toISOString()
         },
         where: { id: productId }

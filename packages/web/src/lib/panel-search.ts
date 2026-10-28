@@ -8,7 +8,7 @@ export type Sheet = 'menu' | 'whatsapp' | 'settings' | 'billing' | 'history' | '
 
 export type PanelView = 'orders';
 
-export type SettingsTab = 'store' | 'hours' | 'delivery' | 'payment' | 'policy' | 'stock';
+export type SettingsTab = 'store' | 'hours' | 'delivery' | 'payment' | 'policy' | 'stock' | 'pos';
 
 /**
  * The panel page state in the URL: the main view (conversations, or `view=orders` for the kitchen board), the open
@@ -33,7 +33,7 @@ const SHEETS: Sheet[] = ['menu', 'whatsapp', 'settings', 'billing', 'history', '
 
 const STOCK_FILTER_VALUES: StockFilter[] = ['low', 'sold_out', 'archived'];
 
-const TABS: SettingsTab[] = ['store', 'hours', 'delivery', 'payment', 'policy', 'stock'];
+const TABS: SettingsTab[] = ['store', 'hours', 'delivery', 'payment', 'policy', 'stock', 'pos'];
 
 const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
 

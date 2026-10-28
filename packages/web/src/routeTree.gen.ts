@@ -28,6 +28,7 @@ import { Route as AdminSimulationsRunIdRouteImport } from './routes/admin.simula
 import { Route as PanelSlugIndexRouteImport } from './routes/panel.$slug/index'
 import { Route as PanelSlugBillingRouteImport } from './routes/panel.$slug/billing'
 import { Route as PanelSlugConversationsRouteImport } from './routes/panel.$slug/conversations'
+import { Route as PanelSlugPosRouteImport } from './routes/panel.$slug/pos'
 import { Route as PanelSlugSettingsRouteImport } from './routes/panel.$slug/settings'
 import { Route as PanelSlugWhatsappRouteImport } from './routes/panel.$slug/whatsapp'
 import { Route as PanelSlugMenuIndexRouteImport } from './routes/panel.$slug/menu.index'
@@ -129,6 +130,11 @@ const PanelSlugConversationsRoute = PanelSlugConversationsRouteImport.update({
   path: '/conversations',
   getParentRoute: () => PanelSlugRoute,
 } as any)
+const PanelSlugPosRoute = PanelSlugPosRouteImport.update({
+  id: '/pos',
+  path: '/pos',
+  getParentRoute: () => PanelSlugRoute,
+} as any)
 const PanelSlugSettingsRoute = PanelSlugSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -167,6 +173,7 @@ export interface FileRoutesByFullPath {
   '/admin/simulations/$runId': typeof AdminSimulationsRunIdRoute
   '/panel/$slug/billing': typeof PanelSlugBillingRoute
   '/panel/$slug/conversations': typeof PanelSlugConversationsRoute
+  '/panel/$slug/pos': typeof PanelSlugPosRoute
   '/panel/$slug/settings': typeof PanelSlugSettingsRoute
   '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
   '/admin/conversations/': typeof AdminConversationsIndexRoute
@@ -191,6 +198,7 @@ export interface FileRoutesByTo {
   '/admin/simulations/$runId': typeof AdminSimulationsRunIdRoute
   '/panel/$slug/billing': typeof PanelSlugBillingRoute
   '/panel/$slug/conversations': typeof PanelSlugConversationsRoute
+  '/panel/$slug/pos': typeof PanelSlugPosRoute
   '/panel/$slug/settings': typeof PanelSlugSettingsRoute
   '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
   '/admin/conversations': typeof AdminConversationsIndexRoute
@@ -217,6 +225,7 @@ export interface FileRoutesById {
   '/admin/simulations/$runId': typeof AdminSimulationsRunIdRoute
   '/panel/$slug/billing': typeof PanelSlugBillingRoute
   '/panel/$slug/conversations': typeof PanelSlugConversationsRoute
+  '/panel/$slug/pos': typeof PanelSlugPosRoute
   '/panel/$slug/settings': typeof PanelSlugSettingsRoute
   '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
   '/admin/conversations/': typeof AdminConversationsIndexRoute
@@ -244,6 +253,7 @@ export interface FileRouteTypes {
     | '/admin/simulations/$runId'
     | '/panel/$slug/billing'
     | '/panel/$slug/conversations'
+    | '/panel/$slug/pos'
     | '/panel/$slug/settings'
     | '/panel/$slug/whatsapp'
     | '/admin/conversations/'
@@ -268,6 +278,7 @@ export interface FileRouteTypes {
     | '/admin/simulations/$runId'
     | '/panel/$slug/billing'
     | '/panel/$slug/conversations'
+    | '/panel/$slug/pos'
     | '/panel/$slug/settings'
     | '/panel/$slug/whatsapp'
     | '/admin/conversations'
@@ -293,6 +304,7 @@ export interface FileRouteTypes {
     | '/admin/simulations/$runId'
     | '/panel/$slug/billing'
     | '/panel/$slug/conversations'
+    | '/panel/$slug/pos'
     | '/panel/$slug/settings'
     | '/panel/$slug/whatsapp'
     | '/admin/conversations/'
@@ -456,6 +468,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PanelSlugConversationsRouteImport
       parentRoute: typeof PanelSlugRoute
     }
+    '/panel/$slug/pos': {
+      id: '/panel/$slug/pos'
+      path: '/pos'
+      fullPath: '/panel/$slug/pos'
+      preLoaderRoute: typeof PanelSlugPosRouteImport
+      parentRoute: typeof PanelSlugRoute
+    }
     '/panel/$slug/settings': {
       id: '/panel/$slug/settings'
       path: '/settings'
@@ -490,6 +509,7 @@ declare module '@tanstack/react-router' {
 interface PanelSlugRouteChildren {
   PanelSlugBillingRoute: typeof PanelSlugBillingRoute
   PanelSlugConversationsRoute: typeof PanelSlugConversationsRoute
+  PanelSlugPosRoute: typeof PanelSlugPosRoute
   PanelSlugSettingsRoute: typeof PanelSlugSettingsRoute
   PanelSlugWhatsappRoute: typeof PanelSlugWhatsappRoute
   PanelSlugIndexRoute: typeof PanelSlugIndexRoute
@@ -500,6 +520,7 @@ interface PanelSlugRouteChildren {
 const PanelSlugRouteChildren: PanelSlugRouteChildren = {
   PanelSlugBillingRoute: PanelSlugBillingRoute,
   PanelSlugConversationsRoute: PanelSlugConversationsRoute,
+  PanelSlugPosRoute: PanelSlugPosRoute,
   PanelSlugSettingsRoute: PanelSlugSettingsRoute,
   PanelSlugWhatsappRoute: PanelSlugWhatsappRoute,
   PanelSlugIndexRoute: PanelSlugIndexRoute,

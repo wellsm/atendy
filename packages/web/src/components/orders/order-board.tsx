@@ -2,7 +2,7 @@ import type { OrderStatus, PanelOrder } from '../../lib/queries';
 
 import { useEffect, useRef, useState } from 'react';
 
-import { formatPhone, formatWhen } from '../../lib/format';
+import { formatWhen, orderCustomerName } from '../../lib/format';
 import { usePanelNavigate } from '../../lib/panel-search';
 import { Actions, Items, Notice, Summary, useOrderStatus } from '../conversations/order-panel';
 
@@ -101,6 +101,7 @@ export function OrderBoard({ orders }: { orders: PanelOrder[] }) {
 function OrderCard({ order, fresh }: { order: PanelOrder; fresh: boolean }) {
   const navigate = usePanelNavigate();
   const controls = useOrderStatus(() => undefined);
+  const conversationId = order.conversation_id;
 
   return (
     <li
@@ -108,16 +109,14 @@ function OrderCard({ order, fresh }: { order: PanelOrder; fresh: boolean }) {
     >
       <div className="flex items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-[15px] font-semibold">
-            {order.customer.name ?? formatPhone(order.customer.phone)}
-          </span>
+          <span className="truncate text-[15px] font-semibold">{orderCustomerName(order)}</span>
           <span className="text-xs text-muted">
             {formatWhen(order.placed_at)} · #{order.code}
           </span>
         </div>
         <div className="flex flex-col items-end gap-1">
           <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-fg-2">
-            {order.fulfillment === 'pickup' ? 'Retirada' : 'Entrega'}
+            {order.source === 'pos' ? 'Balcão' : order.fulfillment === 'pickup' ? 'Retirada' : 'Entrega'}
           </span>
           {order.amended_at && (
             <span className="rounded-full bg-amend-bg px-[7px] py-px text-[11px] font-medium text-amend-fg">
@@ -142,13 +141,15 @@ function OrderCard({ order, fresh }: { order: PanelOrder; fresh: boolean }) {
 
       <Actions order={order} controls={controls} compact />
 
-      <button
-        type="button"
-        onClick={() => void navigate({ c: order.conversation_id })}
-        className="-mt-1 self-start text-[13px] font-medium text-accent-fg"
-      >
-        Ver conversa →
-      </button>
+      {conversationId && (
+        <button
+          type="button"
+          onClick={() => void navigate({ c: conversationId })}
+          className="-mt-1 self-start text-[13px] font-medium text-accent-fg"
+        >
+          Ver conversa →
+        </button>
+      )}
     </li>
   );
 }

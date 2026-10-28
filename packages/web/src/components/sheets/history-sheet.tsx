@@ -3,7 +3,7 @@ import type { PanelOrder } from '../../lib/queries';
 import { useState } from 'react';
 
 import { Sheet, SheetHeader } from './sheet';
-import { formatMoney, formatPhone, formatWhen, STATUS_LABEL } from '../../lib/format';
+import { formatMoney, formatWhen, orderCustomerName, STATUS_LABEL } from '../../lib/format';
 import { usePanelNavigate } from '../../lib/panel-search';
 import { useOrders } from '../../lib/queries';
 import { STATUS_CHIP } from '../conversations/order-panel';
@@ -93,7 +93,8 @@ export function HistorySheet({ onClose }: { onClose: () => void }) {
         )}
 
         {orders.map((order) => {
-          const name = order.customer.name ?? formatPhone(order.customer.phone);
+          const name = orderCustomerName(order);
+          const conversationId = order.conversation_id;
           const code = `#${order.code}`;
           const chip = `rounded-full font-medium ${STATUS_CHIP[order.status]}`;
 
@@ -101,7 +102,9 @@ export function HistorySheet({ onClose }: { onClose: () => void }) {
             <button
               key={order.id}
               type="button"
-              onClick={() => void navigate({ c: order.conversation_id })}
+              // Counter sales have no conversation to open.
+              disabled={!conversationId}
+              onClick={() => conversationId && void navigate({ c: conversationId })}
               className={`flex w-full items-center gap-2.5 border-b border-line px-4 py-3 text-left hover:bg-hover md:px-6 md:text-[13px] ${COLUMNS}`}
             >
               <span className="flex min-w-0 flex-1 flex-col gap-0.5 md:hidden">

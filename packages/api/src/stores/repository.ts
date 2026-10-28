@@ -2,7 +2,7 @@ import type { DbClient } from '../db';
 import type { Coordinates, DeliveryBand } from './geo';
 import type { HourRange } from './hours';
 import type { DeliverySettings } from './settings';
-import type { OrderCodeMode, StorePolicy } from './types';
+import type { OrderCodeMode, PosSettings, StorePolicy } from './types';
 
 import { randomBytes, randomUUID } from 'node:crypto';
 
@@ -410,7 +410,11 @@ export namespace StoreRepository {
           latitude: true,
           longitude: true,
           stock_alert_phone: true,
-          stock_alert_hour: true
+          stock_alert_hour: true,
+          pos_layout: true,
+          pos_cash_control: true,
+          pos_blind_close: true,
+          pos_receipt_width: true
         },
         where: { id: storeId }
       }),
@@ -446,8 +450,43 @@ export namespace StoreRepository {
       paymentMethods: store.payment_methods,
       policy: store.policy ?? {},
       stockAlertPhone: store.stock_alert_phone ?? null,
-      stockAlertHour: store.stock_alert_hour ?? null
+      stockAlertHour: store.stock_alert_hour ?? null,
+      pos: resolvePos(store)
     };
+  };
+
+  const resolvePos = (store: {
+    pos_layout?: 'grid' | 'search' | null;
+    pos_cash_control?: boolean | null;
+    pos_blind_close?: boolean | null;
+    pos_receipt_width?: number | null;
+  }): PosSettings => ({
+    layout: store.pos_layout ?? 'grid',
+    cashControl: store.pos_cash_control ?? true,
+    blindClose: store.pos_blind_close ?? false,
+    receiptWidth: store.pos_receipt_width === 58 ? 58 : 80
+  });
+
+  export const getPosSettings = async (db: DbClient, storeId: string): Promise<PosSettings> => {
+    const store = await db.stores.findOne({
+      select: { pos_layout: true, pos_cash_control: true, pos_blind_close: true, pos_receipt_width: true },
+      where: { id: storeId }
+    });
+
+    return resolvePos(store ?? {});
+  };
+
+  export const setPosSettings = async (db: DbClient, storeId: string, settings: PosSettings) => {
+    await db.stores.updateOne({
+      data: {
+        pos_layout: settings.layout,
+        pos_cash_control: settings.cashControl,
+        pos_blind_close: settings.blindClose,
+        pos_receipt_width: settings.receiptWidth,
+        updated_at: new Date().toISOString()
+      },
+      where: { id: storeId }
+    });
   };
 
   export const setStockAlert = async (

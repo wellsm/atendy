@@ -24,6 +24,7 @@ import { renameCategoryHandler } from '../../src/panel/endpoints/rename-category
 import { reorderCategoriesHandler } from '../../src/panel/endpoints/reorder-categories';
 import { setOptionActiveHandler } from '../../src/panel/endpoints/set-option-active';
 import { setProductActiveHandler } from '../../src/panel/endpoints/set-product-active';
+import { updateCategoryPreparationHandler } from '../../src/panel/endpoints/update-category-preparation';
 import { updateMenuGroupHandler } from '../../src/panel/endpoints/update-group';
 import { updateProductHandler } from '../../src/panel/endpoints/update-product';
 import { seedConversation, seedStore } from '../support/fixtures';
@@ -81,7 +82,9 @@ describe('panel menu endpoints', () => {
 
     const menu = await getMenuHandler({ identity } as never, { db, productImages });
 
-    deepEqual(menu.body.categories, [{ id: category.id, name: 'Pizzas', products: [product] }]);
+    deepEqual(menu.body.categories, [
+      { id: category.id, name: 'Pizzas', needsPreparation: false, products: [product] }
+    ]);
 
     const [flavors] = product.groups;
 
@@ -180,7 +183,9 @@ describe('panel menu endpoints', () => {
 
     const menu = await getMenuHandler({ identity: foreign.identity } as never, { db, productImages });
 
-    deepEqual(menu.body.categories, [{ id: foreign.category.id, name: 'Pizzas', products: [foreign.product] }]);
+    deepEqual(menu.body.categories, [
+      { id: foreign.category.id, name: 'Pizzas', needsPreparation: false, products: [foreign.product] }
+    ]);
   });
 
   it('refuses to delete a category with products, then deletes it once empty', async () => {
@@ -362,6 +367,38 @@ describe('panel menu endpoints', () => {
       { id: drinks.id, name: 'Bebidas geladas' },
       { id: category.id, name: 'Pizzas' }
     ]);
+  });
+
+  it('saves the kitchen flag on categories and products', async () => {
+    const { identity, category } = await setup();
+    const foreign = await setup();
+
+    await updateCategoryPreparationHandler(
+      { identity, parameters: { categoryId: category.id }, body: { needsPreparation: true } } as never,
+      { db }
+    );
+    await rejects(
+      updateCategoryPreparationHandler(
+        { identity, parameters: { categoryId: foreign.category.id }, body: { needsPreparation: true } } as never,
+        { db }
+      ),
+      HttpNotFoundError
+    );
+
+    const {
+      body: { product }
+    } = await createProductHandler({ identity, body: { ...pizza(category.id), needsPreparation: false } } as never, {
+      db,
+      productImages
+    });
+
+    equal(product.needsPreparation, false);
+
+    const menu = await getMenuHandler({ identity } as never, { db, productImages });
+    const loaded = menu.body.categories.find(({ id }) => id === category.id)!;
+
+    equal(loaded.needsPreparation, true);
+    equal(loaded.products.find(({ id }) => id === product.id)!.needsPreparation, false);
   });
 
   it('deleted product leaves order items intact', async () => {

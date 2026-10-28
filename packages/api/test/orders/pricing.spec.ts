@@ -135,7 +135,31 @@ describe('computeTotals', () => {
         ],
         500
       ),
-      { subtotal_cents: 11700, fee_cents: 500, total_cents: 12200 }
+      { subtotal_cents: 11700, discount_cents: 0, fee_cents: 500, surcharge_cents: 0, total_cents: 12200 }
+    );
+  });
+
+  it('applies line and order discounts and the surcharge', () => {
+    deepEqual(
+      computeTotals([{ qty: 2, unit_price_cents: 1000, discount: { kind: 'percent', value: 10 } }], 0, {
+        discount: { kind: 'value', value: 500 },
+        surchargeCents: 200
+      }),
+      { subtotal_cents: 1800, discount_cents: 500, fee_cents: 0, surcharge_cents: 200, total_cents: 1500 }
+    );
+  });
+
+  it('never takes a discount below zero', () => {
+    deepEqual(
+      computeTotals(
+        [
+          { qty: 1, unit_price_cents: 700, discount: { kind: 'value', value: 1000 } },
+          { qty: 1, unit_price_cents: 300 }
+        ],
+        0,
+        { discount: { kind: 'percent', value: 150 } }
+      ),
+      { subtotal_cents: 300, discount_cents: 300, fee_cents: 0, surcharge_cents: 0, total_cents: 0 }
     );
   });
 });

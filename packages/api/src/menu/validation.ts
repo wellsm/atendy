@@ -59,6 +59,7 @@ export type ProductDraft = {
   description: string | null;
   priceCents: number;
   active?: boolean;
+  needsPreparation?: boolean | null;
   groups: GroupDraft[];
 };
 
@@ -207,6 +208,7 @@ export const validateProduct = (input: ProductDraft): ProductDraft => {
     description,
     priceCents: input.priceCents,
     ...(input.active !== undefined && { active: input.active }),
+    needsPreparation: input.needsPreparation ?? null,
     groups
   };
 };

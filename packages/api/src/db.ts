@@ -2,6 +2,8 @@ import type { Client, Database, Index } from '@ez4/database';
 import type { PostgresEngine } from '@ez4/raw-pg/client';
 import type { AiCallSchema } from './agent/schemas/ai-call';
 import type { BillingRecordSchema } from './billing/schemas/billing-record';
+import type { CashMovementSchema } from './cash/schemas/cash-movement';
+import type { CashSessionSchema } from './cash/schemas/cash-session';
 import type { ConversationSchema } from './conversations/schemas/conversation';
 import type { CustomerSchema } from './conversations/schemas/customer';
 import type { MessageSchema } from './conversations/schemas/message';
@@ -13,6 +15,7 @@ import type { ProductGroupSchema } from './menu/schemas/product-group';
 import type { OrderSchema } from './orders/schemas/order';
 import type { OrderItemSchema } from './orders/schemas/order-item';
 import type { BillingInvoiceSchema } from './payments/schemas/billing-invoice';
+import type { OrderPaymentSchema } from './pos/schemas/order-payment';
 import type { ProspectImportSchema } from './prospecting/schemas/import';
 import type { ProspectLeadSchema } from './prospecting/schemas/lead';
 import type { ProspectingSenderSchema } from './prospecting/schemas/sender';
@@ -140,6 +143,24 @@ export declare class Db extends Database.Service<PostgresEngine> {
       };
     },
     {
+      name: 'cash_sessions';
+      schema: CashSessionSchema;
+      indexes: {
+        id: Index.Primary;
+        store_id: Index.Secondary;
+      };
+    },
+    {
+      name: 'cash_movements';
+      schema: CashMovementSchema;
+      indexes: {
+        id: Index.Primary;
+        store_id: Index.Secondary;
+        session_id: Index.Secondary;
+        order_id: Index.Secondary;
+      };
+    },
+    {
       name: 'options';
       schema: OptionSchema;
       indexes: {
@@ -189,6 +210,15 @@ export declare class Db extends Database.Service<PostgresEngine> {
       schema: OrderItemSchema;
       indexes: {
         id: Index.Primary;
+        order_id: Index.Secondary;
+      };
+    },
+    {
+      name: 'order_payments';
+      schema: OrderPaymentSchema;
+      indexes: {
+        id: Index.Primary;
+        store_id: Index.Secondary;
         order_id: Index.Secondary;
       };
     },
