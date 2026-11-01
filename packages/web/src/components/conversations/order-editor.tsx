@@ -56,7 +56,7 @@ export function OrderEditor({ conversationId }: { conversationId: string }) {
   }
 
   if (draft.isError) {
-    return <p className="px-5 py-4 text-sm text-accent-fg">Não foi possível carregar o pedido.</p>;
+    return <p className="px-5 py-4 text-sm text-danger-fg">Não foi possível carregar o pedido.</p>;
   }
 
   const { cart, saved_address: saved } = draft.data;
@@ -92,7 +92,7 @@ export function OrderEditor({ conversationId }: { conversationId: string }) {
             </p>
           )}
 
-          {place.isError && <p className="text-xs text-accent-fg">{errorText(place.error)}</p>}
+          {place.isError && <p className="text-xs text-danger-fg">{errorText(place.error)}</p>}
 
           <button
             type="button"
@@ -251,7 +251,7 @@ function ProductPicker(props: { conversationId: string; product: MenuProduct; on
         />
       </div>
 
-      {add.isError && <p className="text-xs text-accent-fg">{errorText(add.error)}</p>}
+      {add.isError && <p className="text-xs text-danger-fg">{errorText(add.error)}</p>}
 
       <div className="flex gap-2">
         <button
@@ -291,7 +291,7 @@ function CartItems({ conversationId, cart }: { conversationId: string; cart: Dra
             aria-label={`Remover ${item.name}`}
             disabled={remove.isPending}
             onClick={() => remove.mutate(item.item_id)}
-            className="shrink-0 px-1 text-faint hover:text-accent-fg disabled:opacity-50"
+            className="shrink-0 px-1 text-faint hover:text-danger-fg disabled:opacity-50"
           >
             ✕
           </button>
@@ -382,7 +382,7 @@ function Fulfillment(props: {
         </>
       )}
 
-      {update.isError && <p className="text-xs text-accent-fg">{errorText(update.error)}</p>}
+      {update.isError && <p className="text-xs text-danger-fg">{errorText(update.error)}</p>}
     </div>
   );
 }
@@ -438,7 +438,7 @@ function Payment({ conversationId, cart }: { conversationId: string; cart: Draft
         </form>
       )}
 
-      {update.isError && <p className="text-xs text-accent-fg">{errorText(update.error)}</p>}
+      {update.isError && <p className="text-xs text-danger-fg">{errorText(update.error)}</p>}
     </div>
   );
 }

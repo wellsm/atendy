@@ -8,7 +8,7 @@ import { useImportProspects } from '../lib/queries';
 
 const ERRORS_SHOWN = 20;
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none';
+const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
 /**
  * Text above this size never goes into the textarea: a controlled textarea with megabytes of JSON freezes the page.
@@ -162,7 +162,7 @@ export function ProspectingImport() {
           type="button"
           disabled={(!loaded && !source.trim()) || importLeads.isPending}
           onClick={onImport}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {importLeads.isPending ? (part ? `Importando parte ${part[0]} de ${part[1]}…` : 'Importando…') : 'Importar'}
         </button>

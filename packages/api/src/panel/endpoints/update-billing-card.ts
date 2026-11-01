@@ -9,6 +9,8 @@ import { HttpBadRequestError, HttpNotFoundError } from '@ez4/gateway';
 import { asaasConfig, AsaasRequestError } from '../../payments/asaas-client';
 import { PaymentsRepository } from '../../payments/repository';
 import { PaymentError, validateCardForm } from '../../payments/validation';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { requireStore } from '../store';
 
 export declare class UpdateBillingCardRequest implements Http.Request {
@@ -18,6 +20,8 @@ export declare class UpdateBillingCardRequest implements Http.Request {
      * Payer IP (Asaas anti-fraud): the first address the gateway saw.
      */
     'x-forwarded-for'?: string;
+    'x-operator'?: string;
+    'x-approval'?: string;
   };
   body: {
     holder: CardHolderInput;
@@ -39,6 +43,7 @@ export async function updateBillingCardHandler(
   { db }: Service.Context<PanelBillingProvider>
 ): Promise<UpdateBillingCardResponse> {
   const store = await requireStore(db, request.identity);
+  await authorize(db, store, request.identity, request.headers, Permission.Settings);
   const now = new Date();
 
   let form: ReturnType<typeof validateCardForm>;

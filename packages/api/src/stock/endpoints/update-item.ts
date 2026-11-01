@@ -1,19 +1,23 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
-import type { PanelProvider } from '../../panel/provider';
+import type { PanelStaffProvider } from '../../panel/provider';
 import type { PanelIdentity } from '../../panel/types';
+import type { OperatorHeaders } from '../../staff/authorize';
 import type { StockItemView, StockPackageView } from '../repository';
 import type { StockUnit } from '../types';
 
 import { HttpNotFoundError } from '@ez4/gateway';
 
 import { requireStore } from '../../panel/store';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { withStockErrors } from '../errors';
 import { StockRepository } from '../repository';
 
 export declare class UpdateStockItemRequest implements Http.Request {
   identity: PanelIdentity;
+  headers: OperatorHeaders;
   parameters: {
     itemId: String.UUID;
   };
@@ -44,9 +48,10 @@ export declare class UpdateStockItemResponse implements Http.Response {
  */
 export async function updateStockItemHandler(
   request: Http.Incoming<UpdateStockItemRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db }: Service.Context<PanelStaffProvider>
 ): Promise<UpdateStockItemResponse> {
   const store = await requireStore(db, request.identity);
+  await authorize(db, store, request.identity, request.headers, Permission.StockManage);
   const { itemId } = request.parameters;
   const { packages, ...input } = request.body;
 

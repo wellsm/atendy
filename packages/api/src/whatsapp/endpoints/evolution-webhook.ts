@@ -9,6 +9,7 @@ import { InboundEventKind } from '../../conversations/queues/inbound';
 import { ConversationRepository } from '../../conversations/repository';
 import { notifyPanel } from '../../realtime/notify';
 import { PanelTrigger } from '../../realtime/types';
+import { isCourierEcho } from '../../staff/couriers';
 import { phoneVariants } from '../../storefront/web-order';
 import { parseEvolutionEvent } from '../evolution-parser';
 import { formatReactionBody, isAnswerReaction } from '../reaction';
@@ -124,6 +125,11 @@ export async function evolutionWebhookHandler(
 
   // The daily stock digest goes out from the store's own instance: its echo must never reach a conversation.
   if (event.fromMe && isStockAlertPhone(store.stock_alert_phone, event.phone)) {
+    return { status: 200 };
+  }
+
+  // A dispatch message sent to a courier from the store's number: its echo is not a customer conversation.
+  if (event.fromMe && (await isCourierEcho(db, storeId, event.phone, event.text))) {
     return { status: 200 };
   }
 

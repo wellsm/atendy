@@ -69,7 +69,7 @@ export function DashboardSheet({ onClose }: { onClose: () => void }) {
       <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
         {dashboard.isPending && <Loading />}
 
-        {dashboard.isError && <p className="text-sm text-accent-fg">Não foi possível carregar o desempenho.</p>}
+        {dashboard.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o desempenho.</p>}
 
         {dashboard.data && <DashboardBody data={dashboard.data} />}
       </div>

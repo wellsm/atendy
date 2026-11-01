@@ -105,7 +105,7 @@ export function MovementForm({
       {presetPending && !presetFailed && <p className="text-sm text-muted">Carregando embalagem…</p>}
 
       {presetFailed && (
-        <p className="text-sm text-accent-fg">
+        <p className="text-sm text-danger-fg">
           Não foi possível carregar a embalagem do código lido. Volte e tente de novo.
         </p>
       )}
@@ -178,13 +178,13 @@ export function MovementForm({
         </>
       )}
 
-      {mutation.error && <p className="text-sm text-accent-fg">{errorText(mutation.error)}</p>}
+      {mutation.error && <p className="text-sm text-danger-fg">{errorText(mutation.error)}</p>}
 
       <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={mutation.isPending || !valid}
-          className="h-10 rounded-lg bg-accent px-5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          className="h-10 rounded-lg bg-accent px-5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
         >
           {mutation.isPending ? 'Salvando…' : TITLES[kind]}
         </button>

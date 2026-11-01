@@ -152,7 +152,7 @@ function SimulationCard({ simulation }: { simulation: ConversationSimulation }) 
         <Link
           to="/admin/simulations/$runId"
           params={{ runId: simulation.run_id }}
-          className="font-medium text-red-700 hover:text-red-800"
+          className="font-medium text-accent-fg hover:text-accent-hover"
         >
           {simulation.run_name}
         </Link>{' '}

@@ -78,7 +78,7 @@ export function ProductEditor({ productId, onClose }: { productId: string; onClo
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-5 md:px-6">
         {menu.isPending && <Loading />}
 
-        {menu.isError && <p className="text-sm text-accent-fg">Não foi possível carregar o cardápio.</p>}
+        {menu.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o cardápio.</p>}
 
         {menu.data && isNew && <NewProduct onDone={back} />}
 

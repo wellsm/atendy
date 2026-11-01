@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Loading } from '../components/loading';
 import { PanelShell } from '../components/panel-shell';
 import { SignedIn } from '../components/signed-in';
+import { OperatorProvider } from '../lib/operator';
 import { useMe, useMyStores } from '../lib/queries';
 import { RealtimeProvider } from '../lib/realtime';
 
@@ -64,13 +65,15 @@ function Panel() {
   if (current) {
     return (
       <RealtimeProvider slug={slug}>
-        {pos ? (
-          <Outlet />
-        ) : (
-          <PanelShell store={me.data.store!}>
+        <OperatorProvider key={slug} slug={slug}>
+          {pos ? (
             <Outlet />
-          </PanelShell>
-        )}
+          ) : (
+            <PanelShell store={me.data.store!}>
+              <Outlet />
+            </PanelShell>
+          )}
+        </OperatorProvider>
       </RealtimeProvider>
     );
   }
@@ -90,7 +93,7 @@ function Panel() {
       <Link
         to="/panel/$slug"
         params={{ slug: me.data.store.slug }}
-        className="text-sm font-medium text-red-700 hover:underline"
+        className="text-sm font-medium text-accent-fg hover:underline"
       >
         Ir para {me.data.store.name}
       </Link>

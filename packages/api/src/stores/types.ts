@@ -111,6 +111,15 @@ export type PosSettings = {
   receiptWidth: 58 | 80;
 };
 
+export type CourierFeeMode = 'order_fee' | 'fixed';
+
+export type StaffSettings = {
+  idleMinutes: number;
+  discountLimitPercent: number;
+  courierFeeMode: CourierFeeMode;
+  courierFeeCents: number;
+};
+
 export const enum NewOrderAfterStatus {
   Accepted = 'accepted',
   Out = 'out',

@@ -131,13 +131,13 @@ export function PhoneCheck(props: {
             maxLength={6}
             placeholder="Código"
             disabled={verify.isPending}
-            className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-center text-lg tracking-[0.4em] focus:border-red-600 focus:outline-none"
+            className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-center text-lg tracking-[0.4em] focus:border-accent focus:outline-none"
           />
           <button
             type="button"
             onClick={() => send.mutate()}
             disabled={wait > 0 || send.isPending}
-            className="self-start text-sm font-medium text-red-700 disabled:text-neutral-400"
+            className="self-start text-sm font-medium text-accent-fg disabled:text-neutral-400"
           >
             {wait > 0 ? `Reenviar código em ${wait} s` : 'Reenviar código'}
           </button>

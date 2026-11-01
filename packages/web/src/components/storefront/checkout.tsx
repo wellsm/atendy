@@ -53,7 +53,7 @@ const errorText = (error: unknown) =>
   'Não foi possível enviar o pedido. Tente de novo.';
 
 const INPUT =
-  'h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-[15px] focus:border-red-600 focus:outline-none md:text-sm';
+  'h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-[15px] focus:border-accent focus:outline-none md:text-sm';
 
 /**
  * Value that settles `delay` ms after the last change (the quote waits for the customer to stop typing).
@@ -272,7 +272,7 @@ export function Checkout(props: { store: StorefrontStore; slug: string; cart: Ca
               disabled={blocked}
               // The WhatsApp code is asked only here, with the order ready: browsing never pays for a code.
               onClick={() => (phoneToken ? send.mutate(phoneToken) : setConfirming(true))}
-              className="h-12 rounded-lg bg-red-600 text-[15px] font-semibold text-white disabled:opacity-50"
+              className="h-12 rounded-lg bg-accent text-[15px] font-semibold text-white disabled:opacity-50"
             >
               {send.isPending ? 'Enviando…' : total != null ? `Enviar pedido · ${formatMoney(total)}` : 'Enviar pedido'}
             </button>
@@ -325,7 +325,7 @@ export function Checkout(props: { store: StorefrontStore; slug: string; cart: Ca
               key={value}
               type="button"
               onClick={() => setFulfillment(value)}
-              className={`h-11 rounded-lg border text-sm font-medium ${fulfillment === value ? 'border-red-600 bg-red-50 text-red-700' : 'border-neutral-300 text-neutral-700'}`}
+              className={`h-11 rounded-lg border text-sm font-medium ${fulfillment === value ? 'border-accent bg-accent-soft text-accent-fg' : 'border-neutral-300 text-neutral-700'}`}
             >
               {value === 'delivery' ? 'Entrega' : 'Retirar na loja'}
             </button>
@@ -438,7 +438,7 @@ export function Checkout(props: { store: StorefrontStore; slug: string; cart: Ca
               key={value}
               type="button"
               onClick={() => setMethod(value)}
-              className={`h-10 rounded-full border px-4 text-sm font-medium ${method === value ? 'border-red-600 bg-red-50 text-red-700' : 'border-neutral-300 text-neutral-700'}`}
+              className={`h-10 rounded-full border px-4 text-sm font-medium ${method === value ? 'border-accent bg-accent-soft text-accent-fg' : 'border-neutral-300 text-neutral-700'}`}
             >
               {PAYMENT_LABELS[value]}
             </button>

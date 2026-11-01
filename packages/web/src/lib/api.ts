@@ -36,23 +36,93 @@ const readError = async (response: Response) => {
 const API_URL = import.meta.env.VITE_API_URL as string;
 
 /**
- * `fetch` against the Atendy API with the Clerk session token. The API uses snake_case on the wire.
+ * What the store panel's `OperatorProvider` lends to every API call (spec `docs/specs/staff.md`): the operator token,
+ * and how to ask "Quem está usando?" or a manager's PIN. Outside a panel (`active` false) calls go out as they are.
+ */
+export const operatorBridge: {
+  active: boolean;
+  /**
+   * The provider that set the bridge, so an unmounting one never wipes a newer one's.
+   */
+  owner?: object;
+  locked: boolean;
+  token?: string;
+  require?: () => Promise<void>;
+  clear?: () => void;
+  approve?: (permission: string) => Promise<string>;
+  refreshLock?: () => Promise<void>;
+} = { active: false, locked: false };
+
+const UNGATED = /^\/panel\/staff\/(lock|unlock|approvals|owner-unlock)$/;
+
+/**
+ * The permission a 403 `approval_required` is about, from the route that answered it.
+ */
+const approvalPermission = (path: string) => {
+  if (/^\/panel\/orders\/[^/?]+$/.test(path)) return 'orders_cancel';
+  if (/^\/panel\/pos\/sales\/[^/]+\/cancel$/.test(path)) return 'pos_cancel';
+  if (path === '/panel/cash/movements') return 'cash_move';
+  if (/^\/panel\/couriers\/[^/]+\/settlements$/.test(path)) return 'courier_settle';
+  if (/^\/panel\/cash\/sessions\/[^/]+\/close$/.test(path)) return 'cash_close';
+  if (path.startsWith('/panel/pos/')) return 'pos_discount_over_limit';
+};
+
+/**
+ * `fetch` against the Atendy API with the Clerk session token. The API uses snake_case on the wire. In a locked
+ * panel it sends the operator (`x-operator`): a write without one first asks who is using, and a 403
+ * `operator_required` / `approval_required` is asked and retried once.
  */
 export const useApi = () => {
   const { getToken } = useAuth();
 
   return useCallback(
-    async <T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> => {
-      const token = await getToken();
+    async <T>(
+      method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+      path: string,
+      body?: unknown,
+      options: { skipCache?: boolean } = {}
+    ): Promise<T> => {
+      const send = async (approval?: string) => {
+        const token = await getToken(options.skipCache ? { skipCache: true } : undefined);
 
-      const response = await fetch(`${API_URL}${path}`, {
-        method,
-        headers: {
-          ...(token && { authorization: `Bearer ${token}` }),
-          ...(body !== undefined && { 'content-type': 'application/json' })
-        },
-        body: body === undefined ? undefined : JSON.stringify(body)
-      });
+        return fetch(`${API_URL}${path}`, {
+          method,
+          headers: {
+            ...(token && { authorization: `Bearer ${token}` }),
+            ...(operatorBridge.token && { 'x-operator': operatorBridge.token }),
+            ...(approval && { 'x-approval': approval }),
+            ...(body !== undefined && { 'content-type': 'application/json' })
+          },
+          body: body === undefined ? undefined : JSON.stringify(body)
+        });
+      };
+
+      const gated = operatorBridge.active && path.startsWith('/panel/') && !UNGATED.test(path);
+
+      if (gated && operatorBridge.locked && !operatorBridge.token && method !== 'GET') {
+        await operatorBridge.require?.();
+      }
+
+      let response = await send();
+
+      if (!response.ok && gated && response.status === 403) {
+        const error = await readError(response);
+
+        if (error.field === 'operator_required') {
+          // This tab thought the store unlocked: the lock state is stale (a PIN employee created elsewhere).
+          if (!operatorBridge.locked) {
+            await operatorBridge.refreshLock?.();
+          }
+
+          operatorBridge.clear?.();
+          await operatorBridge.require?.();
+          response = await send();
+        } else if (error.field === 'approval_required' && approvalPermission(path)) {
+          response = await send(await operatorBridge.approve?.(approvalPermission(path)!));
+        } else {
+          throw error;
+        }
+      }
 
       if (!response.ok) {
         throw await readError(response);

@@ -5,6 +5,8 @@ import type { CashRoutes } from './cash/routes';
 import type { PanelRoutes } from './panel/routes';
 import type { PaymentsRoutes } from './payments/routes';
 import type { ProspectingRoutes } from './prospecting/routes';
+import type { CourierRoutes } from './staff/courier-routes';
+import type { StaffRoutes } from './staff/routes';
 import type { StockRoutes } from './stock/routes';
 import type { StorefrontRoutes } from './storefront/routes';
 import type { WhatsAppRoutes } from './whatsapp/routes';
@@ -24,6 +26,8 @@ export declare class Api extends Http.Service {
     ...PanelRoutes,
     ...StockRoutes,
     ...CashRoutes,
+    ...StaffRoutes,
+    ...CourierRoutes,
     ...AdminRoutes,
     ...StorefrontRoutes,
     ...ProspectingRoutes
@@ -33,7 +37,7 @@ export declare class Api extends Http.Service {
   cors: {
     allowOrigins: ['http://localhost:3000', 'https://d1wc504nfok37p.cloudfront.net'];
     allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'];
-    allowHeaders: ['authorization', 'content-type'];
+    allowHeaders: ['authorization', 'content-type', 'x-operator', 'x-approval'];
   };
 
   // No `variables` here: they would reach every route Lambda. Each one lives on the providers of the handlers that

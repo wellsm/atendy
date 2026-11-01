@@ -114,7 +114,7 @@ export function Thread({ conversationId }: { conversationId: string }) {
 
   if (thread.isError) {
     return (
-      <p className="p-4 text-sm text-accent-fg">
+      <p className="p-4 text-sm text-danger-fg">
         {thread.error instanceof ApiError && thread.error.status === 404
           ? 'Conversa não encontrada.'
           : 'Não foi possível carregar a conversa.'}
@@ -321,7 +321,7 @@ export function Thread({ conversationId }: { conversationId: string }) {
               Ao responder, você assume a conversa e o bot para.
             </span>
           )}
-          {error && <span className="px-1.5 text-xs text-accent-fg md:px-0">{error}</span>}
+          {error && <span className="px-1.5 text-xs text-danger-fg md:px-0">{error}</span>}
           <div className="flex items-end gap-2 md:gap-2.5">
             <textarea
               value={text}

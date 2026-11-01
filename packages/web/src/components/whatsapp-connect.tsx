@@ -153,7 +153,7 @@ export function WhatsAppConnect({ hooks, copy = STORE_COPY }: { hooks: WhatsAppH
 
   if (!state) {
     return (
-      <div className="rounded-xl border border-line bg-surface p-5 text-sm text-accent-fg">
+      <div className="rounded-xl border border-line bg-surface p-5 text-sm text-danger-fg">
         Não foi possível ver o status do WhatsApp.
       </div>
     );
@@ -201,21 +201,21 @@ export function WhatsAppConnect({ hooks, copy = STORE_COPY }: { hooks: WhatsAppH
       </div>
 
       {confirmDisconnect && (
-        <div className="mx-5 mb-5 flex flex-col gap-3 rounded-lg border border-accent-line bg-accent-soft p-3 text-sm text-accent-fg sm:mx-6 sm:mb-6 sm:flex-row sm:items-center sm:px-4">
+        <div className="mx-5 mb-5 flex flex-col gap-3 rounded-lg border border-danger-line bg-danger-soft p-3 text-sm text-danger-fg sm:mx-6 sm:mb-6 sm:flex-row sm:items-center sm:px-4">
           <p className="flex-1">{copy.confirmDisconnect}</p>
           <div className="flex gap-2">
             <button
               type="button"
               disabled={disconnect.isPending}
               onClick={() => disconnect.mutate(undefined, { onSettled: () => setConfirmDisconnect(false) })}
-              className="h-11 flex-1 rounded-lg bg-accent px-3.5 font-medium text-white disabled:opacity-50 sm:h-9 sm:flex-none"
+              className="h-11 flex-1 rounded-lg bg-danger px-3.5 font-medium text-white disabled:opacity-50 sm:h-9 sm:flex-none"
             >
               Desconectar
             </button>
             <button
               type="button"
               onClick={() => setConfirmDisconnect(false)}
-              className="h-11 flex-1 rounded-lg border border-accent-line bg-surface px-3 sm:h-9 sm:flex-none sm:border-0 sm:bg-transparent"
+              className="h-11 flex-1 rounded-lg border border-danger-line bg-surface px-3 sm:h-9 sm:flex-none sm:border-0 sm:bg-transparent"
             >
               Voltar
             </button>
@@ -224,7 +224,7 @@ export function WhatsAppConnect({ hooks, copy = STORE_COPY }: { hooks: WhatsAppH
       )}
 
       {disconnect.isError && (
-        <p className="mx-5 mb-5 text-sm text-accent-fg sm:mx-6">Não foi possível desconectar. Tente novamente.</p>
+        <p className="mx-5 mb-5 text-sm text-danger-fg sm:mx-6">Não foi possível desconectar. Tente novamente.</p>
       )}
 
       {connected && !confirmDisconnect && (
@@ -246,7 +246,7 @@ export function WhatsAppConnect({ hooks, copy = STORE_COPY }: { hooks: WhatsAppH
             <Steps steps={QR_STEPS} className={pairingCode ? 'hidden sm:flex' : 'flex'} />
             {pairingCode && <Steps steps={PAIRING_STEPS} className="flex sm:hidden" />}
 
-            {connectError && <p className="text-sm text-accent-fg">{connectError}</p>}
+            {connectError && <p className="text-sm text-danger-fg">{connectError}</p>}
 
             <div className="flex items-center gap-2 text-sm sm:mt-1 sm:gap-4">
               <button

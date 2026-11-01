@@ -12,10 +12,18 @@
   --color-fg-2: #404040;
   --color-muted: #737373;
   --color-faint: #a3a3a3;
-  --color-accent: #dc2626;
-  --color-accent-fg: #b91c1c;
-  --color-accent-soft: #fef2f2;
-  --color-accent-line: #fecaca;
+  /* Brand orange, a shade darker than the logo's #e35205 so white button text passes AA. */
+  --color-accent: #c94804;
+  --color-accent-hover: #a93a03;
+  --color-accent-fg: #b83f03;
+  --color-accent-soft: #fff4ec;
+  --color-accent-line: #f7cbb4;
+  /* Errors, blocked states and destructive confirmations. */
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-fg: #b91c1c;
+  --color-danger-soft: #fef2f2;
+  --color-danger-line: #fecaca;
   --color-chat: #efeae2;
   --color-bubble-in: #ffffff;
   --color-bubble-out: #d9fdd3;
@@ -63,9 +71,12 @@
     --color-fg-2: #d4d4d4;
     --color-muted: #a3a3a3;
     --color-faint: #737373;
-    --color-accent-fg: #f87171;
-    --color-accent-soft: #2a1515;
-    --color-accent-line: #5c2323;
+    --color-accent-fg: #fb8a4a;
+    --color-accent-soft: #2b1a0e;
+    --color-accent-line: #5c3214;
+    --color-danger-fg: #f87171;
+    --color-danger-soft: #2a1515;
+    --color-danger-line: #5c2323;
     --color-chat: #0b141a;
     --color-bubble-in: #202c33;
     --color-bubble-out: #005c4b;

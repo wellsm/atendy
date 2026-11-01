@@ -13,8 +13,10 @@ import { ApiError } from '../lib/api';
 import { centsToInput, formatMoney, formatWhen, handoffLabel, parseMoney } from '../lib/format';
 import {
   adminWhatsAppHooks,
+  useAdminStaff,
   useAdminStore,
   useChargeAdminBillingNow,
+  useResetAdminStaffPin,
   useRunAdminBilling,
   useSeedDemoMenu,
   useUpdateAdminStore
@@ -28,7 +30,7 @@ export const Route = createFileRoute('/admin/$storeId')({
   )
 });
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none';
+const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
 const ROUTER_LABEL: Record<RouterType, string> = {
   jev: 'Jev (decide rápido, LLM só quando precisa)',
@@ -104,6 +106,7 @@ function Sections({ storeId, detail }: { storeId: string; detail: AdminStoreDeta
       <MemoryCard storeId={storeId} hours={detail.order_memory_hours} />
       <PriceCard storeId={storeId} detail={detail} />
       <OrderCodeCard storeId={storeId} detail={detail} />
+      <StaffPinCard storeId={storeId} />
       {detail.billing && <PaymentCard storeId={storeId} billing={detail.billing} />}
       <MenuCard storeId={storeId} activeProducts={detail.health.active_products} />
       <div>
@@ -202,7 +205,7 @@ function BotCard({ storeId, detail }: { storeId: string; detail: AdminStoreDetai
           <button
             type="submit"
             disabled={update.isPending}
-            className="rounded-md bg-red-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-accent px-4 py-2 font-medium text-white disabled:opacity-50"
           >
             {update.isPending ? 'Salvando…' : 'Salvar'}
           </button>
@@ -242,7 +245,7 @@ function MemoryCard({ storeId, hours }: { storeId: string; hours: number | null 
         <button
           type="submit"
           disabled={update.isPending || parsed === undefined}
-          className="rounded-md bg-red-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+          className="rounded-md bg-accent px-4 py-2 font-medium text-white disabled:opacity-50"
         >
           Salvar
         </button>
@@ -299,7 +302,7 @@ function PriceCard({ storeId, detail }: { storeId: string; detail: AdminStoreDet
         <button
           type="submit"
           disabled={update.isPending || !valid}
-          className="rounded-md bg-red-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+          className="rounded-md bg-accent px-4 py-2 font-medium text-white disabled:opacity-50"
         >
           Salvar
         </button>
@@ -507,6 +510,73 @@ function OrderCodeCard({ storeId, detail }: { storeId: string; detail: AdminStor
       <p className="mt-2 text-xs text-neutral-500">
         Vale para os próximos pedidos. O sequencial começa em 1 e, se voltar depois, continua de onde parou.
       </p>
+    </Card>
+  );
+}
+
+/**
+ * Fallback for a store locked out by a forgotten PIN: the admin sets a new one for a PIN employee.
+ */
+function StaffPinCard({ storeId }: { storeId: string }) {
+  const staff = useAdminStaff(storeId);
+  const reset = useResetAdminStaffPin(storeId);
+  const [staffId, setStaffId] = useState('');
+  const [pin, setPin] = useState('');
+  const people = staff.data?.staff.filter(({ role }) => role !== 'courier') ?? [];
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (staffId && /^\d{4}$/.test(pin)) {
+      reset.mutate({ staff_id: staffId, pin }, { onSuccess: () => setPin('') });
+    }
+  };
+
+  return (
+    <Card title="Redefinir PIN">
+      {people.length === 0 ? (
+        <p className="text-sm text-neutral-500">Nenhum funcionário com PIN.</p>
+      ) : (
+        <form onSubmit={submit} className="flex flex-wrap items-center gap-3">
+          <select
+            value={staffId}
+            onChange={(event) => {
+              setStaffId(event.target.value);
+              reset.reset();
+            }}
+            className={INPUT}
+          >
+            <option value="">Escolha quem</option>
+            {people.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name} ({person.role}
+                {person.active ? '' : ', inativo'})
+              </option>
+            ))}
+          </select>
+          <input
+            value={pin}
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="Novo PIN"
+            autoComplete="off"
+            onChange={(event) => {
+              setPin(event.target.value.replace(/\D/g, ''));
+              reset.reset();
+            }}
+            className={`w-28 ${INPUT}`}
+          />
+          <button
+            type="submit"
+            disabled={reset.isPending || !staffId || pin.length !== 4}
+            className="rounded-md bg-accent px-4 py-2 font-medium text-white disabled:opacity-50"
+          >
+            Redefinir
+          </button>
+          {reset.isSuccess && <span className="text-green-700">PIN trocado</span>}
+          {reset.isError && <span className="text-red-700">Não foi possível trocar.</span>}
+        </form>
+      )}
     </Card>
   );
 }

@@ -27,7 +27,8 @@ export { OrderError, OrderErrorCode } from './errors';
 
 export const enum OrderStatusErrorCode {
   NotFound = 'not_found',
-  InvalidTransition = 'invalid_transition'
+  InvalidTransition = 'invalid_transition',
+  NotDelivery = 'not_delivery'
 }
 
 /**
@@ -142,7 +143,10 @@ const PANEL_ORDER_FIELDS = {
   abandoned_at: true,
   amended_at: true,
   source: true,
-  customer_name: true
+  customer_name: true,
+  created_by: true,
+  canceled_by: true,
+  courier_id: true
 } as const;
 
 const OPEN_ORDER_STATUSES = [OrderStatus.Placed, OrderStatus.Accepted, OrderStatus.Out, OrderStatus.Done];
@@ -1035,7 +1039,27 @@ export namespace OrderRepository {
    * Store move from the panel. Locks the order like `editPlacedOrder`, so an agent edit and an accept never
    * interleave. Returns what the customer notification needs.
    */
-  export const setStatus = async (db: DbClient, input: { storeId: string; orderId: string; status: OrderStatus }) => {
+  export const setStatus = async (
+    db: DbClient,
+    input: {
+      storeId: string;
+      orderId: string;
+      status: OrderStatus;
+      author?: string;
+      /**
+       * Applied on `out` of a delivery order: the courier and the fee frozen now (`null` id = no courier).
+       */
+      courier?: { id: string | null; feeCents: number | null };
+      /**
+       * Applied on `done`: when and where the courier handed it over (`null` = no position).
+       */
+      delivered?: { lat: number; lng: number } | null;
+      /**
+       * Checked under the lock: the order must still be this courier's (a reassigned order is not found).
+       */
+      expectedCourierId?: string;
+    }
+  ) => {
     return db.transaction(async (tx) => {
       const order = await tx.orders.findOne({
         select: {
@@ -1045,14 +1069,21 @@ export namespace OrderRepository {
           conversation_id: true,
           fulfillment: true,
           payment_method: true,
-          total_cents: true
+          total_cents: true,
+          courier_id: true,
+          delivered_at: true
         },
         where: { id: input.orderId },
         lock: true
       });
 
       // A draft is still the customer's cart: the panel never sees it.
-      if (!order || order.store_id !== input.storeId || order.status === OrderStatus.Draft) {
+      if (
+        !order ||
+        order.store_id !== input.storeId ||
+        order.status === OrderStatus.Draft ||
+        (input.expectedCourierId !== undefined && order.courier_id !== input.expectedCourierId)
+      ) {
         throw new OrderStatusError(OrderStatusErrorCode.NotFound, 'Order not found');
       }
 
@@ -1068,8 +1099,31 @@ export namespace OrderRepository {
         );
       }
 
+      const now = new Date().toISOString();
+
       await tx.orders.updateOne({
-        data: { status: input.status, updated_at: new Date().toISOString() },
+        data: {
+          status: input.status,
+          updated_at: now,
+          ...(input.status === OrderStatus.Out &&
+            order.fulfillment === Fulfillment.Delivery &&
+            input.courier?.id && {
+              courier_id: input.courier.id,
+              courier_fee_cents: input.courier.feeCents,
+              dispatched_at: now
+            }),
+          ...(input.status === OrderStatus.Done &&
+            input.delivered !== undefined && {
+              delivered_at: now,
+              delivered_lat: input.delivered?.lat ?? null,
+              delivered_lng: input.delivered?.lng ?? null
+            }),
+          // Done from the board still counts for the courier's settlement period.
+          ...(input.status === OrderStatus.Done &&
+            input.delivered === undefined &&
+            order.courier_id &&
+            !order.delivered_at && { delivered_at: now })
+        },
         where: { id: input.orderId }
       });
 
@@ -1087,11 +1141,46 @@ export namespace OrderRepository {
         await CashRepository.recordOrderCash(tx, input.storeId, {
           orderId: input.orderId,
           amountCents: order.total_cents,
-          author: 'system'
+          author: input.author ?? 'system'
         });
       }
 
       return { conversationId: order.conversation_id ?? null, fulfillment: order.fulfillment ?? null };
+    });
+  };
+
+  /**
+   * Changes the courier of an order that is out for delivery and freezes the new fee. The orders board and the
+   * courier pages see it at once; the old courier's link stops listing it.
+   */
+  export const assignCourier = async (
+    db: DbClient,
+    input: { storeId: string; orderId: string; courierId: string; feeCents: number }
+  ) => {
+    await db.transaction(async (tx) => {
+      const order = await tx.orders.findOne({
+        select: { store_id: true, status: true, fulfillment: true },
+        where: { id: input.orderId },
+        lock: true
+      });
+
+      if (!order || order.store_id !== input.storeId) {
+        throw new OrderStatusError(OrderStatusErrorCode.NotFound, 'Order not found');
+      }
+
+      if (order.status !== OrderStatus.Out || order.fulfillment !== Fulfillment.Delivery) {
+        throw new OrderStatusError(OrderStatusErrorCode.InvalidTransition, 'The order is not out for delivery');
+      }
+
+      await tx.orders.updateOne({
+        data: {
+          courier_id: input.courierId,
+          courier_fee_cents: input.feeCents,
+          dispatched_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        where: { id: input.orderId }
+      });
     });
   };
 
@@ -1118,7 +1207,9 @@ export namespace OrderRepository {
       return [];
     }
 
-    const [{ records: items }, { records: customers }] = await Promise.all([
+    const courierIds = [...new Set(orders.flatMap(({ courier_id }) => (courier_id ? [courier_id] : [])))];
+
+    const [{ records: items }, { records: customers }, { records: couriers }] = await Promise.all([
       db.order_items.findMany({
         select: {
           id: true,
@@ -1135,7 +1226,10 @@ export namespace OrderRepository {
       db.customers.findMany({
         select: { id: true, name: true, phone: true },
         where: { id: { isIn: [...new Set(orders.flatMap(({ customer_id }) => (customer_id ? [customer_id] : [])))] } }
-      })
+      }),
+      courierIds.length
+        ? db.staff.findMany({ select: { id: true, name: true }, where: { id: { isIn: courierIds } } })
+        : { records: [] }
     ]);
 
     return orders.map((order) => {
@@ -1143,6 +1237,7 @@ export namespace OrderRepository {
 
       return {
         ...order,
+        courier: couriers.find(({ id }) => id === order.courier_id) ?? null,
         // POS sales may have no customer row, only a typed name.
         customer: { name: customer?.name ?? order.customer_name ?? null, phone: customer?.phone ?? null },
         items: items

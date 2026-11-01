@@ -21,6 +21,9 @@ import type { ProspectLeadSchema } from './prospecting/schemas/lead';
 import type { ProspectingSenderSchema } from './prospecting/schemas/sender';
 import type { SimulationSchema } from './simulations/schemas/simulation';
 import type { SimulationRunSchema } from './simulations/schemas/simulation-run';
+import type { CourierMessageSchema } from './staff/schemas/courier-message';
+import type { CourierSettlementSchema } from './staff/schemas/courier-settlement';
+import type { StaffSchema } from './staff/schemas/staff';
 import type { StockItemSchema } from './stock/schemas/stock-item';
 import type { StockLinkSchema } from './stock/schemas/stock-link';
 import type { StockMovementSchema } from './stock/schemas/stock-movement';
@@ -143,6 +146,32 @@ export declare class Db extends Database.Service<PostgresEngine> {
       };
     },
     {
+      name: 'staff';
+      schema: StaffSchema;
+      indexes: {
+        id: Index.Primary;
+        store_id: Index.Secondary;
+        courier_token: Index.Unique;
+      };
+    },
+    {
+      name: 'courier_settlements';
+      schema: CourierSettlementSchema;
+      indexes: {
+        id: Index.Primary;
+        store_id: Index.Secondary;
+        courier_id: Index.Secondary;
+      };
+    },
+    {
+      name: 'courier_messages';
+      schema: CourierMessageSchema;
+      indexes: {
+        id: Index.Primary;
+        store_id: Index.Secondary;
+      };
+    },
+    {
       name: 'cash_sessions';
       schema: CashSessionSchema;
       indexes: {
@@ -203,6 +232,7 @@ export declare class Db extends Database.Service<PostgresEngine> {
         'store_id:status': Index.Secondary;
         'store_id:code': Index.Secondary;
         conversation_id: Index.Secondary;
+        courier_id: Index.Secondary;
       };
     },
     {

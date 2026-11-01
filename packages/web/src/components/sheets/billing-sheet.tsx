@@ -15,7 +15,7 @@ const INPUT =
 const STATUS: Record<InvoiceStatus, { label: string; className: string }> = {
   pending: { label: 'Agendada', className: 'bg-surface-2 text-fg-2' },
   paid: { label: 'Paga', className: 'bg-ok-bg text-ok-fg' },
-  overdue: { label: 'Em aberto', className: 'bg-placed-bg text-accent-fg' },
+  overdue: { label: 'Em aberto', className: 'bg-placed-bg text-danger-fg' },
   in_review: { label: 'Em análise', className: 'bg-accepted-bg text-warn-fg' }
 };
 
@@ -66,7 +66,7 @@ export function BillingSheet({ onClose }: { onClose: () => void }) {
       />
       <div className="flex-1 space-y-5 overflow-y-auto p-4 md:p-6">
         {billing.isPending && <Loading />}
-        {billing.isError && <p className="text-sm text-accent-fg">Não foi possível carregar o pagamento.</p>}
+        {billing.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o pagamento.</p>}
         {billing.data && <BillingSections summary={billing.data} />}
       </div>
     </Sheet>
@@ -79,7 +79,7 @@ function BillingSections({ summary }: { summary: BillingSummary }) {
   return (
     <>
       {summary.blocked && (
-        <p className="rounded-xl border border-accent-line bg-accent-soft p-4 text-sm text-accent-fg">
+        <p className="rounded-xl border border-danger-line bg-danger-soft p-4 text-sm text-danger-fg">
           O bot está pausado por uma fatura em aberto. Atualize o cartão ou pague pelo link da fatura para voltar a
           atender.
         </p>
@@ -302,7 +302,7 @@ function CardForm({ summary }: { summary: BillingSummary }) {
             Cancelar
           </button>
         )}
-        {update.isError && <span className="text-sm text-accent-fg">{errorText(update.error)}</span>}
+        {update.isError && <span className="text-sm text-danger-fg">{errorText(update.error)}</span>}
       </div>
     </form>
   );

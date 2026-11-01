@@ -1,7 +1,7 @@
 import type { MenuImport } from '../repository';
 
 import { PriceMode } from '../types';
-import { DRINKS } from './drinks';
+import { DRINKS, DRINKS_STOCK } from './drinks';
 
 const pastaTypes = {
   name: 'Massa',
@@ -50,6 +50,7 @@ const size = {
 };
 
 export const PASTA_MENU: MenuImport = {
+  stock: DRINKS_STOCK,
   categories: [
     {
       name: 'Monte sua Massa',

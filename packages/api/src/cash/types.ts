@@ -14,5 +14,9 @@ export const enum CashMovementKind {
   /**
    * Cash put into the drawer.
    */
-  Suprimento = 'suprimento'
+  Suprimento = 'suprimento',
+  /**
+   * Fees paid in cash to a courier at settlement (money out).
+   */
+  CourierPayout = 'courier_payout'
 }

@@ -175,7 +175,7 @@ export function PaymentStep({
               </p>
 
               {total > 0 && !methods.length && (
-                <p className="text-sm text-accent-fg">Nenhuma forma de pagamento ativa (Configurações › Pagamento).</p>
+                <p className="text-sm text-danger-fg">Nenhuma forma de pagamento ativa (Configurações › Pagamento).</p>
               )}
 
               {rows.map((row, index) => {
@@ -254,7 +254,7 @@ export function PaymentStep({
                           (received >= amount ? (
                             <p className="text-lg font-bold tabular-nums">Troco: {formatMoney(received - amount)}</p>
                           ) : (
-                            <p className="text-sm text-accent-fg">O valor recebido não cobre o pagamento.</p>
+                            <p className="text-sm text-danger-fg">O valor recebido não cobre o pagamento.</p>
                           ))}
                       </>
                     )}
@@ -270,12 +270,12 @@ export function PaymentStep({
             </div>
 
             <div className="flex shrink-0 flex-col gap-2 border-t border-line px-4 py-3">
-              {error && <p className="text-sm text-accent-fg">{error}</p>}
+              {error && <p className="text-sm text-danger-fg">{error}</p>}
               <button
                 type="submit"
                 autoFocus
                 disabled={!ready || finalize.isPending}
-                className="h-14 rounded-xl bg-accent text-lg font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                className="h-14 rounded-xl bg-accent text-lg font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
               >
                 {finalize.isPending ? 'Finalizando…' : 'Finalizar'}
               </button>
@@ -298,7 +298,7 @@ export function PaymentStep({
                 <p className="text-xl font-semibold tabular-nums">Troco: {formatMoney(change)}</p>
               )}
               {sendReceipt.isSuccess && <p className="text-sm text-ok-fg">Comprovante enviado no WhatsApp.</p>}
-              {sendReceipt.isError && <p className="text-sm text-accent-fg">Não foi possível enviar no WhatsApp.</p>}
+              {sendReceipt.isError && <p className="text-sm text-danger-fg">Não foi possível enviar no WhatsApp.</p>}
             </div>
 
             <div className="flex shrink-0 flex-col gap-2 border-t border-line px-4 py-3">
@@ -327,7 +327,7 @@ export function PaymentStep({
                 type="button"
                 autoFocus
                 onClick={onNew}
-                className="h-14 rounded-xl bg-accent text-lg font-semibold text-white hover:bg-red-700"
+                className="h-14 rounded-xl bg-accent text-lg font-semibold text-white hover:bg-accent-hover"
               >
                 Nova venda
               </button>

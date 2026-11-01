@@ -17,6 +17,7 @@ import { Route as AdminStoreIdRouteImport } from './routes/admin.$storeId'
 import { Route as AdminCostsRouteImport } from './routes/admin.costs'
 import { Route as AdminPromptRouteImport } from './routes/admin.prompt'
 import { Route as AdminProspectingRouteImport } from './routes/admin.prospecting'
+import { Route as CourierTokenRouteImport } from './routes/courier.$token'
 import { Route as PanelIndexRouteImport } from './routes/panel.index'
 import { Route as PanelSlugRouteImport } from './routes/panel.$slug'
 import { Route as SignInIndexRouteImport } from './routes/sign-in.index'
@@ -72,6 +73,11 @@ const AdminPromptRoute = AdminPromptRouteImport.update({
 const AdminProspectingRoute = AdminProspectingRouteImport.update({
   id: '/admin/prospecting',
   path: '/admin/prospecting',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CourierTokenRoute = CourierTokenRouteImport.update({
+  id: '/courier/$token',
+  path: '/courier/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PanelIndexRoute = PanelIndexRouteImport.update({
@@ -164,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/admin/costs': typeof AdminCostsRoute
   '/admin/prompt': typeof AdminPromptRoute
   '/admin/prospecting': typeof AdminProspectingRoute
+  '/courier/$token': typeof CourierTokenRoute
   '/panel/$slug': typeof PanelSlugRouteWithChildren
   '/sign-in/sso-callback': typeof SignInSsoCallbackRoute
   '/admin/': typeof AdminIndexRoute
@@ -190,6 +197,7 @@ export interface FileRoutesByTo {
   '/admin/costs': typeof AdminCostsRoute
   '/admin/prompt': typeof AdminPromptRoute
   '/admin/prospecting': typeof AdminProspectingRoute
+  '/courier/$token': typeof CourierTokenRoute
   '/sign-in/sso-callback': typeof SignInSsoCallbackRoute
   '/admin': typeof AdminIndexRoute
   '/panel': typeof PanelIndexRoute
@@ -216,6 +224,7 @@ export interface FileRoutesById {
   '/admin/costs': typeof AdminCostsRoute
   '/admin/prompt': typeof AdminPromptRoute
   '/admin/prospecting': typeof AdminProspectingRoute
+  '/courier/$token': typeof CourierTokenRoute
   '/panel/$slug': typeof PanelSlugRouteWithChildren
   '/sign-in/sso-callback': typeof SignInSsoCallbackRoute
   '/admin/': typeof AdminIndexRoute
@@ -244,6 +253,7 @@ export interface FileRouteTypes {
     | '/admin/costs'
     | '/admin/prompt'
     | '/admin/prospecting'
+    | '/courier/$token'
     | '/panel/$slug'
     | '/sign-in/sso-callback'
     | '/admin/'
@@ -270,6 +280,7 @@ export interface FileRouteTypes {
     | '/admin/costs'
     | '/admin/prompt'
     | '/admin/prospecting'
+    | '/courier/$token'
     | '/sign-in/sso-callback'
     | '/admin'
     | '/panel'
@@ -295,6 +306,7 @@ export interface FileRouteTypes {
     | '/admin/costs'
     | '/admin/prompt'
     | '/admin/prospecting'
+    | '/courier/$token'
     | '/panel/$slug'
     | '/sign-in/sso-callback'
     | '/admin/'
@@ -322,6 +334,7 @@ export interface RootRouteChildren {
   AdminCostsRoute: typeof AdminCostsRoute
   AdminPromptRoute: typeof AdminPromptRoute
   AdminProspectingRoute: typeof AdminProspectingRoute
+  CourierTokenRoute: typeof CourierTokenRoute
   PanelSlugRoute: typeof PanelSlugRouteWithChildren
   SignInSsoCallbackRoute: typeof SignInSsoCallbackRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -389,6 +402,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/prospecting'
       fullPath: '/admin/prospecting'
       preLoaderRoute: typeof AdminProspectingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/courier/$token': {
+      id: '/courier/$token'
+      path: '/courier/$token'
+      fullPath: '/courier/$token'
+      preLoaderRoute: typeof CourierTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/panel/': {
@@ -540,6 +560,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCostsRoute: AdminCostsRoute,
   AdminPromptRoute: AdminPromptRoute,
   AdminProspectingRoute: AdminProspectingRoute,
+  CourierTokenRoute: CourierTokenRoute,
   PanelSlugRoute: PanelSlugRouteWithChildren,
   SignInSsoCallbackRoute: SignInSsoCallbackRoute,
   AdminIndexRoute: AdminIndexRoute,

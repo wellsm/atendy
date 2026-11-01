@@ -16,6 +16,7 @@ import { updateHoursHandler } from '../../src/panel/endpoints/update-hours';
 import { updatePaymentHandler } from '../../src/panel/endpoints/update-payment';
 import { updatePolicyHandler } from '../../src/panel/endpoints/update-policy';
 import { updatePosSettingsHandler } from '../../src/panel/endpoints/update-pos-settings';
+import { updateStaffSettingsHandler } from '../../src/panel/endpoints/update-staff-settings';
 import { updateStockAlertHandler } from '../../src/panel/endpoints/update-stock-alert';
 import { updateStoreHandler } from '../../src/panel/endpoints/update-store';
 import { resolveDeliveryFee } from '../../src/stores/delivery';
@@ -128,6 +129,50 @@ describe('panel settings endpoints', () => {
     equal((await save(false)).body.cashControl, false);
   });
 
+  it('saves staff settings with defaults and refuses out-of-range values', async () => {
+    const { identity } = await setup();
+    const save = (body: object) =>
+      updateStaffSettingsHandler(
+        {
+          identity,
+          body: { idleMinutes: 30, discountLimitPercent: 0, courierFeeMode: 'order_fee', courierFeeCents: 0, ...body }
+        } as never,
+        { db }
+      );
+    const read = async () => (await getSettingsHandler({ identity } as never, { db })).body.staff;
+
+    deepEqual(await read(), {
+      idleMinutes: 15,
+      discountLimitPercent: 10,
+      courierFeeMode: 'order_fee',
+      courierFeeCents: 0
+    });
+
+    await save({ idleMinutes: 30, discountLimitPercent: 0 });
+    deepEqual(await read(), {
+      idleMinutes: 30,
+      discountLimitPercent: 0,
+      courierFeeMode: 'order_fee',
+      courierFeeCents: 0
+    });
+
+    await save({ courierFeeMode: 'fixed', courierFeeCents: 500 });
+    deepEqual(await read(), {
+      idleMinutes: 30,
+      discountLimitPercent: 0,
+      courierFeeMode: 'fixed',
+      courierFeeCents: 500
+    });
+
+    await rejects(save({ courierFeeMode: 'other' }), badField('courier_fee_mode'));
+    await rejects(save({ courierFeeCents: -1 }), badField('courier_fee_cents'));
+
+    await rejects(save({ idleMinutes: 0, discountLimitPercent: 10 }), badField('idle_minutes'));
+    await rejects(save({ idleMinutes: 241, discountLimitPercent: 10 }), badField('idle_minutes'));
+    await rejects(save({ idleMinutes: 15, discountLimitPercent: 101 }), badField('discount_limit_percent'));
+    await rejects(save({ idleMinutes: 15, discountLimitPercent: -1 }), badField('discount_limit_percent'));
+  });
+
   it('refuses a stock alert hour outside 0-23 or a phone that is not Brazilian', async () => {
     const { identity } = await setup();
     const save = (body: object) => updateStockAlertHandler({ identity, body } as never, { db });
@@ -184,7 +229,8 @@ describe('panel settings endpoints', () => {
       storeLocation: null,
       stockAlertPhone: null,
       stockAlertHour: null,
-      pos: { layout: 'grid', cashControl: true, blindClose: false, receiptWidth: 80 }
+      pos: { layout: 'grid', cashControl: true, blindClose: false, receiptWidth: 80 },
+      staff: { idleMinutes: 15, discountLimitPercent: 10, courierFeeMode: 'order_fee', courierFeeCents: 0 }
     });
   });
 

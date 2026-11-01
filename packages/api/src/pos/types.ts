@@ -53,6 +53,11 @@ export type PosSale = {
   needsPreparation: boolean;
   createdAt: string;
   placedAt: string | null;
+  /**
+   * Employee id or Clerk user id (the owner); the web resolves the name.
+   */
+  createdBy: string | null;
+  canceledBy: string | null;
 };
 
 /**
@@ -68,6 +73,8 @@ export type PosHeldSale = {
   createdAt: string;
   placedAt: string | null;
   canceledAt: string | null;
+  createdBy: string | null;
+  canceledBy: string | null;
 };
 
 export const enum PosSaleList {

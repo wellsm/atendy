@@ -128,7 +128,7 @@ function RunPage() {
                 <Link
                   to="/admin/conversations/$conversationId"
                   params={{ conversationId: simulation.conversation_id }}
-                  className="font-medium text-red-700 hover:text-red-800"
+                  className="font-medium text-accent-fg hover:text-accent-hover"
                 >
                   Ver conversa →
                 </Link>

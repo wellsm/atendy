@@ -26,6 +26,21 @@ const MAX_CANCEL_REASON = 200;
 
 const PAID_STATUSES = [OrderStatus.Accepted, OrderStatus.Out, OrderStatus.Done];
 
+/**
+ * Called inside the write transaction with the sale's total discount (line + sale) and its subtotal before discounts.
+ */
+export type DiscountGuard = (discountCents: number, subtotalCents: number) => Promise<void>;
+
+const guarded = async (sale: PosSale, guard: DiscountGuard | undefined) => {
+  if (guard) {
+    const gross = sale.items.reduce((total, item) => total + item.qty * item.unitPriceCents, 0);
+
+    await guard(gross - sale.subtotalCents + sale.discountCents, gross);
+  }
+
+  return sale;
+};
+
 const notFound = () => new PosError(PosErrorCode.NotFound, 'Sale not found');
 
 const cleanLabel = (label: string | null | undefined) => {
@@ -196,7 +211,9 @@ export namespace PosRepository {
         customer_name: true,
         discount: true,
         created_at: true,
-        placed_at: true
+        placed_at: true,
+        created_by: true,
+        canceled_by: true
       },
       where: { id: saleId }
     });
@@ -277,7 +294,9 @@ export namespace PosRepository {
       })),
       needsPreparation: needsPreparation(preparation),
       createdAt: order.created_at,
-      placedAt: order.placed_at ?? null
+      placedAt: order.placed_at ?? null,
+      createdBy: order.created_by ?? null,
+      canceledBy: order.canceled_by ?? null
     };
   };
 
@@ -305,7 +324,9 @@ export namespace PosRepository {
         total_cents: true,
         created_at: true,
         placed_at: true,
-        canceled_at: true
+        canceled_at: true,
+        created_by: true,
+        canceled_by: true
       },
       where,
       order: list === PosSaleList.Held ? { created_at: Order.Desc } : { placed_at: Order.Desc }
@@ -333,11 +354,19 @@ export namespace PosRepository {
       itemsCount: lines.filter(({ order_id }) => order_id === sale.id).reduce((total, { qty }) => total + qty, 0),
       createdAt: sale.created_at,
       placedAt: sale.placed_at ?? null,
-      canceledAt: sale.canceled_at ?? null
+      canceledAt: sale.canceled_at ?? null,
+      createdBy: sale.created_by ?? null,
+      canceledBy: sale.canceled_by ?? null
     }));
   };
 
-  export const updateSale = async (db: DbClient, storeId: string, saleId: string, patch: PosSalePatch) => {
+  export const updateSale = async (
+    db: DbClient,
+    storeId: string,
+    saleId: string,
+    patch: PosSalePatch,
+    discountGuard?: DiscountGuard
+  ) => {
     const data: {
       pos_label?: string | null;
       notes?: string | null;
@@ -388,14 +417,20 @@ export namespace PosRepository {
 
       await tx.orders.updateOne({ data: { ...data, updated_at: new Date().toISOString() }, where: { id: saleId } });
 
-      return getSale(tx, storeId, saleId);
+      return guarded(await getSale(tx, storeId, saleId), discountGuard);
     });
   };
 
   /**
    * Adds a staff line: no store limits, sold-out items allowed (stock moves only when the sale is paid).
    */
-  export const addLine = async (db: DbClient, storeId: string, saleId: string, input: NewLine) => {
+  export const addLine = async (
+    db: DbClient,
+    storeId: string,
+    saleId: string,
+    input: NewLine,
+    discountGuard?: DiscountGuard
+  ) => {
     const writeLine = await prepareLine(db, storeId, {
       ...input,
       discount: checkDiscount(input.discount),
@@ -407,7 +442,7 @@ export namespace PosRepository {
       await lockDraft(tx, storeId, saleId);
       await writeLine(tx, saleId);
 
-      return getSale(tx, storeId, saleId);
+      return guarded(await getSale(tx, storeId, saleId), discountGuard);
     });
   };
 
@@ -416,7 +451,8 @@ export namespace PosRepository {
     storeId: string,
     saleId: string,
     itemId: string,
-    patch: PosLinePatch
+    patch: PosLinePatch,
+    discountGuard?: DiscountGuard
   ) => {
     const data: { qty?: number; notes?: string | null; discount?: Discount | null } = {};
 
@@ -440,17 +476,23 @@ export namespace PosRepository {
         await tx.order_items.updateOne({ data, where: { id: itemId } });
       }
 
-      return getSale(tx, storeId, saleId);
+      return guarded(await getSale(tx, storeId, saleId), discountGuard);
     });
   };
 
-  export const removeLine = async (db: DbClient, storeId: string, saleId: string, itemId: string) => {
+  export const removeLine = async (
+    db: DbClient,
+    storeId: string,
+    saleId: string,
+    itemId: string,
+    discountGuard?: DiscountGuard
+  ) => {
     return db.transaction(async (tx) => {
       await lockDraft(tx, storeId, saleId);
       await findLine(tx, saleId, itemId);
       await tx.order_items.deleteMany({ where: { id: itemId } });
 
-      return getSale(tx, storeId, saleId);
+      return guarded(await getSale(tx, storeId, saleId), discountGuard);
     });
   };
 

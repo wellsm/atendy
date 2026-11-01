@@ -161,7 +161,8 @@ describe('StoreRepository', () => {
       policy: { min_order_cents: 3000 },
       stockAlertPhone: null,
       stockAlertHour: null,
-      pos: { layout: 'grid', cashControl: true, blindClose: false, receiptWidth: 80 }
+      pos: { layout: 'grid', cashControl: true, blindClose: false, receiptWidth: 80 },
+      staff: { idleMinutes: 15, discountLimitPercent: 10, courierFeeMode: 'order_fee', courierFeeCents: 0 }
     });
   });
 

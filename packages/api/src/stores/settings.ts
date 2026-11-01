@@ -1,6 +1,6 @@
 import type { DeliveryBand } from './geo';
 import type { HourRange } from './hours';
-import type { PaymentMethod, PosSettings, StorePolicy } from './types';
+import type { PaymentMethod, PosSettings, StaffSettings, StorePolicy } from './types';
 
 import { normalizeNeighborhood } from './delivery';
 import { parsePolicyPatch, PolicyError } from './policy';
@@ -239,6 +239,35 @@ export const validatePosSettings = (input: {
     cashControl: input.cashControl,
     blindClose: input.blindClose,
     receiptWidth: input.receiptWidth
+  };
+};
+
+export const validateStaffSettings = (input: StaffSettings): StaffSettings => {
+  if (!Number.isInteger(input.idleMinutes) || input.idleMinutes < 1 || input.idleMinutes > 240) {
+    throw new SettingsError('idle_minutes', 'The idle time must be an integer from 1 to 240 minutes.');
+  }
+
+  if (
+    !Number.isInteger(input.discountLimitPercent) ||
+    input.discountLimitPercent < 0 ||
+    input.discountLimitPercent > 100
+  ) {
+    throw new SettingsError('discount_limit_percent', 'The discount limit must be an integer from 0 to 100.');
+  }
+
+  if (input.courierFeeMode !== 'order_fee' && input.courierFeeMode !== 'fixed') {
+    throw new SettingsError('courier_fee_mode', 'Choose the order fee or a fixed amount.');
+  }
+
+  if (!Number.isInteger(input.courierFeeCents) || input.courierFeeCents < 0 || input.courierFeeCents > 100_000) {
+    throw new SettingsError('courier_fee_cents', 'The courier fee must be a non-negative integer in cents.');
+  }
+
+  return {
+    idleMinutes: input.idleMinutes,
+    discountLimitPercent: input.discountLimitPercent,
+    courierFeeMode: input.courierFeeMode,
+    courierFeeCents: input.courierFeeCents
   };
 };
 

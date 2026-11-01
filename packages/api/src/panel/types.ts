@@ -14,6 +14,10 @@ export type PanelIdentity = {
    * Active Clerk Organization (one org = one store). Absent during onboarding.
    */
   orgId?: string;
+  /**
+   * Minutes since the first factor was last verified (Clerk `fva[0]`); absent when Clerk did not say.
+   */
+  factorAgeMinutes?: number;
 };
 
 export type PanelStore = {
@@ -176,6 +180,15 @@ export type PanelOrder = {
    * Null on POS sales.
    */
   conversationId: string | null;
+  /**
+   * Employee id or Clerk user id of who made / canceled it (counter sales and attendant orders); null otherwise.
+   */
+  createdBy: string | null;
+  canceledBy: string | null;
+  /**
+   * Delivery orders that left with a courier.
+   */
+  courier: { id: string; name: string } | null;
   customer: PanelCustomer;
   items: PanelOrderItem[];
 };
@@ -197,6 +210,9 @@ export const toPanelOrder = (order: OrderRepository.PanelOrder): PanelOrder => (
   source: order.source ?? null,
   amendedAt: order.amended_at ?? null,
   conversationId: order.conversation_id ?? null,
+  createdBy: order.created_by ?? null,
+  canceledBy: order.canceled_by ?? null,
+  courier: order.courier,
   customer: order.customer,
   items: order.items.map((item) => ({
     id: item.id,

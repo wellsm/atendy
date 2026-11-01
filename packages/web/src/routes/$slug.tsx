@@ -153,7 +153,7 @@ function StorefrontPage() {
           <button
             type="button"
             onClick={() => setCheckout(true)}
-            className="mx-auto flex h-12 w-full max-w-lg items-center justify-between rounded-lg bg-red-600 px-4 text-[15px] font-semibold text-white"
+            className="mx-auto flex h-12 w-full max-w-lg items-center justify-between rounded-lg bg-accent px-4 text-[15px] font-semibold text-white"
           >
             <span>
               Ver pedido · {cart.count} {cart.count === 1 ? 'item' : 'itens'}
@@ -187,7 +187,7 @@ function StorefrontPage() {
 function Avatar({ name, className }: { name: string; className: string }) {
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full bg-red-600 font-bold text-white ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-accent font-bold text-white ${className}`}
     >
       {initials(name)}
     </span>
@@ -322,14 +322,12 @@ function CategoryTab(props: { category: StorefrontCategory; active: boolean; onC
       aria-current={props.active ? 'true' : undefined}
       className={`relative shrink-0 rounded-full px-3.5 py-2 text-sm md:rounded-none md:px-0 md:py-4 md:text-[15px] ${
         props.active
-          ? 'bg-neutral-900 font-semibold text-white md:bg-transparent md:text-red-700'
+          ? 'bg-neutral-900 font-semibold text-white md:bg-transparent md:text-accent-fg'
           : 'bg-neutral-100 font-medium text-neutral-700 md:bg-transparent md:text-neutral-600'
       }`}
     >
       {props.category.name}
-      {props.active && (
-        <span className="absolute inset-x-0 -bottom-px hidden h-0.75 rounded-full bg-red-600 md:block" />
-      )}
+      {props.active && <span className="absolute inset-x-0 -bottom-px hidden h-0.75 rounded-full bg-accent md:block" />}
     </button>
   );
 }

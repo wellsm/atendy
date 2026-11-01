@@ -168,7 +168,7 @@ export function ProductDetails({
                       {!isAvailable(option) && <span className="text-xs text-neutral-500">Esgotado</span>}
                       {onAdd && choosable(option) && (
                         <span
-                          className={`flex size-5.5 shrink-0 items-center justify-center border-2 text-xs text-white ${group.max === 1 ? 'rounded-full' : 'rounded-md'} ${chosen[group.id]?.includes(option.id) ? 'border-red-600 bg-red-600' : 'border-neutral-300'}`}
+                          className={`flex size-5.5 shrink-0 items-center justify-center border-2 text-xs text-white ${group.max === 1 ? 'rounded-full' : 'rounded-md'} ${chosen[group.id]?.includes(option.id) ? 'border-accent bg-accent' : 'border-neutral-300'}`}
                         >
                           {chosen[group.id]?.includes(option.id) && '✓'}
                         </span>
@@ -188,7 +188,7 @@ export function ProductDetails({
                   rows={2}
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Ex.: sem cebola, bem passada"
-                  className="mt-1.5 block w-full resize-none rounded-lg border border-neutral-300 px-3 py-2 text-sm font-normal focus:border-red-600 focus:outline-none"
+                  className="mt-1.5 block w-full resize-none rounded-lg border border-neutral-300 px-3 py-2 text-sm font-normal focus:border-accent focus:outline-none"
                 />
               </label>
             )}
@@ -219,7 +219,7 @@ export function ProductDetails({
                 type="button"
                 disabled={!!short || soldOut}
                 onClick={add}
-                className="h-11 flex-1 rounded-lg bg-red-600 px-4 text-[15px] font-semibold text-white disabled:opacity-50"
+                className="h-11 flex-1 rounded-lg bg-accent px-4 text-[15px] font-semibold text-white disabled:opacity-50"
               >
                 {soldOut ? 'Esgotado' : short ? `Escolha: ${short.name}` : `Adicionar · ${formatMoney(unit * qty)}`}
               </button>

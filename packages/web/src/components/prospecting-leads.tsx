@@ -21,7 +21,7 @@ type Place = { city: string; zone: string; neighborhood: string };
 
 type Places = NonNullable<ReturnType<typeof useProspectsOverview>['data']>['places'];
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none';
+const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
 const HOME_CITY = 'São Paulo';
 
@@ -247,7 +247,7 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
               aria-pressed={situation === key}
               onClick={() => filter(setSituation)(situation === key ? '' : key)}
               className={`flex w-full flex-col items-start rounded-lg border px-3 py-2 text-left ${
-                situation === key ? 'border-red-500 bg-red-50' : 'border-neutral-200 hover:bg-neutral-50'
+                situation === key ? 'border-accent bg-accent-soft' : 'border-neutral-200 hover:bg-neutral-50'
               }`}
             >
               <span className="text-2xl font-semibold tabular-nums">{overview.data?.situations[key] ?? 0}</span>
@@ -374,7 +374,7 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
           type="button"
           disabled={queueBest.isPending}
           onClick={onQueueBest}
-          className="rounded-md bg-red-600 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+          className="rounded-md bg-accent px-3 py-1.5 font-medium text-white disabled:opacity-50"
         >
           Enviar para os 20 melhores
         </button>

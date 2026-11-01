@@ -127,6 +127,34 @@ describe('evolution webhook', () => {
     equal(await reactionOf('C1'), null);
   });
 
+  it('drops the echo of a courier dispatch message but not the courier writing back', async () => {
+    const { storeId, secret, instance } = await seedStore(db);
+    const phone = '5511977776666';
+    const body = '🛵 Nova entrega #K7Q2MX\n📍 Centro\n\nSuas entregas: http://web.test/courier/tok';
+
+    await db.courier_messages.insertOne({
+      data: { id: randomUUID(), store_id: storeId, phone, body, created_at: new Date().toISOString() }
+    });
+
+    // The courier's own message is a normal customer event (it also opens a conversation the echo could hit).
+    const reply = await call({
+      storeId,
+      secret,
+      body: evolutionTextEvent({ instance, id: 'CE2', remoteJid: `${phone}@s.whatsapp.net`, text: 'ok, saindo' })
+    });
+
+    equal(reply.inboundQueue.sendMessage.mock.callCount(), 1);
+
+    const echo = await call({
+      storeId,
+      secret,
+      body: evolutionTextEvent({ instance, id: 'CE1', remoteJid: `${phone}@s.whatsapp.net`, text: body, fromMe: true })
+    });
+
+    equal(echo.inboundQueue.sendMessage.mock.callCount(), 0);
+    equal(await db.messages.count({ where: { store_id: storeId, provider_message_id: 'CE1' } }), 0);
+  });
+
   it('stores a customer message, creates customer and conversation, and enqueues it', async () => {
     const { storeId, secret, instance } = await seedStore(db);
 

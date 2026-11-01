@@ -118,7 +118,7 @@ export function MyOrders(props: {
                     type="button"
                     disabled={!available}
                     onClick={() => repeat(order)}
-                    className="h-9 rounded-lg border border-red-600 px-3 text-sm font-semibold text-red-700 disabled:border-neutral-300 disabled:text-neutral-400"
+                    className="h-9 rounded-lg border border-accent px-3 text-sm font-semibold text-accent-fg disabled:border-neutral-300 disabled:text-neutral-400"
                   >
                     {available ? 'Pedir de novo' : 'Itens indisponíveis'}
                   </button>

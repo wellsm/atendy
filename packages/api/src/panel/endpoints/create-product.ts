@@ -1,15 +1,19 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
+import type { OperatorHeaders } from '../../staff/authorize';
 import type { PanelMenuProvider } from '../provider';
 import type { PanelIdentity, PanelProduct, PanelProductInput } from '../types';
 
 import { withImageUrl } from '../../menu/images';
 import { MenuRepository } from '../../menu/repository';
 import { validateProduct } from '../../menu/validation';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { requireStore, withMenuErrors } from '../store';
 
 export declare class CreateProductRequest implements Http.Request {
   identity: PanelIdentity;
+  headers: OperatorHeaders;
   body: PanelProductInput;
 }
 
@@ -28,6 +32,7 @@ export async function createProductHandler(
   { db, productImages }: Service.Context<PanelMenuProvider>
 ): Promise<CreateProductResponse> {
   const store = await requireStore(db, request.identity);
+  await authorize(db, store, request.identity, request.headers, Permission.MenuEdit);
 
   const { product, droppedImageKeys } = await withMenuErrors(() =>
     MenuRepository.createProduct(db, store.id, validateProduct(request.body))

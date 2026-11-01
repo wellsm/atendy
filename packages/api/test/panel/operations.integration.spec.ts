@@ -95,6 +95,8 @@ describe('panel operations endpoints', () => {
 
     equal(response.body.orders[0]!.items[0]!.name, 'Coca-Cola 2L');
     equal(response.body.orders[0]!.status, OrderStatus.Placed);
+    equal(response.body.orders[0]!.createdBy, null);
+    equal(response.body.orders[0]!.canceledBy, null);
 
     const closed = await listOrdersHandler(
       { identity: other.identity, query: { scope: PanelOrderScope.Closed } } as never,

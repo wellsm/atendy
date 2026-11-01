@@ -44,7 +44,7 @@ export function OptionPhoto(props: {
         className={`flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-lg text-xs ${
           props.url
             ? 'bg-surface-2'
-            : `border border-dashed ${failed ? 'border-red-400 text-accent-fg' : 'border-line-2 text-faint'} bg-hover hover:border-red-400`
+            : `border border-dashed ${failed ? 'border-red-400 text-danger-fg' : 'border-line-2 text-faint'} bg-hover hover:border-accent`
         }`}
       >
         {props.url ? (

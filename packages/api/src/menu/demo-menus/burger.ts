@@ -1,7 +1,7 @@
 import type { MenuImport } from '../repository';
 
 import { PriceMode } from '../types';
-import { DRINKS } from './drinks';
+import { DRINKS, DRINKS_STOCK } from './drinks';
 
 const doneness = {
   name: 'Ponto da carne',
@@ -69,6 +69,7 @@ const burger = (name: string, description: string, price: number, image: string)
 });
 
 export const BURGER_MENU: MenuImport = {
+  stock: DRINKS_STOCK,
   categories: [
     {
       name: 'Burgers Artesanais',

@@ -1,7 +1,7 @@
 import type { MenuImport } from '../repository';
 
 import { PriceMode } from '../types';
-import { DRINKS } from './drinks';
+import { DRINKS, DRINKS_STOCK } from './drinks';
 
 const extras = {
   name: 'Adicionais',
@@ -42,6 +42,7 @@ const snack = (name: string, description: string, price: number, image: string) 
 });
 
 export const SNACK_BAR_MENU: MenuImport = {
+  stock: DRINKS_STOCK,
   categories: [
     {
       name: 'Lanches',

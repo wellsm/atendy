@@ -13,12 +13,12 @@ export const Route = createFileRoute('/sign-in/')({
 });
 
 const INPUT =
-  'w-full rounded-[10px] border bg-white px-3.5 py-3 text-base font-normal focus:border-red-500 focus:outline-none disabled:bg-neutral-50 lg:text-[15px]';
+  'w-full rounded-[10px] border bg-white px-3.5 py-3 text-base font-normal focus:border-accent focus:outline-none disabled:bg-neutral-50 lg:text-[15px]';
 
 const inputBorder = (error?: string) => (error ? 'border-red-500' : 'border-neutral-300');
 
 const BUTTON =
-  'h-[52px] w-full rounded-xl bg-red-600 px-4 text-base font-semibold text-white hover:bg-red-700 disabled:opacity-50 lg:h-12 lg:rounded-[10px] lg:text-[15px]';
+  'h-[52px] w-full rounded-xl bg-accent px-4 text-base font-semibold text-white hover:bg-accent-hover disabled:opacity-50 lg:h-12 lg:rounded-[10px] lg:text-[15px]';
 
 const LINK_BUTTON = 'text-sm text-neutral-600 hover:text-neutral-900';
 
@@ -328,7 +328,7 @@ function CodeStep(props: { email: string; flow: 'sign_in' | 'sign_up'; onBack: (
           <button
             type="button"
             onClick={() => void resend()}
-            className="p-2.5 font-medium text-red-700 hover:text-red-800"
+            className="p-2.5 font-medium text-accent-fg hover:text-accent-hover"
           >
             Reenviar código
           </button>

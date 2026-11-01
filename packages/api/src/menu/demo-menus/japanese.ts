@@ -1,6 +1,24 @@
 import type { MenuImport } from '../repository';
 
 import { PriceMode } from '../types';
+import { CAIXA_24, drinkItem, FARDO_12, takeOne } from './drinks';
+
+// Drink stock items carry the drink's own name, so products and the upsell options link by name.
+const STOCK = [
+  drinkItem('H2O Limão 500ml', 24, 12, 380, FARDO_12),
+  drinkItem('H2O Limoneto 500ml', 24, 12, 380, FARDO_12),
+  drinkItem('Heineken 330ml', 24, 12, 560, CAIXA_24),
+  drinkItem('Corona 350ml', 24, 12, 650, CAIXA_24),
+  drinkItem('Budweiser 330ml', 24, 12, 480, CAIXA_24),
+  drinkItem('Coca-Cola 350ml', 48, 12, 350, FARDO_12),
+  drinkItem('Coca-Cola Zero 350ml', 48, 12, 350, FARDO_12),
+  drinkItem('Guaraná Antarctica 350ml', 48, 12, 290, FARDO_12),
+  drinkItem('Guaraná Antarctica Zero 350ml', 48, 12, 290, FARDO_12),
+  drinkItem('Schweppes Citrus 350ml', 24, 12, 330, FARDO_12),
+  drinkItem('Sprite 350ml', 48, 12, 290, FARDO_12),
+  drinkItem('Água mineral 350ml', 24, 12, 110, FARDO_12),
+  drinkItem('Água mineral com gás 350ml', 24, 12, 150, FARDO_12)
+];
 
 /**
  * Real-world shape (an iFood sushi delivery): every dish carries the same free kit choice, paid extras and a drink
@@ -48,7 +66,7 @@ const drinkUpsell = (max: number) => ({
     { name: 'Sprite 350ml', price_delta_cents: 690 },
     { name: 'Água mineral 350ml', price_delta_cents: 490 },
     { name: 'Água mineral com gás 350ml', price_delta_cents: 490 }
-  ]
+  ].map((option) => ({ ...option, stock: takeOne(option.name) }))
 });
 
 const protein = {
@@ -88,10 +106,12 @@ const poke = (name: string, description: string, price: number) => ({
 const drink = (name: string, price: number, description?: string) => ({
   name,
   ...(description && { description }),
-  price_cents: price
+  price_cents: price,
+  stock: takeOne(name)
 });
 
 export const JAPANESE_MENU: MenuImport = {
+  stock: STOCK,
   categories: [
     {
       name: 'Hot Rolls',

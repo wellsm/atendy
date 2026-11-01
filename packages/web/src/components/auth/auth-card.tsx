@@ -1,15 +1,17 @@
 import type { ReactNode } from 'react';
 
+import { Logo } from '../logo';
+
 const STEPS = ['Cadastre a loja', 'Monte o cardápio', 'Conecte o WhatsApp'];
 
 /**
- * Frame of the sign-in screens: red side panel on desktop, red header with a sheet over it on phones.
+ * Frame of the sign-in screens: orange side panel on desktop, orange header with a sheet over it on phones.
  */
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-neutral-50 lg:grid lg:grid-cols-2">
-      <aside className="flex flex-col gap-3 bg-red-600 px-6 pb-9 pt-6 text-white lg:justify-between lg:p-14">
-        <p className="text-xs font-semibold uppercase tracking-wider lg:text-[13px]">Atendy</p>
+      <aside className="flex flex-col gap-3 bg-accent px-6 pb-9 pt-6 text-white lg:justify-between lg:p-14">
+        <Logo mono className="h-6 self-start lg:h-7" />
         <div className="flex max-w-[440px] flex-col gap-4">
           <h2 className="text-balance text-[26px] font-bold leading-tight tracking-tight lg:text-[40px]">
             Seu delivery atendido no WhatsApp<span className="hidden lg:inline">, 24 horas por dia</span>.

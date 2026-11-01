@@ -2,6 +2,7 @@ import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { Integer, String } from '@ez4/schema';
 import type { Fulfillment } from '../../orders/types';
+import type { OperatorHeaders } from '../../staff/authorize';
 import type { PaymentMethod } from '../../stores/types';
 import type { PanelDraftProvider } from '../provider';
 import type { PanelCart, PanelIdentity } from '../types';
@@ -11,6 +12,8 @@ import { HttpBadRequestError } from '@ez4/gateway';
 import { OrderRepository } from '../../orders/repository';
 import { notifyPanel } from '../../realtime/notify';
 import { PanelTrigger } from '../../realtime/types';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { locateWithGoogle } from '../../stores/geocoding';
 import { requireStaffDraft, withOrderErrors } from '../draft';
 import { requireStore } from '../store';
@@ -18,6 +21,7 @@ import { toPanelCart } from '../types';
 
 export declare class UpdateDraftRequest implements Http.Request {
   identity: PanelIdentity;
+  headers: OperatorHeaders;
   parameters: {
     conversationId: String.UUID;
   };
@@ -48,6 +52,7 @@ export async function updateDraftHandler(
   { db, panelEvents }: Service.Context<PanelDraftProvider>
 ): Promise<UpdateDraftResponse> {
   const store = await requireStore(db, request.identity);
+  await authorize(db, store, request.identity, request.headers, Permission.Conversations);
   const scope = await requireStaffDraft(db, store.id, request.parameters.conversationId);
   const { fulfillment, address, useSavedAddress, payment } = request.body;
   const geocode = locateWithGoogle(process.env.GOOGLE_MAPS_API_KEY);

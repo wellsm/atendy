@@ -62,6 +62,8 @@ describe('pos sales', () => {
 
     equal(first.id, saleId);
     equal(again.label, 'Maria');
+    equal(first.createdBy, 'user_1');
+    equal(first.canceledBy, null);
 
     const { records } = await db.orders.findMany({
       select: { source: true, status: true, conversation_id: true, customer_id: true, created_by: true },

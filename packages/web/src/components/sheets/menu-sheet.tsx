@@ -9,6 +9,7 @@ import { Sheet, SheetHeader } from './sheet';
 import { ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
 import { priceLabel, unavailableText } from '../../lib/menu';
+import { useOperator } from '../../lib/operator';
 import { usePanelNavigate, usePanelSearch } from '../../lib/panel-search';
 import { usePanelSlug } from '../../lib/panel-slug';
 import {
@@ -68,7 +69,11 @@ const normalize = (text: string) =>
 export function MenuSheet({ onClose }: { onClose: () => void }) {
   const menu = useMenu();
   const navigate = usePanelNavigate();
-  const { product, groups } = usePanelSearch();
+  const search = usePanelSearch();
+  // Roles without menu_edit only pause products and options: no product form, no groups library.
+  const edit = useOperator().allows('menu_edit');
+  const product = edit ? search.product : undefined;
+  const groups = edit && search.groups;
 
   return (
     <Sheet width="lg" label="Cardápio" onClose={onClose}>
@@ -84,7 +89,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
           />
           <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4 md:px-6">
             {menu.isPending && <Loading />}
-            {menu.isError && <p className="text-sm text-accent-fg">Não foi possível carregar o cardápio.</p>}
+            {menu.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o cardápio.</p>}
             {menu.data && <GroupLibrary categories={menu.data.categories} />}
           </div>
         </>
@@ -99,7 +104,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
           />
           <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4 md:px-6">
             {menu.isPending && <Loading />}
-            {menu.isError && <p className="text-sm text-accent-fg">Não foi possível carregar o cardápio.</p>}
+            {menu.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o cardápio.</p>}
             {menu.data && <Menu categories={menu.data.categories} />}
           </div>
         </>
@@ -110,6 +115,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
 
 function Menu({ categories }: { categories: MenuCategory[] }) {
   const slug = usePanelSlug();
+  const edit = useOperator().allows('menu_edit');
   const reorder = useReorderCategories();
   const [selected, setSelected] = useState(ALL);
   const [query, setQuery] = useState('');
@@ -159,7 +165,7 @@ function Menu({ categories }: { categories: MenuCategory[] }) {
         >
           Página pública ↗
         </a>
-        {products.some(({ groups }) => groups.length > 0) && (
+        {edit && products.some(({ groups }) => groups.length > 0) && (
           <Link
             to="/panel/$slug"
             params={{ slug }}
@@ -169,12 +175,12 @@ function Menu({ categories }: { categories: MenuCategory[] }) {
             Grupos de opções
           </Link>
         )}
-        {categories.length > 0 && (
+        {edit && categories.length > 0 && (
           <Link
             to="/panel/$slug"
             params={{ slug }}
             search={{ sheet: 'menu', product: 'new', ...(current && { category: current.id }) }}
-            className="flex h-9 items-center rounded-lg bg-accent px-3.5 text-[13px] font-medium text-white hover:bg-red-700"
+            className="flex h-9 items-center rounded-lg bg-accent px-3.5 text-[13px] font-medium text-white hover:bg-accent-hover"
           >
             + Produto
           </Link>
@@ -217,28 +223,32 @@ function Menu({ categories }: { categories: MenuCategory[] }) {
                 <span className="truncate">{category.name}</span>
                 <span className="text-xs text-muted">{category.products.length}</span>
               </button>
-              <button
-                type="button"
-                disabled={index === 0 || reorder.isPending}
-                onClick={() => move(index, -1)}
-                className={ARROW}
-                aria-label={`Subir ${category.name}`}
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                disabled={index === categories.length - 1 || reorder.isPending}
-                onClick={() => move(index, 1)}
-                className={ARROW}
-                aria-label={`Descer ${category.name}`}
-              >
-                ↓
-              </button>
+              {edit && (
+                <>
+                  <button
+                    type="button"
+                    disabled={index === 0 || reorder.isPending}
+                    onClick={() => move(index, -1)}
+                    className={ARROW}
+                    aria-label={`Subir ${category.name}`}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    disabled={index === categories.length - 1 || reorder.isPending}
+                    onClick={() => move(index, 1)}
+                    className={ARROW}
+                    aria-label={`Descer ${category.name}`}
+                  >
+                    ↓
+                  </button>
+                </>
+              )}
             </div>
           ))}
-          {reorder.isError && <p className="px-2 py-1 text-xs text-accent-fg">Não foi possível reordenar.</p>}
-          <NewCategory onCreated={setSelected} />
+          {reorder.isError && <p className="px-2 py-1 text-xs text-danger-fg">Não foi possível reordenar.</p>}
+          {edit && <NewCategory onCreated={setSelected} />}
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
@@ -347,13 +357,14 @@ function NewCategory({ onCreated }: { onCreated: (id: string) => void }) {
           +
         </button>
       </div>
-      {create.isError && <span className="px-1 text-xs text-accent-fg">{categoryError(create.error)}</span>}
+      {create.isError && <span className="px-1 text-xs text-danger-fg">{categoryError(create.error)}</span>}
     </form>
   );
 }
 
 function CategoryCard({ category, products }: { category: MenuCategory; products: MenuProduct[] }) {
   const slug = usePanelSlug();
+  const edit = useOperator().allows('menu_edit');
   const rename = useRenameCategory();
   const remove = useDeleteCategory();
   const setPreparation = useSetCategoryPreparation();
@@ -392,53 +403,57 @@ function CategoryCard({ category, products }: { category: MenuCategory; products
             >
               Cancelar
             </button>
-            {rename.isError && <span className="basis-full text-sm text-accent-fg">{categoryError(rename.error)}</span>}
+            {rename.isError && <span className="basis-full text-sm text-danger-fg">{categoryError(rename.error)}</span>}
           </form>
         ) : (
           <>
             <h2 className="min-w-0 flex-1 break-words font-semibold">
               {category.name} <span className="text-sm font-normal text-faint">· {category.products.length}</span>
             </h2>
-            <label className="flex items-center gap-2 text-sm text-muted">
-              <Toggle
-                checked={category.needs_preparation}
-                label="Precisa de preparo"
-                onChange={(needsPreparation) => setPreparation.mutate({ id: category.id, needsPreparation })}
-              />
-              Precisa de preparo
-            </label>
-            <button type="button" onClick={() => setEditing(true)} className="text-sm text-muted">
-              Renomear
-            </button>
-            <button
-              type="button"
-              disabled={category.products.length > 0}
-              title={category.products.length ? 'Remova os produtos antes' : undefined}
-              onClick={() => setConfirmDelete(true)}
-              className="text-sm text-muted disabled:opacity-40"
-            >
-              Apagar
-            </button>
-            <Link
-              to="/panel/$slug"
-              params={{ slug }}
-              search={{ sheet: 'menu', product: 'new', category: category.id }}
-              className="rounded-md border border-accent-line bg-accent-soft px-2.5 py-1 text-sm font-medium text-accent-fg hover:bg-placed-bg"
-            >
-              + Produto
-            </Link>
+            {edit && (
+              <>
+                <label className="flex items-center gap-2 text-sm text-muted">
+                  <Toggle
+                    checked={category.needs_preparation}
+                    label="Precisa de preparo"
+                    onChange={(needsPreparation) => setPreparation.mutate({ id: category.id, needsPreparation })}
+                  />
+                  Precisa de preparo
+                </label>
+                <button type="button" onClick={() => setEditing(true)} className="text-sm text-muted">
+                  Renomear
+                </button>
+                <button
+                  type="button"
+                  disabled={category.products.length > 0}
+                  title={category.products.length ? 'Remova os produtos antes' : undefined}
+                  onClick={() => setConfirmDelete(true)}
+                  className="text-sm text-muted disabled:opacity-40"
+                >
+                  Apagar
+                </button>
+                <Link
+                  to="/panel/$slug"
+                  params={{ slug }}
+                  search={{ sheet: 'menu', product: 'new', category: category.id }}
+                  className="rounded-md border border-accent-line bg-accent-soft px-2.5 py-1 text-sm font-medium text-accent-fg hover:bg-accent-line"
+                >
+                  + Produto
+                </Link>
+              </>
+            )}
           </>
         )}
       </div>
 
       {confirmDelete && (
-        <div className="flex flex-wrap items-center gap-3 border-b border-accent-line bg-accent-soft px-4 py-3 text-sm text-accent-fg">
+        <div className="flex flex-wrap items-center gap-3 border-b border-danger-line bg-danger-soft px-4 py-3 text-sm text-danger-fg">
           <span>Apagar a categoria {category.name}?</span>
           <button
             type="button"
             disabled={remove.isPending}
             onClick={() => remove.mutate(category.id, { onSettled: () => setConfirmDelete(false) })}
-            className="rounded-md bg-accent px-3 py-1.5 font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-danger px-3 py-1.5 font-medium text-white disabled:opacity-50"
           >
             Apagar
           </button>
@@ -447,7 +462,7 @@ function CategoryCard({ category, products }: { category: MenuCategory; products
           </button>
         </div>
       )}
-      {remove.isError && <p className="px-4 pt-3 text-sm text-accent-fg">Não foi possível apagar a categoria.</p>}
+      {remove.isError && <p className="px-4 pt-3 text-sm text-danger-fg">Não foi possível apagar a categoria.</p>}
 
       {!category.products.length && <p className="px-4 py-5 text-sm text-muted">Nenhum produto aqui ainda.</p>}
 
@@ -462,6 +477,7 @@ function CategoryCard({ category, products }: { category: MenuCategory; products
 
 function ProductRow({ product }: { product: MenuProduct }) {
   const slug = usePanelSlug();
+  const edit = useOperator().allows('menu_edit');
   const setProductActive = useSetProductActive();
   const setOptionActive = useSetOptionActive();
   const unavailable = unavailableText(product.groups);
@@ -518,7 +534,7 @@ function ProductRow({ product }: { product: MenuProduct }) {
         ))}
 
         {(setProductActive.isError || setOptionActive.isError) && (
-          <p className="text-xs text-accent-fg">Não foi possível alterar. Tente novamente.</p>
+          <p className="text-xs text-danger-fg">Não foi possível alterar. Tente novamente.</p>
         )}
       </div>
 
@@ -532,14 +548,16 @@ function ProductRow({ product }: { product: MenuProduct }) {
             onChange={(active) => setProductActive.mutate({ id: product.id, active })}
           />
         </span>
-        <Link
-          to="/panel/$slug"
-          params={{ slug }}
-          search={{ sheet: 'menu', product: product.id }}
-          className="text-sm font-medium text-accent-fg hover:text-accent-fg"
-        >
-          Editar
-        </Link>
+        {edit && (
+          <Link
+            to="/panel/$slug"
+            params={{ slug }}
+            search={{ sheet: 'menu', product: product.id }}
+            className="text-sm font-medium text-accent-fg hover:text-accent-fg"
+          >
+            Editar
+          </Link>
+        )}
       </div>
     </li>
   );

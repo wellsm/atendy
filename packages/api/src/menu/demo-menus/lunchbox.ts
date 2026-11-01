@@ -1,7 +1,7 @@
 import type { MenuImport } from '../repository';
 
 import { PriceMode } from '../types';
-import { DRINKS } from './drinks';
+import { DRINKS, DRINKS_STOCK } from './drinks';
 
 const proteins = (max: number) => ({
   name: max === 1 ? 'Mistura' : 'Misturas',
@@ -60,6 +60,7 @@ const extras = {
 };
 
 export const LUNCHBOX_MENU: MenuImport = {
+  stock: DRINKS_STOCK,
   categories: [
     {
       name: 'Marmitas',

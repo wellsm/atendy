@@ -155,7 +155,7 @@ export function ApplyGroup(props: {
           type="button"
           disabled={!selected.length || apply.isPending}
           onClick={submit}
-          className="h-9 rounded-lg bg-accent px-4 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          className="h-9 rounded-lg bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
         >
           {apply.isPending ? 'Aplicando…' : `Aplicar em ${count(selected.length, 'produto', 'produtos')}`}
         </button>
@@ -163,7 +163,7 @@ export function ApplyGroup(props: {
         {apply.isSuccess && <span className="text-sm text-fg-2">{resultText(apply.data)}</span>}
 
         {apply.isError && (
-          <span className="text-sm text-accent-fg">
+          <span className="text-sm text-danger-fg">
             Não foi possível aplicar. Recarregue o cardápio e tente de novo.
           </span>
         )}

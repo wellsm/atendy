@@ -1,7 +1,7 @@
 import type { MenuImport } from '../repository';
 
 import { PriceMode } from '../types';
-import { DRINKS } from './drinks';
+import { DRINKS, DRINKS_STOCK } from './drinks';
 
 /**
  * Pastel shop. Flavor prices live in the options (base price 0); two flavors charge the most expensive.
@@ -50,6 +50,7 @@ const extras = {
 };
 
 export const PASTRY_MENU: MenuImport = {
+  stock: DRINKS_STOCK,
   categories: [
     {
       name: 'Pastéis Salgados',

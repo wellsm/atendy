@@ -17,6 +17,7 @@ export type CashReport = {
   orderCashCents: number;
   sangriaCents: number;
   suprimentoCents: number;
+  courierPayoutCents: number;
   expectedCashCents: number;
   salesCount: number;
   /**
@@ -40,6 +41,7 @@ export type CashReportView = {
   orderCashCents: number;
   sangriaCents: number;
   suprimentoCents: number;
+  courierPayoutCents: number;
   expectedCashCents: number | null;
   salesCount: number;
   salesCents: number;
@@ -82,7 +84,7 @@ const emptyTotals = (): MethodTotals =>
   }) satisfies Record<PaymentMethod, number>;
 
 /**
- * Expected cash = float + POS cash + order cash + suprimentos − sangrias − cash refunds. Other methods are totals only.
+ * Expected cash = float + POS cash + order cash + suprimentos − sangrias − courier payouts − cash refunds. Other methods are totals only.
  */
 export const cashSummary = (input: CashSummaryInput): CashReport => {
   const byMethod = emptyTotals();
@@ -92,6 +94,7 @@ export const cashSummary = (input: CashSummaryInput): CashReport => {
   let orderCashCents = 0;
   let sangriaCents = 0;
   let suprimentoCents = 0;
+  let courierPayoutCents = 0;
 
   for (const payment of input.payments) {
     byMethod[payment.method] += payment.amountCents;
@@ -118,11 +121,21 @@ export const cashSummary = (input: CashSummaryInput): CashReport => {
       case CashMovementKind.Suprimento:
         suprimentoCents += movement.amountCents;
         break;
+
+      case CashMovementKind.CourierPayout:
+        courierPayoutCents += movement.amountCents;
+        break;
     }
   }
 
   const expectedCashCents =
-    input.floatCents + byMethod.cash + orderCashCents + suprimentoCents - sangriaCents - refundsByMethod.cash;
+    input.floatCents +
+    byMethod.cash +
+    orderCashCents +
+    suprimentoCents -
+    sangriaCents -
+    courierPayoutCents -
+    refundsByMethod.cash;
 
   const countedCents = input.countedCents ?? null;
 
@@ -133,6 +146,7 @@ export const cashSummary = (input: CashSummaryInput): CashReport => {
     orderCashCents,
     sangriaCents,
     suprimentoCents,
+    courierPayoutCents,
     expectedCashCents,
     salesCount: input.salesCount,
     salesCents,

@@ -35,7 +35,7 @@ function PanelPage() {
       {view === 'orders' && openOrders.isPending && <Loading />}
 
       {view === 'orders' && openOrders.isError && (
-        <p className="p-4 text-sm text-accent-fg">Não foi possível carregar os pedidos.</p>
+        <p className="p-4 text-sm text-danger-fg">Não foi possível carregar os pedidos.</p>
       )}
 
       {view === 'orders' && openOrders.data && <OrderBoard orders={openOrders.data.orders} />}
@@ -48,7 +48,7 @@ function PanelPage() {
             {conversations.isPending && <Loading />}
 
             {conversations.isError && (
-              <p className="p-4 text-sm text-accent-fg">Não foi possível carregar as conversas.</p>
+              <p className="p-4 text-sm text-danger-fg">Não foi possível carregar as conversas.</p>
             )}
 
             {conversations.data && (

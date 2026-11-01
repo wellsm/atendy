@@ -5,6 +5,7 @@ import { createFileRoute, Navigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { Loading } from '../components/loading';
+import { Logo } from '../components/logo';
 import { SignedIn } from '../components/signed-in';
 import { useCreateStore, useMe } from '../lib/queries';
 
@@ -31,8 +32,8 @@ const STEPS = ['Cadastre a loja', 'Monte o cardápio', 'Conecte o WhatsApp'];
 
 function Hero() {
   return (
-    <div className="flex flex-col gap-3 bg-red-600 px-6 pb-9 pt-5 text-white md:justify-between md:p-14">
-      <p className="text-xs font-semibold uppercase tracking-wider md:text-sm">Atendy</p>
+    <div className="flex flex-col gap-3 bg-accent px-6 pb-9 pt-5 text-white md:justify-between md:p-14">
+      <Logo mono className="h-6 self-start md:h-7" />
       <div className="flex max-w-md flex-col gap-4">
         <h2 className="text-2xl font-bold leading-tight tracking-tight text-balance md:text-4xl">
           Seu delivery atendido no WhatsApp<span className="hidden md:inline">, 24 horas por dia</span>.
@@ -112,7 +113,7 @@ function StoreForm({ newStore }: { newStore: boolean }) {
           minLength={2}
           maxLength={80}
           required
-          className="rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-base font-normal focus:border-red-500 focus:outline-none md:text-[15px]"
+          className="rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-base font-normal focus:border-accent focus:outline-none md:text-[15px]"
           placeholder="Pizzaria do Bairro"
         />
       </label>
@@ -132,7 +133,7 @@ function StoreForm({ newStore }: { newStore: boolean }) {
           />
           <span
             aria-hidden="true"
-            className="flex size-5.5 shrink-0 items-center justify-center rounded-md border-2 border-amber-600 bg-white text-xs font-bold text-white peer-checked:border-red-600 peer-checked:bg-red-600 peer-focus-visible:ring-2 peer-focus-visible:ring-red-500 peer-focus-visible:ring-offset-2 md:size-5"
+            className="flex size-5.5 shrink-0 items-center justify-center rounded-md border-2 border-amber-600 bg-white text-xs font-bold text-white peer-checked:border-accent peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2 md:size-5"
           >
             {acceptRisk && '✓'}
           </span>
@@ -147,7 +148,7 @@ function StoreForm({ newStore }: { newStore: boolean }) {
       <button
         type="submit"
         disabled={!acceptRisk || name.trim().length < 2 || createStore.isPending}
-        className="h-13 rounded-xl bg-red-600 text-base font-semibold text-white enabled:hover:bg-red-700 disabled:opacity-50 md:h-12 md:rounded-lg md:text-[15px]"
+        className="h-13 rounded-xl bg-accent text-base font-semibold text-white enabled:hover:bg-accent-hover disabled:opacity-50 md:h-12 md:rounded-lg md:text-[15px]"
       >
         {createStore.isPending ? 'Cadastrando…' : 'Cadastrar loja'}
       </button>

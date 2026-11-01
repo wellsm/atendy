@@ -32,7 +32,15 @@ export const verifyClerkToken = async (authorization: string | undefined): Promi
     // Session token v2 carries the active org in `o.id`; v1 in `org_id`.
     const orgId = getOrgId(payload.o) ?? getOrgId({ id: payload.org_id });
 
-    return orgId ? { userId: payload.sub, orgId } : { userId: payload.sub };
+    // `fva`: [first factor age, second factor age] in minutes; -1 or absent when unknown.
+    const firstFactorAge = Array.isArray(payload.fva) ? payload.fva[0] : undefined;
+    const factorAgeMinutes = typeof firstFactorAge === 'number' && firstFactorAge >= 0 ? firstFactorAge : undefined;
+
+    return {
+      userId: payload.sub,
+      ...(orgId && { orgId }),
+      ...(factorAgeMinutes !== undefined && { factorAgeMinutes })
+    };
   } catch (error) {
     if (error instanceof TokenVerificationError) {
       return undefined;

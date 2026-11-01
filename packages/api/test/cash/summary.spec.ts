@@ -32,6 +32,21 @@ describe('cashSummary', () => {
     equal(report.differenceCents, null);
   });
 
+  it('subtracts courier payouts from the expected cash', () => {
+    const report = cashSummary({
+      floatCents: 10000,
+      payments: [],
+      movements: [{ kind: CashMovementKind.CourierPayout, method: PaymentMethod.Cash, amountCents: 1500 }],
+      discountsCents: 0,
+      surchargesCents: 0,
+      salesCount: 0,
+      canceledCount: 0
+    });
+
+    equal(report.courierPayoutCents, 1500);
+    equal(report.expectedCashCents, 8500);
+  });
+
   it('keeps canceled sales by method but out of the sales total, and counts the difference', () => {
     const report = cashSummary({
       floatCents: 0,

@@ -4,7 +4,8 @@ import { useState } from 'react';
 
 import { ApiError } from '../../lib/api';
 import { formatMoney, formatWhen, STATUS_LABEL } from '../../lib/format';
-import { useCancelPosSale, useFinalizedPosSales } from '../../lib/queries';
+import { useCancelPosSale, useFinalizedPosSales, useStaff } from '../../lib/queries';
+import { authorName } from '../../lib/staff';
 
 const ERROR_TEXT: Record<string, string> = {
   reason: 'Informe o motivo (até 200 caracteres).',
@@ -15,6 +16,9 @@ const ERROR_TEXT: Record<string, string> = {
 
 function SaleRow({ sale }: { sale: PosHeldSale }) {
   const cancel = useCancelPosSale();
+  const staff = useStaff().data?.staff;
+  const madeBy = authorName(sale.created_by, staff);
+  const canceledBy = authorName(sale.canceled_by, staff);
   const [reason, setReason] = useState<string>();
 
   return (
@@ -28,6 +32,8 @@ function SaleRow({ sale }: { sale: PosHeldSale }) {
           <span className="text-xs text-muted">
             {formatWhen(sale.placed_at)} ·{' '}
             {sale.canceled_at ? 'Cancelada' : sale.status === 'out' ? 'Pronto' : STATUS_LABEL[sale.status]}
+            {madeBy && ` · ${madeBy}`}
+            {sale.canceled_at && canceledBy && ` · cancelada por ${canceledBy}`}
           </span>
         </span>
         <span className={`text-sm font-semibold tabular-nums ${sale.canceled_at ? 'text-muted line-through' : ''}`}>
@@ -61,7 +67,7 @@ function SaleRow({ sale }: { sale: PosHeldSale }) {
               className="h-10 rounded-lg border border-line-2 bg-surface px-3 text-sm focus:border-accent focus:outline-none"
             />
             {cancel.isError && (
-              <p className="text-sm text-accent-fg">
+              <p className="text-sm text-danger-fg">
                 {(cancel.error instanceof ApiError && cancel.error.field && ERROR_TEXT[cancel.error.field]) ||
                   'Não foi possível cancelar.'}
               </p>
@@ -70,7 +76,7 @@ function SaleRow({ sale }: { sale: PosHeldSale }) {
               <button
                 type="submit"
                 disabled={!reason.trim() || cancel.isPending}
-                className="h-10 flex-1 rounded-lg border border-accent-line bg-accent-soft px-3 text-[13px] font-medium text-accent-fg disabled:opacity-50"
+                className="h-10 flex-1 rounded-lg border border-danger-line bg-danger-soft px-3 text-[13px] font-medium text-danger-fg disabled:opacity-50"
               >
                 Confirmar cancelamento
               </button>
@@ -107,7 +113,7 @@ export function SaleHistory({ onClose }: { onClose: () => void }) {
             Fechar
           </button>
         </div>
-        {sales.isError && <p className="px-4 py-3 text-sm text-accent-fg">Não foi possível carregar as vendas.</p>}
+        {sales.isError && <p className="px-4 py-3 text-sm text-danger-fg">Não foi possível carregar as vendas.</p>}
         {sales.isSuccess && list.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted">Nenhuma venda finalizada.</p>
         ) : (

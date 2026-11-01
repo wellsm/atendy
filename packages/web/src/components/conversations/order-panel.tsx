@@ -5,7 +5,8 @@ import { useState } from 'react';
 import { OrderEditor } from './order-editor';
 import { ApiError } from '../../lib/api';
 import { formatMoney, formatWhen, PAYMENT_LABEL, STATUS_LABEL } from '../../lib/format';
-import { useUpdateOrder } from '../../lib/queries';
+import { useAssignCourier, useStaff, useUpdateOrder } from '../../lib/queries';
+import { authorName } from '../../lib/staff';
 
 export const STATUS_CHIP: Record<OrderStatus, string> = {
   placed: 'bg-placed-bg text-placed-fg',
@@ -47,12 +48,12 @@ export const useOrderStatus = (onChanged: () => void) => {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [notice, setNotice] = useState<string>();
 
-  const move = (order: PanelOrder, status: OrderStatus) => {
+  const move = (order: PanelOrder, status: OrderStatus, courierId?: string) => {
     setConfirmCancel(false);
     setNotice(undefined);
 
     update.mutate(
-      { orderId: order.id, status },
+      { orderId: order.id, status, courierId },
       {
         onSuccess: ({ notified }) => {
           if (!notified && status !== 'done') {
@@ -63,7 +64,9 @@ export const useOrderStatus = (onChanged: () => void) => {
           setNotice(
             error instanceof ApiError && error.status === 409
               ? 'Esse pedido já tinha mudado. A lista foi atualizada.'
-              : 'Não foi possível atualizar o pedido. Tente novamente.'
+              : error instanceof ApiError && error.field === 'forbidden'
+                ? 'Sem permissão.'
+                : 'Não foi possível atualizar o pedido. Tente novamente.'
           ),
         onSettled: onChanged
       }
@@ -140,6 +143,10 @@ export function Items({ order }: { order: PanelOrder }) {
 }
 
 export function Summary({ order, withTotals }: { order: PanelOrder; withTotals: boolean }) {
+  const staff = useStaff().data?.staff;
+  const madeBy = authorName(order.created_by, staff);
+  const canceledBy = authorName(order.canceled_by, staff);
+
   return (
     <dl className="space-y-1.5 text-[13px]">
       <div className="flex justify-between gap-3">
@@ -161,6 +168,18 @@ export function Summary({ order, withTotals }: { order: PanelOrder; withTotals: 
           {order.change_for_cents != null && ` (troco para ${formatMoney(order.change_for_cents)})`}
         </dd>
       </div>
+      {madeBy && (
+        <div className="flex justify-between gap-3">
+          <dt className="text-muted">Atendido por</dt>
+          <dd className="text-right">{madeBy}</dd>
+        </div>
+      )}
+      {canceledBy && (
+        <div className="flex justify-between gap-3">
+          <dt className="text-muted">Cancelado por</dt>
+          <dd className="text-right">{canceledBy}</dd>
+        </div>
+      )}
       {withTotals && order.fee_cents > 0 && (
         <div className="flex justify-between gap-3">
           <dt className="text-muted">Taxa de entrega</dt>
@@ -181,6 +200,61 @@ export function Notice({ text }: { text: string }) {
   return <p className="rounded-lg border border-warn-line bg-warn-bg px-2.5 py-2 text-xs text-warn-fg">{text}</p>;
 }
 
+/**
+ * Delivery orders: the courier is picked when the order leaves ("Sem entregador" sends no message) and can be changed
+ * while it is out. Employees come from `GET /panel/staff` (active couriers and active employees who deliver).
+ */
+function CourierPicker({
+  order,
+  value,
+  onChange
+}: {
+  order: PanelOrder;
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const couriers = (useStaff().data?.staff ?? []).filter(
+    (member) => member.active && (member.role === 'courier' || member.delivers)
+  );
+  const assign = useAssignCourier();
+  const out = order.status === 'out';
+
+  if (!couriers.length && !order.courier) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        {out ? `Entregador: ${order.courier?.name ?? 'sem entregador'}` : 'Quem vai levar?'}
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-[38px] rounded-lg border border-line-2 bg-surface px-2 text-sm text-fg"
+        >
+          <option value="">{out ? 'Escolher outro…' : 'Sem entregador'}</option>
+          {couriers.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {out && value && value !== order.courier?.id && (
+        <button
+          type="button"
+          disabled={assign.isPending}
+          onClick={() => assign.mutate({ orderId: order.id, courierId: value }, { onSuccess: () => onChange('') })}
+          className="h-[38px] rounded-lg border border-line-2 text-[13px] font-medium hover:bg-hover disabled:opacity-50"
+        >
+          Trocar entregador
+        </button>
+      )}
+      {assign.isError && <Notice text="Não foi possível trocar o entregador." />}
+    </div>
+  );
+}
+
 export function Actions({
   order,
   controls,
@@ -192,14 +266,21 @@ export function Actions({
 }) {
   const { move, pending, confirmCancel, setConfirmCancel } = controls;
   const action = nextAction(order);
+  const [courierId, setCourierId] = useState('');
+  const delivery = order.fulfillment === 'delivery' && order.source !== 'pos';
 
   return (
-    <div className={compact ? 'flex gap-2' : 'flex flex-col gap-2'}>
+    <div className={compact ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
+      {delivery && (order.status === 'accepted' || order.status === 'out') && (
+        <div className={compact ? 'w-full' : undefined}>
+          <CourierPicker order={order} value={courierId} onChange={setCourierId} />
+        </div>
+      )}
       {action && (
         <button
           type="button"
           disabled={pending}
-          onClick={() => move(order, action.status)}
+          onClick={() => move(order, action.status, action.status === 'out' ? courierId || undefined : undefined)}
           className={`rounded-lg bg-accent text-sm font-semibold text-white disabled:opacity-50 ${compact ? 'h-11 flex-1' : 'h-[42px]'}`}
         >
           {action.label}
@@ -222,7 +303,7 @@ export function Actions({
             type="button"
             disabled={pending}
             onClick={() => move(order, 'canceled')}
-            className={`flex-1 rounded-lg border border-accent-line bg-accent-soft px-3 text-[13px] font-medium text-accent-fg disabled:opacity-50 ${compact ? 'h-11' : 'h-[38px]'}`}
+            className={`flex-1 rounded-lg border border-danger-line bg-danger-soft px-3 text-[13px] font-medium text-danger-fg disabled:opacity-50 ${compact ? 'h-11' : 'h-[38px]'}`}
           >
             {compact ? 'Confirmar' : 'Confirmar cancelamento'}
           </button>

@@ -22,6 +22,7 @@ import { SalePanel } from './sale-panel';
 import { matchProducts, SearchBar } from './search-bar';
 import { ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
+import { useOperator } from '../../lib/operator';
 import { usePanelSlug } from '../../lib/panel-slug';
 import { BARCODE, parseScan, readPosLayout, savePosLayout } from '../../lib/pos';
 import {
@@ -72,6 +73,7 @@ const isEditable = (element: Element | null) =>
  */
 export function PosScreen({ store }: { store: PanelStore }) {
   usePanelTheme();
+  const { operator, lock } = useOperator();
   const slug = usePanelSlug();
   const menu = usePosMenu();
   const settings = useSettings();
@@ -436,6 +438,11 @@ export function PosScreen({ store }: { store: PanelStore }) {
         <p className="min-w-0 flex-1 truncate text-sm font-semibold">
           PDV <span className="font-normal text-muted">· {store.name}</span>
         </p>
+        {operator && (
+          <button type="button" onClick={lock} className={BUTTON}>
+            <b className="font-semibold">{operator.name}</b> · Trocar operador
+          </button>
+        )}
         <span className="hidden text-xs text-faint lg:inline">F2 buscar · F4 cobrar · Esc limpar</span>
         {!blocked && (
           <>
@@ -467,7 +474,7 @@ export function PosScreen({ store }: { store: PanelStore }) {
       </header>
 
       {blocked ? (
-        <p className="m-4 rounded-lg border border-accent-line bg-accent-soft px-4 py-3 text-sm text-accent-fg">
+        <p className="m-4 rounded-lg border border-danger-line bg-danger-soft px-4 py-3 text-sm text-danger-fg">
           PDV indisponível: a loja está bloqueada.
         </p>
       ) : cashClosed ? (
@@ -481,7 +488,7 @@ export function PosScreen({ store }: { store: PanelStore }) {
         </div>
       ) : (
         <>
-          {menu.isError && <p className="px-4 py-2 text-sm text-accent-fg">Não foi possível carregar o cardápio.</p>}
+          {menu.isError && <p className="px-4 py-2 text-sm text-danger-fg">Não foi possível carregar o cardápio.</p>}
 
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
@@ -498,7 +505,7 @@ export function PosScreen({ store }: { store: PanelStore }) {
                   focusSearch();
                 }}
               />
-              {message && <p className="shrink-0 px-4 pb-2 text-sm text-accent-fg">{message}</p>}
+              {message && <p className="shrink-0 px-4 pb-2 text-sm text-danger-fg">{message}</p>}
 
               {effectiveLayout === 'search' && (
                 <div className="hidden shrink-0 px-4 pb-3 md:block">

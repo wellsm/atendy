@@ -28,7 +28,7 @@ const PAUSE_REASON: Record<ProspectPauseReason, string> = {
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none';
+const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
 export function ProspectingSender() {
   const summary = useProspecting();
@@ -57,7 +57,7 @@ export function ProspectingSender() {
           type="button"
           disabled={update.isPending}
           onClick={() => update.mutate({ paused: !sender.paused })}
-          className="ml-auto rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="ml-auto rounded-md bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {sender.paused ? 'Retomar envios' : 'Pausar'}
         </button>

@@ -1,4 +1,4 @@
-import { deepEqual, rejects } from 'node:assert/strict';
+import { deepEqual, equal, rejects } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { HttpUnauthorizedError } from '@ez4/gateway';
@@ -25,6 +25,14 @@ describe('panelAuthorizer', () => {
     const { identity } = await authorize(await signClerkToken({ sub: 'user_2' }));
 
     deepEqual(identity, { userId: 'user_2' });
+  });
+
+  it('reads the first factor age (`fva[0]`) and ignores unknown ages', async () => {
+    const recent = await authorize(await signClerkToken({ sub: 'user_1', o: { id: 'org_1' }, fva: [3, -1] }));
+    const unknown = await authorize(await signClerkToken({ sub: 'user_1', fva: [-1, -1] }));
+
+    equal(recent.identity.factorAgeMinutes, 3);
+    deepEqual(unknown.identity, { userId: 'user_1' });
   });
 
   it('rejects a missing, tampered or expired token', async () => {

@@ -3,6 +3,7 @@ import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
 import type { PanelSendProvider } from '../../panel/provider';
 import type { PanelIdentity } from '../../panel/types';
+import type { OperatorHeaders } from '../../staff/authorize';
 
 import { HttpConflictError } from '@ez4/gateway';
 
@@ -11,6 +12,8 @@ import { requirePosStore } from '../../panel/pos-store';
 import { sendStaffMessage, StaffSendError } from '../../panel/send';
 import { notifyPanel } from '../../realtime/notify';
 import { PanelTrigger } from '../../realtime/types';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { customerConversation } from '../../storefront/web-order';
 import { PosError, PosErrorCode } from '../errors';
 import { withPosErrors } from '../http-errors';
@@ -19,6 +22,7 @@ import { PosRepository } from '../repository';
 
 export declare class SendPosReceiptRequest implements Http.Request {
   identity: PanelIdentity;
+  headers: OperatorHeaders;
   parameters: {
     saleId: String.UUID;
   };
@@ -42,6 +46,7 @@ export async function sendPosReceiptHandler(
   { db, panelEvents }: Service.Context<PanelSendProvider>
 ): Promise<SendPosReceiptResponse> {
   const store = await requirePosStore(db, request.identity);
+  await authorize(db, store, request.identity, request.headers, Permission.PosSell);
 
   const sale = await withPosErrors(async () => {
     const found = await PosRepository.getSale(db, store.id, request.parameters.saleId);

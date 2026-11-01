@@ -1,16 +1,20 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
-import type { PanelProvider } from '../../panel/provider';
+import type { PanelStaffProvider } from '../../panel/provider';
 import type { PanelIdentity } from '../../panel/types';
+import type { OperatorHeaders } from '../../staff/authorize';
 import type { LossReason } from '../types';
 
 import { requireStore } from '../../panel/store';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { withStockErrors } from '../errors';
 import { StockRepository } from '../repository';
 
 export declare class CreateStockLossRequest implements Http.Request {
   identity: PanelIdentity;
+  headers: OperatorHeaders;
   body: {
     itemId: String.UUID;
     qty: number;
@@ -28,13 +32,12 @@ export declare class CreateStockLossResponse implements Http.Response {
 
 export async function createStockLossHandler(
   request: Http.Incoming<CreateStockLossRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db }: Service.Context<PanelStaffProvider>
 ): Promise<CreateStockLossResponse> {
   const store = await requireStore(db, request.identity);
+  const { author } = await authorize(db, store, request.identity, request.headers, Permission.StockMove);
 
-  await withStockErrors(() =>
-    StockRepository.recordLoss(db, store.id, { ...request.body, author: request.identity.userId })
-  );
+  await withStockErrors(() => StockRepository.recordLoss(db, store.id, { ...request.body, author }));
 
   return { status: 201, body: { recorded: true } };
 }

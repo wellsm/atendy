@@ -15,6 +15,10 @@ export declare class PanelProvider implements Http.Provider {
  * Menu endpoints that return products (signed `imageUrl`) or handle their photos.
  */
 export declare class PanelMenuProvider implements Http.Provider {
+  variables: {
+    PANEL_OPERATOR_SECRET: Environment.Variable<'PANEL_OPERATOR_SECRET'>;
+  };
+
   services: {
     db: Environment.Service<Db>;
     productImages: Environment.Service<ProductImages>;
@@ -35,6 +39,10 @@ export declare class PanelThreadProvider implements Http.Provider {
  * Conversation endpoints that hand the conversation back to the bot: they queue its pending messages.
  */
 export declare class PanelConversationProvider implements Http.Provider {
+  variables: {
+    PANEL_OPERATOR_SECRET: Environment.Variable<'PANEL_OPERATOR_SECRET'>;
+  };
+
   services: {
     db: Environment.Service<Db>;
     panelEvents: Environment.Service<PanelEventsQueue>;
@@ -56,10 +64,24 @@ export declare class PanelAuthProvider implements Http.Provider {
 }
 
 /**
+ * Handlers that sign (unlock, approvals, owner unlock) or verify (`authorize`) operator and approval tokens.
+ */
+export declare class PanelStaffProvider implements Http.Provider {
+  variables: {
+    PANEL_OPERATOR_SECRET: Environment.Variable<'PANEL_OPERATOR_SECRET'>;
+  };
+
+  services: {
+    db: Environment.Service<Db>;
+  };
+}
+
+/**
  * Store WhatsApp instance create/connect/state/logout (`StoreWhatsApp`).
  */
 export declare class PanelWhatsAppProvider implements Http.Provider {
   variables: {
+    PANEL_OPERATOR_SECRET: Environment.Variable<'PANEL_OPERATOR_SECRET'>;
     EVOLUTION_API_URL: Environment.Variable<'EVOLUTION_API_URL'>;
     // Global Evolution key: instance create/connect/state/logout only, never returned to the panel.
     EVOLUTION_API_KEY: Environment.Variable<'EVOLUTION_API_KEY'>;
@@ -76,7 +98,12 @@ export declare class PanelWhatsAppProvider implements Http.Provider {
  */
 export declare class PanelSendProvider implements Http.Provider {
   variables: {
+    PANEL_OPERATOR_SECRET: Environment.Variable<'PANEL_OPERATOR_SECRET'>;
     EVOLUTION_API_URL: Environment.Variable<'EVOLUTION_API_URL'>;
+    /**
+     * Courier dispatch messages link to `<WEB_BASE_URL>/courier/<token>`.
+     */
+    WEB_BASE_URL: Environment.Variable<'WEB_BASE_URL'>;
   };
 
   services: {
@@ -90,6 +117,7 @@ export declare class PanelSendProvider implements Http.Provider {
  */
 export declare class PanelGeocodingProvider implements Http.Provider {
   variables: {
+    PANEL_OPERATOR_SECRET: Environment.Variable<'PANEL_OPERATOR_SECRET'>;
     /**
      * Google Geocoding. Server-side only.
      */
@@ -106,6 +134,7 @@ export declare class PanelGeocodingProvider implements Http.Provider {
  */
 export declare class PanelDraftProvider implements Http.Provider {
   variables: {
+    PANEL_OPERATOR_SECRET: Environment.Variable<'PANEL_OPERATOR_SECRET'>;
     GOOGLE_MAPS_API_KEY: Environment.Variable<'GOOGLE_MAPS_API_KEY'>;
   };
 
@@ -119,6 +148,10 @@ export declare class PanelDraftProvider implements Http.Provider {
  * POS finalize and cancel: they change the orders board.
  */
 export declare class PanelPosProvider implements Http.Provider {
+  variables: {
+    PANEL_OPERATOR_SECRET: Environment.Variable<'PANEL_OPERATOR_SECRET'>;
+  };
+
   services: {
     db: Environment.Service<Db>;
     panelEvents: Environment.Service<PanelEventsQueue>;
@@ -130,6 +163,7 @@ export declare class PanelPosProvider implements Http.Provider {
  */
 export declare class PanelBillingProvider implements Http.Provider {
   variables: {
+    PANEL_OPERATOR_SECRET: Environment.Variable<'PANEL_OPERATOR_SECRET'>;
     /**
      * `https://api-sandbox.asaas.com/v3` on dev. The key never leaves the API.
      */

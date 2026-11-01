@@ -1,17 +1,21 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
-import type { PanelProvider } from '../../panel/provider';
+import type { PanelStaffProvider } from '../../panel/provider';
 import type { PanelIdentity } from '../../panel/types';
+import type { OperatorHeaders } from '../../staff/authorize';
 import type { StockItemView, StockPackageView } from '../repository';
 import type { StockUnit } from '../types';
 
 import { requireStore } from '../../panel/store';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { withStockErrors } from '../errors';
 import { StockRepository } from '../repository';
 
 export declare class CreateStockItemRequest implements Http.Request {
   identity: PanelIdentity;
+  headers: OperatorHeaders;
   body: {
     name: string;
     unit: StockUnit;
@@ -36,9 +40,10 @@ export declare class CreateStockItemResponse implements Http.Response {
 
 export async function createStockItemHandler(
   request: Http.Incoming<CreateStockItemRequest>,
-  { db }: Service.Context<PanelProvider>
+  { db }: Service.Context<PanelStaffProvider>
 ): Promise<CreateStockItemResponse> {
   const store = await requireStore(db, request.identity);
+  await authorize(db, store, request.identity, request.headers, Permission.StockManage);
   const { packages, ...input } = request.body;
 
   const saved = await withStockErrors(async () => {

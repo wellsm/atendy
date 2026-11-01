@@ -1,6 +1,7 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
+import type { OperatorHeaders } from '../../staff/authorize';
 import type { PanelConversationProvider } from '../provider';
 import type { PanelConversation, PanelIdentity } from '../types';
 
@@ -10,11 +11,14 @@ import { InboundEventKind } from '../../conversations/queues/inbound';
 import { ConversationRepository } from '../../conversations/repository';
 import { notifyPanel } from '../../realtime/notify';
 import { PanelTrigger } from '../../realtime/types';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { requireStore } from '../store';
 import { toPanelConversation } from '../types';
 
 export declare class ApproveConversationRequest implements Http.Request {
   identity: PanelIdentity;
+  headers: OperatorHeaders;
   parameters: {
     conversationId: String.UUID;
   };
@@ -36,6 +40,7 @@ export async function approveConversationHandler(
   { db, inboundQueue, panelEvents }: Service.Context<PanelConversationProvider>
 ): Promise<ApproveConversationResponse> {
   const store = await requireStore(db, request.identity);
+  await authorize(db, store, request.identity, request.headers, Permission.Conversations);
   const { conversationId } = request.parameters;
 
   const conversation = await ConversationRepository.findForStore(db, store.id, conversationId);

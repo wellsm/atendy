@@ -120,7 +120,7 @@ function ScannerOverlay({ onCode, onClose }: { onCode: (code: string) => void; o
           </button>
         </div>
         {error ? (
-          <p className="text-sm text-accent-fg">{error}</p>
+          <p className="text-sm text-danger-fg">{error}</p>
         ) : (
           <video ref={video} muted playsInline className="aspect-[4/3] w-full rounded-lg bg-black object-cover" />
         )}

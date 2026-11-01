@@ -3,6 +3,7 @@ import type { panelAuthorizer } from './authorizer';
 import type { addDraftItemHandler } from './endpoints/add-draft-item';
 import type { applyMenuGroupHandler } from './endpoints/apply-group';
 import type { approveConversationHandler } from './endpoints/approve-conversation';
+import type { assignCourierHandler } from './endpoints/assign-courier';
 import type { completeImageHandler } from './endpoints/complete-image';
 import type { connectWhatsAppHandler } from './endpoints/connect-whatsapp';
 import type { createCategoryHandler } from './endpoints/create-category';
@@ -44,6 +45,7 @@ import type { updatePaymentHandler } from './endpoints/update-payment';
 import type { updatePolicyHandler } from './endpoints/update-policy';
 import type { updatePosSettingsHandler } from './endpoints/update-pos-settings';
 import type { updateProductHandler } from './endpoints/update-product';
+import type { updateStaffSettingsHandler } from './endpoints/update-staff-settings';
 import type { updateStockAlertHandler } from './endpoints/update-stock-alert';
 import type { updateStoreHandler } from './endpoints/update-store';
 import type { updateStoreLocationHandler } from './endpoints/update-store-location';
@@ -113,6 +115,11 @@ export type PanelRoutes = [
     handler: typeof updatePosSettingsHandler;
   }>,
   Http.UseRoute<{
+    path: 'PUT /panel/settings/staff';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof updateStaffSettingsHandler;
+  }>,
+  Http.UseRoute<{
     path: 'PATCH /panel/settings/policy';
     authorizer: typeof panelAuthorizer;
     handler: typeof updatePolicyHandler;
@@ -126,6 +133,11 @@ export type PanelRoutes = [
     path: 'PATCH /panel/orders/{orderId}';
     authorizer: typeof panelAuthorizer;
     handler: typeof updateOrderHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'PUT /panel/orders/{orderId}/courier';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof assignCourierHandler;
   }>,
   Http.UseRoute<{
     path: 'GET /panel/conversations';

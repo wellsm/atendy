@@ -1,6 +1,7 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
+import type { OperatorHeaders } from '../../staff/authorize';
 import type { PanelMenuProvider } from '../provider';
 import type { PanelIdentity, PanelProduct, PanelProductInput } from '../types';
 
@@ -9,10 +10,13 @@ import { HttpNotFoundError } from '@ez4/gateway';
 import { withImageUrl } from '../../menu/images';
 import { MenuRepository } from '../../menu/repository';
 import { validateProduct } from '../../menu/validation';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { requireStore, withMenuErrors } from '../store';
 
 export declare class UpdateProductRequest implements Http.Request {
   identity: PanelIdentity;
+  headers: OperatorHeaders;
   parameters: {
     productId: String.UUID;
   };
@@ -35,6 +39,7 @@ export async function updateProductHandler(
   { db, productImages }: Service.Context<PanelMenuProvider>
 ): Promise<UpdateProductResponse> {
   const store = await requireStore(db, request.identity);
+  await authorize(db, store, request.identity, request.headers, Permission.MenuEdit);
   const { productId } = request.parameters;
 
   const saved = await withMenuErrors(() =>

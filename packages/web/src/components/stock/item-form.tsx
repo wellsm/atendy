@@ -205,16 +205,16 @@ export function ItemForm({
       </div>
 
       {(create.error || update.error) && (
-        <p className="text-sm text-accent-fg">{errorText(create.error ?? update.error)}</p>
+        <p className="text-sm text-danger-fg">{errorText(create.error ?? update.error)}</p>
       )}
-      {archive.error && <p className="text-sm text-accent-fg">Não foi possível arquivar. Tente novamente.</p>}
+      {archive.error && <p className="text-sm text-danger-fg">Não foi possível arquivar. Tente novamente.</p>}
 
       <div className="flex flex-wrap items-center gap-3">
         <button
           type={nested ? 'button' : 'submit'}
           onClick={nested ? submit : undefined}
           disabled={saving || !valid}
-          className="h-10 rounded-lg bg-accent px-5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          className="h-10 rounded-lg bg-accent px-5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
         >
           {saving ? 'Salvando…' : 'Salvar'}
         </button>
@@ -232,7 +232,7 @@ export function ItemForm({
 
               archive.mutate(item.id, { onSuccess: onCancel });
             }}
-            className="ml-auto h-10 rounded-lg px-4 text-sm text-accent-fg hover:bg-accent-soft"
+            className="ml-auto h-10 rounded-lg px-4 text-sm text-danger-fg hover:bg-danger-soft"
           >
             {confirmArchive ? 'Confirmar arquivamento' : 'Arquivar'}
           </button>

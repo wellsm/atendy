@@ -169,6 +169,15 @@ export type OrderStatus = 'placed' | 'accepted' | 'out' | 'done' | 'canceled' | 
 export type PanelOrder = {
   id: string;
   /**
+   * Employee id or Clerk user id of who made / canceled it (see `authorName`).
+   */
+  created_by: string | null;
+  canceled_by: string | null;
+  /**
+   * Delivery orders that left with a courier.
+   */
+  courier: { id: string; name: string } | null;
+  /**
    * `K7Q2MX` / `128`, shown as `#K7Q2MX`.
    */
   code: string;
@@ -225,10 +234,25 @@ export const useUpdateOrder = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { orderId: string; status: OrderStatus }) =>
+    mutationFn: (input: { orderId: string; status: OrderStatus; courierId?: string }) =>
       api<{ order: PanelOrder; notified: boolean }>('PATCH', `/panel/orders/${input.orderId}`, {
-        status: input.status
+        status: input.status,
+        ...(input.courierId && { courier_id: input.courierId })
       }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['orders'] })
+  });
+};
+
+/**
+ * Changes the courier of an order that is out for delivery.
+ */
+export const useAssignCourier = () => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { orderId: string; courierId: string }) =>
+      api<{ order: PanelOrder }>('PUT', `/panel/orders/${input.orderId}/courier`, { courier_id: input.courierId }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['orders'] })
   });
 };
@@ -541,6 +565,14 @@ export type Settings = {
    */
   stock_alert_hour: number | null;
   pos: PosSettings;
+  staff: StaffSettings;
+};
+
+export type StaffSettings = {
+  idle_minutes: number;
+  discount_limit_percent: number;
+  courier_fee_mode: 'order_fee' | 'fixed';
+  courier_fee_cents: number;
 };
 
 export type PosSettings = {
@@ -1888,6 +1920,8 @@ export type PosSale = {
   needs_preparation: boolean;
   created_at: string;
   placed_at: string | null;
+  created_by: string | null;
+  canceled_by: string | null;
 };
 
 /**
@@ -1903,6 +1937,8 @@ export type PosHeldSale = {
   created_at: string;
   placed_at: string | null;
   canceled_at: string | null;
+  created_by: string | null;
+  canceled_by: string | null;
 };
 
 export type PosSalePatch = {
@@ -2095,6 +2131,7 @@ export type CashReport = {
   order_cash_cents: number;
   sangria_cents: number;
   suprimento_cents: number;
+  courier_payout_cents: number;
   expected_cash_cents: number | null;
   sales_count: number;
   sales_cents: number;
@@ -2107,7 +2144,7 @@ export type CashReport = {
 
 export type CashMovement = {
   id: string;
-  kind: 'refund' | 'order_cash' | 'sangria' | 'suprimento';
+  kind: 'refund' | 'order_cash' | 'sangria' | 'suprimento' | 'courier_payout';
   method: PaymentMethod;
   amount_cents: number;
   reason: string | null;
@@ -2178,5 +2215,185 @@ export const useCashSession = (id: string | undefined) => {
     queryKey: ['cash', 'session', id],
     enabled: !!id,
     queryFn: () => api<{ session: CashSession; report: CashReport }>('GET', `/panel/cash/sessions/${id}`)
+  });
+};
+
+export type StaffRole = 'cashier' | 'kitchen' | 'manager' | 'courier';
+
+export type StaffMember = {
+  id: string;
+  name: string;
+  role: StaffRole;
+  delivers: boolean;
+  phone: string | null;
+  active: boolean;
+};
+
+export type StaffInput = {
+  name: string;
+  role: StaffRole;
+  delivers: boolean;
+  phone: string | null;
+  pin?: string | null;
+};
+
+export type StaffLock = {
+  locked: boolean;
+  idle_minutes: number;
+  staff: { id: string; name: string; role: StaffRole }[];
+};
+
+/**
+ * Whether the panel asks "Quem está usando?", and the names it offers.
+ */
+export const useStaffLock = () => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['staff', 'lock'],
+    queryFn: () => api<StaffLock>('GET', '/panel/staff/lock')
+  });
+};
+
+/**
+ * Every employee, inactive ones included (reports keep their names).
+ */
+export const useStaff = () => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['staff', 'list'],
+    queryFn: () => api<{ staff: StaffMember[] }>('GET', '/panel/staff')
+  });
+};
+
+export type CourierPendingOrder = {
+  id: string;
+  code: string;
+  delivered_at: string | null;
+  fee_cents: number;
+  cash_cents: number;
+};
+
+export type CourierPending = {
+  orders: CourierPendingOrder[];
+  fees_cents: number;
+  cash_cents: number;
+  net_cents: number;
+};
+
+export type CourierSettlement = {
+  id: string;
+  orders_count: number;
+  fees_cents: number;
+  cash_cents: number;
+  cash_movement_id: string | null;
+  settled_by: string;
+  created_at: string;
+};
+
+/**
+ * Delivered, unsettled orders of a courier delivered between `from` and `to` (ISO instants).
+ */
+export const useCourierPending = (courierId: string, from: string, to: string) => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['staff', 'courier-pending', courierId, from, to],
+    queryFn: () =>
+      api<CourierPending>(
+        'GET',
+        `/panel/couriers/${courierId}/pending?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      )
+  });
+};
+
+export const useCourierSettlements = (courierId: string) => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['staff', 'courier-settlements', courierId],
+    queryFn: () => api<{ settlements: CourierSettlement[] }>('GET', `/panel/couriers/${courierId}/settlements`)
+  });
+};
+
+const useStaffMutation = <TInput, TOutput>(
+  request: (input: TInput) => [method: 'POST' | 'PATCH' | 'PUT', path: string, body: unknown]
+) => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: TInput) => api<TOutput>(...request(input)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] })
+  });
+};
+
+export const useCreateStaff = () =>
+  useStaffMutation<StaffInput, { staff: StaffMember }>((input) => ['POST', '/panel/staff', input]);
+
+export const useUpdateStaff = () =>
+  useStaffMutation<{ id: string; body: StaffInput & { active: boolean } }, { staff: StaffMember }>((input) => [
+    'PATCH',
+    `/panel/staff/${input.id}`,
+    input.body
+  ]);
+
+export const useSetStaffPin = () =>
+  useStaffMutation<{ id: string; pin: string }, { id: string }>((input) => [
+    'PUT',
+    `/panel/staff/${input.id}/pin`,
+    { pin: input.pin }
+  ]);
+
+/**
+ * The token comes back once; the courier link is `<web origin>/courier/<token>`.
+ */
+export const useRegenerateCourierLink = () =>
+  useStaffMutation<{ id: string }, { token: string }>((input) => [
+    'POST',
+    `/panel/staff/${input.id}/courier-link`,
+    undefined
+  ]);
+
+/**
+ * The payout is a cash movement: the drawer's session and reports refetch too.
+ */
+export const useSettleCourier = () => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { id: string; order_ids: string[] }) =>
+      api<{ settlement: CourierSettlement }>('POST', `/panel/couriers/${input.id}/settlements`, {
+        order_ids: input.order_ids
+      }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['staff'] }),
+        queryClient.invalidateQueries({ queryKey: ['cash'] })
+      ])
+  });
+};
+
+export const useUpdateStaffSettings = () =>
+  useSettingsMutation<StaffSettings, StaffSettings>('PUT', '/panel/settings/staff');
+
+export const useAdminStaff = (storeId: string) => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['admin', 'staff', storeId],
+    queryFn: () =>
+      api<{ staff: Pick<StaffMember, 'id' | 'name' | 'role' | 'active'>[] }>('GET', `/admin/stores/${storeId}/staff`)
+  });
+};
+
+export const useResetAdminStaffPin = (storeId: string) => {
+  const api = useApi();
+
+  return useMutation({
+    mutationFn: (input: { staff_id: string; pin: string }) =>
+      api<{ id: string }>('PUT', `/admin/stores/${storeId}/staff/${input.staff_id}/pin`, { pin: input.pin })
   });
 };

@@ -85,7 +85,7 @@ export function HistorySheet({ onClose }: { onClose: () => void }) {
         {(openOrders.isPending || closedOrders.isPending) && <Loading />}
 
         {(openOrders.isError || closedOrders.isError) && (
-          <p className="p-6 text-sm text-accent-fg">Não foi possível carregar os pedidos.</p>
+          <p className="p-6 text-sm text-danger-fg">Não foi possível carregar os pedidos.</p>
         )}
 
         {openOrders.data && closedOrders.data && orders.length === 0 && (

@@ -57,7 +57,7 @@ export function ProductPhoto(props: { url: string | null; onPick: (blob: Blob) =
           </div>
         </>
       ) : (
-        <label className="flex h-32 w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-dashed border-line-2 bg-hover p-4 text-center hover:border-red-400 hover:bg-accent-soft md:size-50 md:h-50">
+        <label className="flex h-32 w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-dashed border-line-2 bg-hover p-4 text-center hover:border-accent hover:bg-accent-soft md:size-50 md:h-50">
           <span className="text-[22px] text-faint">+</span>
           <span className="text-[13px] font-medium text-fg-2">{reading ? 'Lendo a foto…' : 'Enviar foto'}</span>
           <span className="text-xs leading-snug text-muted">JPG, PNG ou WebP. Aparece no cardápio público.</span>
@@ -65,7 +65,7 @@ export function ProductPhoto(props: { url: string | null; onPick: (blob: Blob) =
         </label>
       )}
 
-      {failed && <span className="text-xs text-accent-fg">Não foi possível ler esta imagem. Tente outra foto.</span>}
+      {failed && <span className="text-xs text-danger-fg">Não foi possível ler esta imagem. Tente outra foto.</span>}
     </div>
   );
 }

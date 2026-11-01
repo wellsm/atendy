@@ -1,6 +1,7 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { String } from '@ez4/schema';
+import type { OperatorHeaders } from '../../staff/authorize';
 import type { PanelSendProvider } from '../provider';
 import type { PanelConversation, PanelIdentity } from '../types';
 
@@ -10,12 +11,15 @@ import { ConversationRepository } from '../../conversations/repository';
 import { ConversationMode } from '../../conversations/types';
 import { notifyPanel } from '../../realtime/notify';
 import { PanelTrigger } from '../../realtime/types';
+import { authorize } from '../../staff/authorize';
+import { Permission } from '../../staff/permissions';
 import { sendStaffMessage, StaffSendError } from '../send';
 import { requireStore } from '../store';
 import { toPanelConversation } from '../types';
 
 export declare class SendMessageRequest implements Http.Request {
   identity: PanelIdentity;
+  headers: OperatorHeaders;
   parameters: {
     conversationId: String.UUID;
   };
@@ -42,6 +46,7 @@ export async function sendMessageHandler(
   { db, panelEvents }: Service.Context<PanelSendProvider>
 ): Promise<SendMessageResponse> {
   const store = await requireStore(db, request.identity);
+  await authorize(db, store, request.identity, request.headers, Permission.Conversations);
   const text = request.body.text.trim();
 
   if (!text) {

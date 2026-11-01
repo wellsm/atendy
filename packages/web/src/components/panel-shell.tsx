@@ -9,9 +9,11 @@ import { useState } from 'react';
 
 import { needsPerson } from './conversations/customer';
 import { GlobalSearch } from './global-search';
+import { Logo } from './logo';
 import { SoundToggle } from './sound-toggle';
 import { StoreMenu } from './store-menu';
 import { formatMoney } from '../lib/format';
+import { useOperator } from '../lib/operator';
 import { keepPanelState } from '../lib/panel-search';
 import { usePanelSlug } from '../lib/panel-slug';
 import {
@@ -63,7 +65,7 @@ function AcceptingSwitch({ store }: { store: PanelStore }) {
         </span>
       </button>
       {accepting && !store.open_now && <span className="text-xs text-warn-fg">Fechada pelo horário</span>}
-      {update.isError && <span className="text-xs text-accent-fg">Não foi possível alterar.</span>}
+      {update.isError && <span className="text-xs text-danger-fg">Não foi possível alterar.</span>}
     </div>
   );
 }
@@ -74,10 +76,15 @@ function AcceptingSwitch({ store }: { store: PanelStore }) {
 function MonthCard({ onPick }: { onPick: () => void }) {
   const slug = usePanelSlug();
   const billing = useBilling();
+  const { can } = useOperator();
   const now = new Date();
   const day = now.getDate();
   const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const open = billing.data?.open;
+
+  if (!can('dashboard')) {
+    return null;
+  }
 
   return (
     <div className="mx-3 mt-1 flex flex-col gap-3 rounded-xl border border-line bg-hover p-3.5">
@@ -150,10 +157,14 @@ function ViewNav({ onPick }: { onPick: () => void }) {
   const openOrders = useOrders('open');
   const waiting = conversations.data?.conversations.filter(needsPerson).length ?? 0;
   const newOrders = openOrders.data?.orders.filter(({ status }) => status === 'placed').length ?? 0;
+  const { can } = useOperator();
+  const views = VIEWS.filter((item) => can(item.view ? 'board' : 'conversations'));
 
   return (
-    <nav className="mx-3 mb-3 grid grid-cols-2 gap-1 rounded-[10px] bg-seg p-[3px]">
-      {VIEWS.map((item) => {
+    <nav
+      className={`mx-3 mb-3 grid gap-1 rounded-[10px] bg-seg p-[3px] ${views.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}
+    >
+      {views.map((item) => {
         const count = item.view === 'orders' ? newOrders : waiting;
 
         return (
@@ -190,6 +201,11 @@ function SheetButton({
   onPick: () => void;
 }) {
   const slug = usePanelSlug();
+  const { can } = useOperator();
+
+  if (!can(sheet)) {
+    return null;
+  }
 
   return (
     <Link
@@ -218,11 +234,12 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
   const paused = products.filter(({ active }) => !active).length;
   const wa = whatsapp.data && WHATSAPP[whatsapp.data.state];
   const card = billing.data?.card;
+  const { can } = useOperator();
 
   return (
     <>
       <div className="flex flex-col gap-[3px] px-5 pb-3.5 pt-[18px]">
-        <p className="text-xs font-semibold uppercase tracking-wider text-accent-fg">Atendy</p>
+        <Logo className="mb-1 h-4 self-start text-fg" />
         <StoreMenu name={store.name} />
         <a
           href={`/${store.slug}`}
@@ -242,18 +259,20 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
       <MonthCard onPick={onPick} />
 
       <nav className="flex flex-col gap-1.5 px-3 py-3.5">
-        <Link
-          to="/panel/$slug/pos"
-          params={{ slug }}
-          onClick={onPick}
-          className="flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3 py-2.5 hover:bg-hover"
-        >
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-sm font-medium">PDV</span>
-            <span className="truncate text-xs text-muted">Venda no balcão</span>
-          </span>
-          <span className="text-faint">›</span>
-        </Link>
+        {can('pos') && (
+          <Link
+            to="/panel/$slug/pos"
+            params={{ slug }}
+            onClick={onPick}
+            className="flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3 py-2.5 hover:bg-hover"
+          >
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-sm font-medium">PDV</span>
+              <span className="truncate text-xs text-muted">Venda no balcão</span>
+            </span>
+            <span className="text-faint">›</span>
+          </Link>
+        )}
         <SheetButton
           sheet="menu"
           title="Cardápio"
@@ -300,7 +319,7 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
           title="Pagamento"
           subtitle={
             billing.data?.blocked ? (
-              <span className="text-accent-fg">Bloqueado por falta de pagamento</span>
+              <span className="text-danger-fg">Bloqueado por falta de pagamento</span>
             ) : card ? (
               `Cartão ${card.brand} •••• ${card.last4}`
             ) : (
@@ -355,6 +374,14 @@ function TodaySummary({ orders }: { orders: PanelOrder[] }) {
  */
 export function PanelShell({ store, children }: { store: PanelStore; children: ReactNode }) {
   const { theme, setTheme } = usePanelTheme();
+  const { locked, operator, lock, requireOperator } = useOperator();
+  const askOperator = async () => {
+    try {
+      await requireOperator();
+    } catch {
+      // dismissed
+    }
+  };
   const [drawer, setDrawer] = useState(false);
   const conversations = useConversations();
   const openOrders = useOrders('open');
@@ -395,6 +422,21 @@ export function PanelShell({ store, children }: { store: PanelStore; children: R
           <GlobalSearch conversations={conversations.data?.conversations ?? []} orders={orders} />
           <span className="hidden flex-1 lg:block" />
           <TodaySummary orders={orders} />
+          {locked && (
+            <button
+              type="button"
+              onClick={operator ? lock : () => void askOperator()}
+              className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-[13px] text-fg-2 hover:bg-hover"
+            >
+              {operator ? (
+                <>
+                  <b className="font-semibold text-fg">{operator.name}</b> · Trocar operador
+                </>
+              ) : (
+                'Entrar com PIN'
+              )}
+            </button>
+          )}
           <span className="hidden sm:block">
             <SoundToggle openOrders={openOrders.data?.orders} conversations={conversations.data?.conversations} />
           </span>

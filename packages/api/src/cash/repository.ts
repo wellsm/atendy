@@ -351,6 +351,42 @@ export namespace CashRepository {
   };
 
   /**
+   * Cash paid to a courier at settlement, in the open session. `tx` must be a transaction; returns the movement id,
+   * or null when no session is open (the fees are then settled without touching a drawer).
+   */
+  export const recordCourierPayout = async (
+    tx: DbClient,
+    storeId: string,
+    input: { amountCents: number; author: string; reason: string }
+  ) => {
+    await lockStore(tx, storeId);
+
+    const session = await findOpen(tx, storeId);
+
+    if (!session || input.amountCents < 1) {
+      return null;
+    }
+
+    const id = randomUUID();
+
+    await tx.cash_movements.insertOne({
+      data: {
+        id,
+        store_id: storeId,
+        session_id: session.id,
+        kind: CashMovementKind.CourierPayout,
+        method: PaymentMethod.Cash,
+        amount_cents: input.amountCents,
+        reason: input.reason,
+        author: input.author,
+        created_at: new Date().toISOString()
+      }
+    });
+
+    return id;
+  };
+
+  /**
    * Refunds of a canceled sale, one row per method, in the session open at cancel time (`null`: cash control off).
    * `tx` must be a transaction; a closed or another store's session throws `no_session`.
    */

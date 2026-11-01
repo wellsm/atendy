@@ -162,7 +162,7 @@ function Line({
             discount={item.discount}
             onChange={(discount) => onPatch(discount === undefined ? undefined : { discount })}
           />
-          <button type="button" disabled={disabled} onClick={onRemove} className={`${BUTTON} text-accent-fg`}>
+          <button type="button" disabled={disabled} onClick={onRemove} className={`${BUTTON} text-danger-fg`}>
             Remover
           </button>
         </div>
@@ -395,7 +395,7 @@ export function SalePanel({
                 setConfirmClear(true);
               }
             }}
-            className={`${BUTTON} h-11 ${confirmClear ? 'border-accent-line bg-accent-soft text-accent-fg' : ''}`}
+            className={`${BUTTON} h-11 ${confirmClear ? 'border-danger-line bg-danger-soft text-danger-fg' : ''}`}
           >
             {confirmClear ? 'Confirmar limpeza' : 'Limpar'}
           </button>
@@ -404,7 +404,7 @@ export function SalePanel({
           type="button"
           disabled={!items.length || disabled}
           onClick={onCharge}
-          className="h-14 rounded-xl bg-accent text-lg font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          className="h-14 rounded-xl bg-accent text-lg font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
         >
           Cobrar {formatMoney(sale?.total_cents ?? 0)} <span className="text-sm font-normal opacity-80">F4</span>
         </button>

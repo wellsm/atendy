@@ -81,6 +81,17 @@ export interface StoreSchema extends Database.Schema {
   pos_cash_control?: boolean | null;
   pos_blind_close?: boolean | null;
   pos_receipt_width?: Integer.Range<58, 80> | null;
+  /**
+   * Employees (PIN): minutes of inactivity before the panel locks (1-240, null = 15) and the highest discount a
+   * non-manager may give, in percent (0-100, null = 10).
+   */
+  staff_idle_minutes?: Integer.Range<1, 240> | null;
+  staff_discount_limit_percent?: Integer.Range<0, 100> | null;
+  /**
+   * What a courier earns per delivery: the order's delivery fee (null = `order_fee`) or a fixed amount.
+   */
+  courier_fee_mode?: 'order_fee' | 'fixed' | null;
+  courier_fee_cents?: Integer.Min<0> | null;
   created_at: String.DateTime;
   updated_at: String.DateTime;
 }

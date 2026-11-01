@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Sheet, SheetHeader } from './sheet';
 import { ApiError } from '../../lib/api';
 import { formatMoney, formatWhen } from '../../lib/format';
+import { useOperator } from '../../lib/operator';
 import { usePanelNavigate, usePanelSearch } from '../../lib/panel-search';
 import { useFindStockBarcode, useStockItem, useStockItems, useStockSummary } from '../../lib/queries';
 import {
@@ -55,7 +56,9 @@ function Badge({ item }: { item: StockItem }) {
 }
 
 function ActionButtons({ item, onAction }: { item: StockItem; onAction: (action: Action) => void }) {
-  if (item.archived_at) {
+  const { allows } = useOperator();
+
+  if (item.archived_at || !allows('stock_move')) {
     return null;
   }
 
@@ -67,9 +70,11 @@ function ActionButtons({ item, onAction }: { item: StockItem; onAction: (action:
       <button type="button" className={BUTTON} onClick={() => onAction({ kind: 'loss', item })}>
         Perda
       </button>
-      <button type="button" className={BUTTON} onClick={() => onAction({ kind: 'count', item })}>
-        Contagem
-      </button>
+      {allows('stock_manage') && (
+        <button type="button" className={BUTTON} onClick={() => onAction({ kind: 'count', item })}>
+          Contagem
+        </button>
+      )}
     </div>
   );
 }
@@ -81,6 +86,7 @@ function ActionButtons({ item, onAction }: { item: StockItem; onAction: (action:
 export function StockSheet({ onClose }: { onClose: () => void }) {
   const navigate = usePanelNavigate();
   const { item: itemId } = usePanelSearch();
+  const manage = useOperator().allows('stock_manage');
   const [action, setAction] = useState<Action>();
   const [newBarcode, setNewBarcode] = useState<string>();
 
@@ -105,7 +111,7 @@ export function StockSheet({ onClose }: { onClose: () => void }) {
             />
           </div>
         </>
-      ) : itemId === 'new' ? (
+      ) : itemId === 'new' && manage ? (
         <>
           <SheetHeader title="Novo item" onBack={back} onClose={onClose} />
           <div className="flex-1 overflow-y-auto px-4 pb-8 pt-5 md:px-6">
@@ -116,7 +122,7 @@ export function StockSheet({ onClose }: { onClose: () => void }) {
             />
           </div>
         </>
-      ) : itemId ? (
+      ) : itemId && itemId !== 'new' ? (
         <ItemView key={itemId} itemId={itemId} onAction={setAction} onClose={onClose} />
       ) : (
         <StockList onAction={setAction} onClose={onClose} onNewWithBarcode={setNewBarcode} />
@@ -136,6 +142,7 @@ function StockList({
 }) {
   const navigate = usePanelNavigate();
   const { filter = 'all' } = usePanelSearch();
+  const manage = useOperator().allows('stock_manage');
   const items = useStockItems(filter);
   const summary = useStockSummary();
   const find = useFindStockBarcode();
@@ -189,16 +196,18 @@ function StockList({
         subtitle={summary.data ? `${summary.data.low} baixos · ${summary.data.sold_out} esgotados` : undefined}
         onClose={onClose}
       >
-        <button
-          type="button"
-          onClick={() => {
-            onNewWithBarcode('');
-            void navigate({ sheet: 'stock', item: 'new' });
-          }}
-          className="flex h-9 items-center rounded-lg bg-accent px-3.5 text-[13px] font-medium text-white hover:bg-red-700"
-        >
-          + Item
-        </button>
+        {manage && (
+          <button
+            type="button"
+            onClick={() => {
+              onNewWithBarcode('');
+              void navigate({ sheet: 'stock', item: 'new' });
+            }}
+            className="flex h-9 items-center rounded-lg bg-accent px-3.5 text-[13px] font-medium text-white hover:bg-accent-hover"
+          >
+            + Item
+          </button>
+        )}
       </SheetHeader>
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-8 pt-4 md:px-6">
         <form onSubmit={onSubmit} className="flex gap-2">
@@ -217,21 +226,23 @@ function StockList({
           />
         </form>
 
-        {message && <p className="text-sm text-accent-fg">{message}</p>}
+        {message && <p className="text-sm text-danger-fg">{message}</p>}
 
         {unknownCode && (
           <p className="rounded-lg border border-warn-line bg-warn-bg px-4 py-3 text-sm text-warn-fg">
             Nenhum item com o código {unknownCode}.{' '}
-            <button
-              type="button"
-              className="font-semibold underline"
-              onClick={() => {
-                onNewWithBarcode(unknownCode);
-                void navigate({ sheet: 'stock', item: 'new' });
-              }}
-            >
-              Cadastrar item
-            </button>
+            {manage && (
+              <button
+                type="button"
+                className="font-semibold underline"
+                onClick={() => {
+                  onNewWithBarcode(unknownCode);
+                  void navigate({ sheet: 'stock', item: 'new' });
+                }}
+              >
+                Cadastrar item
+              </button>
+            )}
           </p>
         )}
 
@@ -249,7 +260,7 @@ function StockList({
         </div>
 
         {items.isPending && <Loading />}
-        {items.isError && <p className="text-sm text-accent-fg">Não foi possível carregar o estoque.</p>}
+        {items.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o estoque.</p>}
         {items.data && visible.length === 0 && (
           <p className="text-sm text-muted">
             {items.data.items.length === 0 ? 'Nenhum item aqui ainda.' : 'Nada encontrado para essa busca.'}
@@ -289,6 +300,7 @@ function ItemView({
   onClose: () => void;
 }) {
   const navigate = usePanelNavigate();
+  const manage = useOperator().allows('stock_manage');
   const query = useStockItem(itemId);
   const [editing, setEditing] = useState(false);
   const back = () => void navigate({ sheet: 'stock' });
@@ -303,9 +315,9 @@ function ItemView({
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pb-8 pt-5 md:px-6">
         {query.isPending && <Loading />}
         {notFound && <p className="text-sm text-muted">Item não encontrado.</p>}
-        {query.isError && !notFound && <p className="text-sm text-accent-fg">Não foi possível carregar o item.</p>}
+        {query.isError && !notFound && <p className="text-sm text-danger-fg">Não foi possível carregar o item.</p>}
 
-        {first && editing && (
+        {first && editing && manage && (
           <ItemForm
             item={first.item}
             packages={first.packages}
@@ -314,15 +326,17 @@ function ItemView({
           />
         )}
 
-        {first && !editing && (
+        {first && !(editing && manage) && (
           <>
             <section className="flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <p className="text-2xl font-bold tabular-nums">{formatQty(first.item.balance, first.item.unit)}</p>
                 <Badge item={first.item} />
-                <button type="button" onClick={() => setEditing(true)} className={`${BUTTON} ml-auto`}>
-                  Editar
-                </button>
+                {manage && (
+                  <button type="button" onClick={() => setEditing(true)} className={`${BUTTON} ml-auto`}>
+                    Editar
+                  </button>
+                )}
               </div>
               <ActionButtons item={first.item} onAction={onAction} />
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -386,7 +400,7 @@ function ItemView({
                         {movement.note && ` · ${movement.note}`}
                       </span>
                     </div>
-                    <span className={`tabular-nums ${movement.qty_delta < 0 ? 'text-accent-fg' : 'text-on'}`}>
+                    <span className={`tabular-nums ${movement.qty_delta < 0 ? 'text-danger-fg' : 'text-on'}`}>
                       {movement.qty_delta > 0 ? '+' : ''}
                       {formatQty(movement.qty_delta, first.item.unit)}
                     </span>

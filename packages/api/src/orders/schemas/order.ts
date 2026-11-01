@@ -68,6 +68,17 @@ export interface OrderSchema extends Database.Schema {
    * POS: the Clerk user who rang the sale.
    */
   created_by?: string | null;
+  /**
+   * Delivery orders: the courier who took it, the fee frozen at dispatch, and the hand-over (position when the
+   * courier pressed "Entreguei", if the browser gave it). `courier_settlement_id` is for the later settlement.
+   */
+  courier_id?: String.UUID | null;
+  courier_fee_cents?: Integer.Min<0> | null;
+  dispatched_at?: String.DateTime | null;
+  delivered_at?: String.DateTime | null;
+  delivered_lat?: number | null;
+  delivered_lng?: number | null;
+  courier_settlement_id?: String.UUID | null;
   placed_at?: String.DateTime | null;
   /**
    * Abandoned drafts: the customer's last message before the order memory window ran out.

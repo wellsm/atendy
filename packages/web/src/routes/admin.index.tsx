@@ -5,6 +5,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { Loading } from '../components/loading';
+import { Logo } from '../components/logo';
 import { SignedIn } from '../components/signed-in';
 import { ApiError } from '../lib/api';
 import { useAdminStores, useSetStoreActive } from '../lib/queries';
@@ -48,23 +49,23 @@ function Admin() {
       <div className="mx-auto flex max-w-5xl flex-col gap-4 px-3 py-4 md:gap-5 md:p-8">
         <header className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 md:px-0">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <p className="hidden text-xs font-medium uppercase tracking-wide text-red-600 md:block">Atendy</p>
+            <Logo className="mb-1 hidden h-4 self-start text-neutral-900 md:block" />
             <h1 className="text-xl font-bold md:text-2xl">Admin · Lojas</h1>
           </div>
           <nav className="order-last flex w-full gap-4 text-sm font-medium md:order-none md:w-auto">
-            <Link to="/admin/conversations" className="text-red-700 hover:text-red-800">
+            <Link to="/admin/conversations" className="text-accent-fg hover:text-accent-hover">
               Conversas
             </Link>
-            <Link to="/admin/costs" className="text-red-700 hover:text-red-800">
+            <Link to="/admin/costs" className="text-accent-fg hover:text-accent-hover">
               Custos
             </Link>
-            <Link to="/admin/prompt" className="text-red-700 hover:text-red-800">
+            <Link to="/admin/prompt" className="text-accent-fg hover:text-accent-hover">
               Prompt
             </Link>
-            <Link to="/admin/simulations" className="text-red-700 hover:text-red-800">
+            <Link to="/admin/simulations" className="text-accent-fg hover:text-accent-hover">
               Simulações
             </Link>
-            <Link to="/admin/prospecting" className="text-red-700 hover:text-red-800">
+            <Link to="/admin/prospecting" className="text-accent-fg hover:text-accent-hover">
               Prospecção
             </Link>
           </nav>
@@ -79,7 +80,7 @@ function Admin() {
               aria-pressed={tab === id}
               onClick={() => setTab(id)}
               className={`h-9.5 rounded-md px-3.5 text-[13px] font-medium md:h-auto md:py-1.5 md:text-sm ${
-                tab === id ? 'bg-red-600 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+                tab === id ? 'bg-accent text-white' : 'text-neutral-700 hover:bg-neutral-100'
               }`}
             >
               {label}
@@ -143,7 +144,7 @@ function StoreRow({ store }: { store: AdminStoreRow }) {
           <Link
             to="/admin/$storeId"
             params={{ storeId: store.id }}
-            className="truncate text-[15px] font-semibold text-neutral-900 hover:text-red-700 hover:underline md:text-sm md:font-medium"
+            className="truncate text-[15px] font-semibold text-neutral-900 hover:text-accent-fg hover:underline md:text-sm md:font-medium"
           >
             {store.name}
           </Link>
@@ -168,7 +169,7 @@ function StoreRow({ store }: { store: AdminStoreRow }) {
       <Link
         to="/$slug"
         params={{ slug: store.slug }}
-        className="hidden truncate text-[13px] text-neutral-500 hover:text-red-700 md:block"
+        className="hidden truncate text-[13px] text-neutral-500 hover:text-accent-fg md:block"
       >
         /{store.slug}
       </Link>
@@ -181,7 +182,7 @@ function StoreRow({ store }: { store: AdminStoreRow }) {
         className={`h-10 shrink-0 justify-self-end rounded-lg border px-3 text-[13px] font-medium disabled:opacity-50 md:h-8 ${
           store.active
             ? 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50'
-            : 'border-red-600 bg-red-600 text-white hover:bg-red-700'
+            : 'border-accent bg-accent text-white hover:bg-accent-hover'
         }`}
       >
         {store.active ? 'Desativar' : 'Ativar'}

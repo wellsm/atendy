@@ -16,7 +16,7 @@ export const Route = createFileRoute('/admin/simulations/')({
   )
 });
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none';
+const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
 const DRAFT_KEY = 'atendy.simulation-draft';
 
@@ -139,7 +139,7 @@ function SimulationsPage() {
             type="button"
             disabled={!valid || !storeId || start.isPending}
             onClick={onStart}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             {start.isPending ? 'Iniciando…' : `Rodar ${total || ''} conversas`}
           </button>

@@ -142,7 +142,7 @@ function LibraryRow({ entry, categories }: { entry: LibraryGroup; categories: Me
           <button type="button" onClick={() => setMode(Mode.Apply)} className="font-medium text-accent-fg">
             Aplicar em produtos…
           </button>
-          <button type="button" onClick={() => setMode(Mode.Delete)} className="text-muted hover:text-accent-fg">
+          <button type="button" onClick={() => setMode(Mode.Delete)} className="text-muted hover:text-danger-fg">
             Apagar
           </button>
         </div>
@@ -161,7 +161,7 @@ function LibraryRow({ entry, categories }: { entry: LibraryGroup; categories: Me
       )}
 
       {mode === Mode.Delete && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-accent-line bg-accent-soft px-3 py-2 text-sm text-accent-fg">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
           <span>
             Apagar {group.name}? Sai de {products.length === 1 ? '1 produto' : `${products.length} produtos`}; pedidos
             já feitos não mudam.
@@ -170,7 +170,7 @@ function LibraryRow({ entry, categories }: { entry: LibraryGroup; categories: Me
             type="button"
             disabled={remove.isPending}
             onClick={() => remove.mutate(group.id)}
-            className="rounded-md bg-accent px-3 py-1.5 font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-danger px-3 py-1.5 font-medium text-white disabled:opacity-50"
           >
             Apagar
           </button>
@@ -224,7 +224,7 @@ function GroupEdit(props: { group: MenuGroup; sharedMax: number; onDone: () => v
           type="button"
           disabled={saving || !!invalid}
           onClick={save}
-          className="h-9 rounded-lg bg-accent px-4 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          className="h-9 rounded-lg bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
         >
           {saving ? 'Salvando…' : 'Salvar em todos'}
         </button>
@@ -232,7 +232,7 @@ function GroupEdit(props: { group: MenuGroup; sharedMax: number; onDone: () => v
           Cancelar
         </button>
         {invalid && <span className="text-sm text-warn-fg">{invalid}</span>}
-        {!invalid && error != null && <span className="text-sm text-accent-fg">{errorText(error)}</span>}
+        {!invalid && error != null && <span className="text-sm text-danger-fg">{errorText(error)}</span>}
       </div>
     </div>
   );

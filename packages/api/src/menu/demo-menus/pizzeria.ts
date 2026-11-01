@@ -1,7 +1,7 @@
 import type { MenuImport } from '../repository';
 
 import { PriceMode } from '../types';
-import { DRINKS } from './drinks';
+import { DRINKS, DRINKS_STOCK } from './drinks';
 
 /**
  * Full pizzeria. Pizza prices live in the flavors (base price 0), so half-and-half charges the most
@@ -76,6 +76,7 @@ const pizzaExtras = {
 };
 
 export const PIZZERIA_MENU: MenuImport = {
+  stock: DRINKS_STOCK,
   categories: [
     {
       name: 'Pizzas Salgadas',

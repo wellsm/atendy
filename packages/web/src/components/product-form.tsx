@@ -460,7 +460,7 @@ export function ProductForm(props: {
             </div>
             {stockLinks.isPending && <span className="text-sm text-muted">Carregando vínculos…</span>}
             {stockLinks.isError && (
-              <span className="text-sm text-accent-fg">Não foi possível carregar os vínculos de estoque.</span>
+              <span className="text-sm text-danger-fg">Não foi possível carregar os vínculos de estoque.</span>
             )}
             {!stockLinks.isPending && !stockLinks.isError && (
               <StockLinksEditor
@@ -607,7 +607,7 @@ export function ProductForm(props: {
         <button
           type="submit"
           disabled={props.saving || !!invalid}
-          className="h-10 flex-1 rounded-lg bg-accent px-5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 sm:flex-none"
+          className="h-10 flex-1 rounded-lg bg-accent px-5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50 sm:flex-none"
         >
           {props.saving ? 'Salvando…' : 'Salvar'}
         </button>
@@ -616,34 +616,34 @@ export function ProductForm(props: {
         </button>
         {invalid && <span className="basis-full text-sm text-warn-fg sm:basis-auto">{invalid}</span>}
         {!invalid && props.error != null && (
-          <span className="basis-full text-sm text-accent-fg sm:basis-auto">{errorText(props.error)}</span>
+          <span className="basis-full text-sm text-danger-fg sm:basis-auto">{errorText(props.error)}</span>
         )}
 
         {props.onDelete && !confirmDelete && (
           <button
             type="button"
             onClick={() => setConfirmDelete(true)}
-            className="text-sm text-muted hover:text-accent-fg sm:ml-auto"
+            className="text-sm text-muted hover:text-danger-fg sm:ml-auto"
           >
             Apagar produto
           </button>
         )}
 
         {props.onDelete && confirmDelete && (
-          <div className="flex basis-full flex-wrap items-center gap-3 rounded-lg border border-accent-line bg-accent-soft px-3 py-2 text-sm text-accent-fg sm:ml-auto sm:basis-auto">
+          <div className="flex basis-full flex-wrap items-center gap-3 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg sm:ml-auto sm:basis-auto">
             <span>Apagar {props.product?.name}? Pedidos já feitos não mudam.</span>
             <button
               type="button"
               disabled={props.deleting}
               onClick={props.onDelete}
-              className="rounded-md bg-accent px-3 py-1.5 font-medium text-white disabled:opacity-50"
+              className="rounded-md bg-danger px-3 py-1.5 font-medium text-white disabled:opacity-50"
             >
               Apagar
             </button>
             <button type="button" onClick={() => setConfirmDelete(false)}>
               Voltar
             </button>
-            {props.deleteError != null && <span className="text-accent-fg">Não foi possível apagar.</span>}
+            {props.deleteError != null && <span className="text-danger-fg">Não foi possível apagar.</span>}
           </div>
         )}
       </div>

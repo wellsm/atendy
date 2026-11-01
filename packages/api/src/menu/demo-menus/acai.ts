@@ -1,7 +1,7 @@
 import type { MenuImport } from '../repository';
 
 import { PriceMode } from '../types';
-import { DRINKS } from './drinks';
+import { DRINKS, DRINKS_STOCK } from './drinks';
 
 const freeToppings = {
   name: 'Complementos grátis',
@@ -66,6 +66,7 @@ const cup = (name: string, price: number, image: string) => ({
 });
 
 export const ACAI_MENU: MenuImport = {
+  stock: DRINKS_STOCK,
   categories: [
     {
       name: 'Monte seu Açaí',

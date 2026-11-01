@@ -5,7 +5,7 @@ import { SystemChip } from './prospecting-leads-parts';
 import { formatPhone, formatWhen } from '../lib/format';
 import { useUpdateProspect } from '../lib/queries';
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none';
+const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
 const LINK = 'rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100';
 

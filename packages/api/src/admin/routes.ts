@@ -12,7 +12,9 @@ import type { getStoreHandler } from './endpoints/get-store';
 import type { getStoreWhatsAppHandler } from './endpoints/get-store-whatsapp';
 import type { listAdminConversationsHandler } from './endpoints/list-conversations';
 import type { listAdminSimulationRunsHandler } from './endpoints/list-simulation-runs';
+import type { listAdminStaffHandler } from './endpoints/list-staff';
 import type { listStoresHandler } from './endpoints/list-stores';
+import type { resetAdminStaffPinHandler } from './endpoints/reset-staff-pin';
 import type { runAdminBillingHandler } from './endpoints/run-billing';
 import type { seedDemoMenuHandler } from './endpoints/seed-demo-menu';
 import type { updateAdminStoreHandler } from './endpoints/update-store';
@@ -33,6 +35,16 @@ export type AdminRoutes = [
     path: 'GET /admin/stores/{storeId}';
     authorizer: typeof adminAuthorizer;
     handler: typeof getStoreHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /admin/stores/{storeId}/staff';
+    authorizer: typeof adminAuthorizer;
+    handler: typeof listAdminStaffHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'PUT /admin/stores/{storeId}/staff/{staffId}/pin';
+    authorizer: typeof adminAuthorizer;
+    handler: typeof resetAdminStaffPinHandler;
   }>,
   Http.UseRoute<{
     path: 'POST /admin/stores/{storeId}/demo-menu';

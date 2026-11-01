@@ -2,13 +2,14 @@ import type { DbClient } from '../db';
 import type { Coordinates, DeliveryBand } from './geo';
 import type { HourRange } from './hours';
 import type { DeliverySettings } from './settings';
-import type { OrderCodeMode, PosSettings, StorePolicy } from './types';
+import type { OrderCodeMode, PosSettings, StaffSettings, StorePolicy } from './types';
 
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import { Order } from '@ez4/database';
 
 import { DeliveryMode, PaymentMethod, RouterType, WhatsAppProviderType } from './types';
+import { OrderStatus } from '../orders/types';
 
 export const DEFAULT_TIMEZONE = 'America/Sao_Paulo';
 
@@ -414,7 +415,11 @@ export namespace StoreRepository {
           pos_layout: true,
           pos_cash_control: true,
           pos_blind_close: true,
-          pos_receipt_width: true
+          pos_receipt_width: true,
+          staff_idle_minutes: true,
+          staff_discount_limit_percent: true,
+          courier_fee_mode: true,
+          courier_fee_cents: true
         },
         where: { id: storeId }
       }),
@@ -451,7 +456,8 @@ export namespace StoreRepository {
       policy: store.policy ?? {},
       stockAlertPhone: store.stock_alert_phone ?? null,
       stockAlertHour: store.stock_alert_hour ?? null,
-      pos: resolvePos(store)
+      pos: resolvePos(store),
+      staff: resolveStaff(store)
     };
   };
 
@@ -466,6 +472,67 @@ export namespace StoreRepository {
     blindClose: store.pos_blind_close ?? false,
     receiptWidth: store.pos_receipt_width === 58 ? 58 : 80
   });
+
+  const resolveStaff = (store: {
+    staff_idle_minutes?: number | null;
+    staff_discount_limit_percent?: number | null;
+    courier_fee_mode?: 'order_fee' | 'fixed' | null;
+    courier_fee_cents?: number | null;
+  }): StaffSettings => ({
+    idleMinutes: store.staff_idle_minutes ?? 15,
+    discountLimitPercent: store.staff_discount_limit_percent ?? 10,
+    courierFeeMode: store.courier_fee_mode ?? 'order_fee',
+    courierFeeCents: store.courier_fee_cents ?? 0
+  });
+
+  export const getStaffSettings = async (db: DbClient, storeId: string): Promise<StaffSettings> => {
+    const store = await db.stores.findOne({
+      select: {
+        staff_idle_minutes: true,
+        staff_discount_limit_percent: true,
+        courier_fee_mode: true,
+        courier_fee_cents: true
+      },
+      where: { id: storeId }
+    });
+
+    return resolveStaff(store ?? {});
+  };
+
+  export const setStaffSettings = async (db: DbClient, storeId: string, settings: StaffSettings) => {
+    await db.transaction(async (tx) => {
+      // Orders before the store row, like every other path. Deliveries still out get the new rule; delivered ones
+      // keep the fee they were paid.
+      const { records } = await tx.orders.findMany({
+        select: { id: true, fee_cents: true, courier_id: true },
+        where: { store_id: storeId, status: OrderStatus.Out },
+        order: { id: Order.Asc },
+        lock: true
+      });
+
+      for (const order of records) {
+        if (order.courier_id) {
+          await tx.orders.updateOne({
+            data: {
+              courier_fee_cents: settings.courierFeeMode === 'fixed' ? settings.courierFeeCents : order.fee_cents
+            },
+            where: { id: order.id }
+          });
+        }
+      }
+
+      await tx.stores.updateOne({
+        data: {
+          staff_idle_minutes: settings.idleMinutes,
+          staff_discount_limit_percent: settings.discountLimitPercent,
+          courier_fee_mode: settings.courierFeeMode,
+          courier_fee_cents: settings.courierFeeCents,
+          updated_at: new Date().toISOString()
+        },
+        where: { id: storeId }
+      });
+    });
+  };
 
   export const getPosSettings = async (db: DbClient, storeId: string): Promise<PosSettings> => {
     const store = await db.stores.findOne({

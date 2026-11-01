@@ -36,6 +36,7 @@ import {
   useUpdateStore
 } from '../../lib/queries';
 import { Loading } from '../loading';
+import { StaffTab } from '../staff/staff-settings';
 import { Toggle } from '../toggle';
 
 const INPUT =
@@ -78,7 +79,8 @@ const SECTIONS: [SettingsTab, string][] = [
   ['payment', 'Pagamento'],
   ['policy', 'Regras'],
   ['stock', 'Estoque'],
-  ['pos', 'PDV']
+  ['pos', 'PDV'],
+  ['staff', 'Funcionários']
 ];
 
 /**
@@ -119,7 +121,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
       </div>
 
       {settings.isPending && <Loading />}
-      {settings.isError && <p className="p-6 text-sm text-accent-fg">Não foi possível carregar as configurações.</p>}
+      {settings.isError && <p className="p-6 text-sm text-danger-fg">Não foi possível carregar as configurações.</p>}
       {settings.data && <ActiveSection tab={tab} settings={settings.data} />}
     </Sheet>
   );
@@ -141,6 +143,8 @@ function ActiveSection({ tab, settings }: { tab: SettingsTab; settings: Settings
       return <StockAlertSection phone={settings.stock_alert_phone} hour={settings.stock_alert_hour} />;
     case 'pos':
       return <PosSection pos={settings.pos} />;
+    case 'staff':
+      return <StaffTab settings={settings.staff} />;
   }
 }
 
@@ -181,7 +185,7 @@ function Section(props: {
         </button>
         {props.invalid && <span className="text-sm text-warn-fg">{props.invalid}</span>}
         {!props.invalid && props.error != null && (
-          <span className="text-sm text-accent-fg">{errorText(props.error)}</span>
+          <span className="text-sm text-danger-fg">{errorText(props.error)}</span>
         )}
         {!props.invalid && props.error == null && props.saved && <span className="text-sm text-ok-fg">✓ Salvo</span>}
       </div>
@@ -219,7 +223,7 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="rounded-md px-2 py-1 text-sm text-faint hover:text-accent-fg"
+      className="rounded-md px-2 py-1 text-sm text-faint hover:text-danger-fg"
     >
       ✕
     </button>
@@ -830,9 +834,9 @@ function StoreLocationField({ location }: { location: StoreLocation | null }) {
           {locate.isPending ? 'Localizando…' : 'Localizar'}
         </button>
       </div>
-      {notFound && <p className="mt-2 text-accent-fg">Endereço não encontrado. Inclua rua, número e cidade.</p>}
+      {notFound && <p className="mt-2 text-danger-fg">Endereço não encontrado. Inclua rua, número e cidade.</p>}
       {locate.isError && !notFound && (
-        <p className="mt-2 text-accent-fg">O serviço de mapas não respondeu. Tente novamente.</p>
+        <p className="mt-2 text-danger-fg">O serviço de mapas não respondeu. Tente novamente.</p>
       )}
       {current ? (
         <p className="mt-2 break-words text-muted">

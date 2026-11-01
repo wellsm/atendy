@@ -11,15 +11,18 @@ import {
   useCashSession,
   useCashSessions,
   useCloseCash,
-  useOpenCash
+  useOpenCash,
+  useStaff
 } from '../../lib/queries';
+import { authorName } from '../../lib/staff';
 
 const INPUT =
   'h-11 min-w-0 rounded-lg border border-line-2 bg-surface px-3 text-base focus:border-accent focus:outline-none';
 
 const BUTTON = 'h-11 rounded-lg border border-line-2 px-3 text-sm text-fg-2 hover:bg-hover disabled:opacity-50';
 
-const PRIMARY = 'h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50';
+const PRIMARY =
+  'h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50';
 
 const METHODS: PaymentMethod[] = ['pix', 'card', 'cash', 'voucher'];
 
@@ -87,6 +90,7 @@ const reportRows = (report: CashReport) => {
     ['Dinheiro de pedidos (WhatsApp/site)', formatMoney(report.order_cash_cents)],
     ['Suprimentos', `+ ${formatMoney(report.suprimento_cents)}`],
     ['Sangrias', `− ${formatMoney(report.sangria_cents)}`],
+    ['Pagamento entregador', `− ${formatMoney(report.courier_payout_cents)}`],
     ['Esperado em dinheiro', formatMoney(expected)]
   );
 
@@ -128,11 +132,16 @@ function SessionReport({
   storeName: string;
   receiptWidth: 58 | 80;
 }) {
+  const staff = useStaff().data?.staff;
+  const openedBy = authorName(session.opened_by, staff);
+  const closedBy = authorName(session.closed_by, staff);
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted">
         Aberto {formatWhen(session.opened_at)}
-        {session.closed_at && ` · fechado ${formatWhen(session.closed_at)}`}
+        {openedBy && ` por ${openedBy}`}
+        {session.closed_at && ` · fechado ${formatWhen(session.closed_at)}${closedBy ? ` por ${closedBy}` : ''}`}
       </p>
       <ReportList report={report} />
       <button type="button" onClick={() => window.print()} className={BUTTON}>
@@ -184,7 +193,7 @@ export function OpenCashForm() {
           className={INPUT}
         />
       </label>
-      {open.isError && <p className="text-sm text-accent-fg">{errorText(open.error)}</p>}
+      {open.isError && <p className="text-sm text-danger-fg">{errorText(open.error)}</p>}
       <button type="submit" disabled={cents === undefined || open.isPending} className={PRIMARY}>
         Abrir caixa
       </button>
@@ -271,7 +280,7 @@ function MovementForm({
         onChange={(event) => setReason(event.target.value)}
         className={INPUT}
       />
-      {move.isError && <p className="text-sm text-accent-fg">{errorText(move.error)}</p>}
+      {move.isError && <p className="text-sm text-danger-fg">{errorText(move.error)}</p>}
       <div className="grid grid-cols-2 gap-2">
         <button type="button" onClick={onDone} className={BUTTON}>
           Voltar
@@ -326,7 +335,7 @@ function CloseForm({
           className={INPUT}
         />
       </label>
-      {close.isError && <p className="text-sm text-accent-fg">{errorText(close.error)}</p>}
+      {close.isError && <p className="text-sm text-danger-fg">{errorText(close.error)}</p>}
       <div className="grid grid-cols-2 gap-2">
         <button type="button" onClick={onBack} className={BUTTON}>
           Voltar
@@ -343,7 +352,7 @@ function PastSession({ id, storeName, receiptWidth }: { id: string; storeName: s
   const query = useCashSession(id);
 
   if (query.isError) {
-    return <p className="text-sm text-accent-fg">Não foi possível carregar o resumo.</p>;
+    return <p className="text-sm text-danger-fg">Não foi possível carregar o resumo.</p>;
   }
 
   return query.data ? (
@@ -378,6 +387,7 @@ export function CashPanel({
   const [view, setView] = useState<View>({ kind: 'main' });
   const session = current.data?.session;
   const report = current.data?.report;
+  const staff = useStaff().data?.staff;
   const closed = sessions.data?.sessions.filter(({ closed_at }) => closed_at) ?? [];
   const main = () => setView({ kind: 'main' });
 
@@ -440,13 +450,16 @@ export function CashPanel({
           {view.kind === 'main' && (
             <>
               {current.isPending && <p className="text-sm text-muted">Carregando…</p>}
-              {current.isError && <p className="text-sm text-accent-fg">Não foi possível carregar o caixa.</p>}
+              {current.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o caixa.</p>}
               {current.data && !session && <OpenCashForm />}
               {session && report && (
                 <div className="flex flex-col gap-3">
                   <p className="text-base font-semibold">
                     Caixa aberto{' '}
-                    <span className="text-sm font-normal text-muted">· {formatWhen(session.opened_at)}</span>
+                    <span className="text-sm font-normal text-muted">
+                      · {formatWhen(session.opened_at)}
+                      {authorName(session.opened_by, staff) && ` por ${authorName(session.opened_by, staff)}`}
+                    </span>
                   </p>
                   <ReportList report={report} />
                   <div className="grid grid-cols-2 gap-2">
