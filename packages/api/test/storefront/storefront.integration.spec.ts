@@ -15,7 +15,7 @@ import { StockUnit } from '../../src/stock/types';
 import { deliveryFromCents } from '../../src/storefront/delivery';
 import { getStorefrontHandler } from '../../src/storefront/endpoints/get-store';
 import { StoreRepository } from '../../src/stores/repository';
-import { DeliveryMode, PaymentMethod } from '../../src/stores/types';
+import { DeliveryMode, PaymentMethod, StoreType } from '../../src/stores/types';
 import { seedMenu, seedStore } from '../support/fixtures';
 
 describe('storefront', () => {
@@ -45,7 +45,8 @@ describe('storefront', () => {
       deliveryFromCents: 500,
       minOrderCents: 2500,
       paymentMethods: [PaymentMethod.Pix, PaymentMethod.Cash],
-      deliveryMode: DeliveryMode.Flat
+      deliveryMode: DeliveryMode.Flat,
+      storeType: StoreType.Food
     });
 
     const products = body.categories.flatMap(({ products }) => products);

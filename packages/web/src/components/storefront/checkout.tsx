@@ -9,6 +9,7 @@ import { PhoneCheck } from './phone-check';
 import { ApiError, postPublic } from '../../lib/api';
 import { centsToInput, formatMoney, maskPhoneInput, parseMoney } from '../../lib/format';
 import { readPhoneToken, savePhoneToken } from '../../lib/phone-token';
+import { menuWord } from '../../lib/store-type';
 import { PAYMENT_LABELS } from '../../lib/storefront';
 
 type Quote = {
@@ -239,7 +240,7 @@ export function Checkout(props: { store: StorefrontStore; slug: string; cart: Ca
             onClick={props.onClose}
             className="mt-3 h-11 rounded-lg bg-neutral-900 px-6 text-sm font-semibold text-white"
           >
-            Voltar ao cardápio
+            Voltar ao {menuWord(store.store_type)}
           </button>
         </div>
       </Shell>

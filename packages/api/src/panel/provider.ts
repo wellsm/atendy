@@ -12,6 +12,19 @@ export declare class PanelProvider implements Http.Provider {
 }
 
 /**
+ * `GET /panel/me`: also tells the panel whether the demo phones are on.
+ */
+export declare class PanelMeProvider implements Http.Provider {
+  variables: {
+    DEMO_ENABLED: Environment.Variable<'DEMO_ENABLED'>;
+  };
+
+  services: {
+    db: Environment.Service<Db>;
+  };
+}
+
+/**
  * Menu endpoints that return products (signed `imageUrl`) or handle their photos.
  */
 export declare class PanelMenuProvider implements Http.Provider {

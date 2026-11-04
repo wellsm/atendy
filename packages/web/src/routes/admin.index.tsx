@@ -1,14 +1,15 @@
+import type { FormEvent } from 'react';
 import type { AdminStoreRow } from '../lib/queries';
 
 import { UserButton } from '@clerk/react';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { Loading } from '../components/loading';
 import { Logo } from '../components/logo';
 import { SignedIn } from '../components/signed-in';
 import { ApiError } from '../lib/api';
-import { useAdminStores, useSetStoreActive } from '../lib/queries';
+import { useAdminStores, useCreateAdminStore, useSetStoreActive } from '../lib/queries';
 
 export const Route = createFileRoute('/admin/')({
   component: () => (
@@ -68,9 +69,14 @@ function Admin() {
             <Link to="/admin/prospecting" className="text-accent-fg hover:text-accent-hover">
               Prospecção
             </Link>
+            <Link to="/admin/users" className="text-accent-fg hover:text-accent-hover">
+              Usuários
+            </Link>
           </nav>
           <UserButton />
         </header>
+
+        <NewStore />
 
         <div className="grid grid-cols-3 rounded-lg border border-neutral-200 bg-white p-0.5 md:flex md:self-start">
           {tabs.map(([id, label]) => (
@@ -188,5 +194,85 @@ function StoreRow({ store }: { store: AdminStoreRow }) {
         {store.active ? 'Desativar' : 'Ativar'}
       </button>
     </li>
+  );
+}
+
+/**
+ * Creates a store already active, with its Clerk org; members come from `/admin/users`.
+ */
+function NewStore() {
+  const create = useCreateAdminStore();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    create.mutate(
+      { name: name.trim(), ...(slug.trim() && { slug: slug.trim() }) },
+      { onSuccess: ({ store }) => navigate({ to: '/admin/$storeId', params: { storeId: store.id } }) }
+    );
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="h-10 self-start rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover"
+      >
+        Nova loja
+      </button>
+    );
+  }
+
+  const error =
+    create.error instanceof ApiError && create.error.field === 'slug'
+      ? create.error.status === 409
+        ? 'Endereço já usado.'
+        : 'Endereço inválido ou reservado.'
+      : create.isError
+        ? 'Não foi possível criar a loja.'
+        : null;
+
+  return (
+    <form
+      onSubmit={submit}
+      className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4 text-sm md:flex-row md:items-end"
+    >
+      <label className="flex flex-1 flex-col gap-1.5 font-semibold">
+        Nome
+        <input
+          required
+          maxLength={80}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className="h-11 rounded-lg border border-neutral-300 px-3 font-normal"
+        />
+      </label>
+      <label className="flex flex-1 flex-col gap-1.5 font-semibold">
+        Endereço (opcional)
+        <input
+          value={slug}
+          onChange={(event) => setSlug(event.target.value)}
+          placeholder="pizzaria-demo"
+          className="h-11 rounded-lg border border-neutral-300 px-3 font-normal"
+        />
+      </label>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setOpen(false)} className="h-11 rounded-lg border border-neutral-300 px-4">
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={create.isPending || !name.trim()}
+          className="h-11 rounded-lg bg-accent px-4 font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+        >
+          Criar loja
+        </button>
+      </div>
+      {error && <p className="text-red-700 md:basis-full">{error}</p>}
+    </form>
   );
 }

@@ -99,6 +99,25 @@ export type StorePolicy = {
    * Delay the bot quotes for such an addition. Null = no number.
    */
   add_on_extra_minutes?: number | null;
+  /**
+   * Admin only. Replaces the catalog-link message of the greeting a new customer gets for a plain hello.
+   */
+  welcome_text?: string | null;
+  /**
+   * Admin only. A service the store handles in another system (e.g. bookings): the bot sends `url` when the customer
+   * wants it, and that reply bills the cycle at `REDIRECT_PERCENT`.
+   */
+  redirect?: StoreRedirect | null;
+  /**
+   * Admin only. The store never sells: a fixed welcome with `redirect.url` on each new visit, then the redirect prompt
+   * (catalog questions, handoff). Needs `redirect`.
+   */
+  redirect_only?: boolean | null;
+};
+
+export type StoreRedirect = {
+  label: string;
+  url: string;
 };
 
 /**
@@ -132,4 +151,12 @@ export const enum NewOrderAfterStatus {
 export const enum OrderCodeMode {
   Random = 'random',
   Sequential = 'sequential'
+}
+
+/**
+ * How the bot and the public page talk: a restaurant menu (default) or a product catalog. Null on a store = food.
+ */
+export const enum StoreType {
+  Food = 'food',
+  Retail = 'retail'
 }

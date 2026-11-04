@@ -3,28 +3,24 @@ import type { WhatsAppProvider } from '../whatsapp/types';
 
 import { randomUUID } from 'node:crypto';
 
-import { SimulationRepository } from './repository';
-
 export type SimulationStep = {
   simulationId: string;
 };
 
 export namespace SimulatorProvider {
   /**
-   * WhatsApp of a simulated conversation: nothing leaves the API. The inbound queue queues the simulated customer's next
-   * step once the whole reply (every message of it) is stored.
+   * WhatsApp of a simulated customer (`@sim`: admin simulations and demo phones): nothing leaves the API.
    */
-  export const forConversation = async (db: DbClient, conversationId: string): Promise<WhatsAppProvider> => {
-    const simulationId = await SimulationRepository.findIdByConversation(db, conversationId);
-
-    if (!simulationId) {
-      throw new Error(`No simulation for conversation ${conversationId}`);
-    }
-
-    return {
-      sendText: () => Promise.resolve({ providerMessageId: `sim:${randomUUID()}` }),
-      startTyping: () => () => Promise.resolve(),
-      downloadMedia: () => Promise.reject(new Error('Simulated customers send text only'))
-    };
+  export const noop: WhatsAppProvider = {
+    sendText: () => Promise.resolve({ providerMessageId: `sim:${randomUUID()}` }),
+    startTyping: () => () => Promise.resolve(),
+    downloadMedia: () => Promise.reject(new Error('Simulated customers send text only'))
   };
+
+  /**
+   * WhatsApp of a simulated conversation. The inbound queue queues a simulation's next step once the whole reply
+   * (every message of it) is stored; demo phones have no simulation row.
+   */
+  export const forConversation = (_db: DbClient, _conversationId: string): Promise<WhatsAppProvider> =>
+    Promise.resolve(noop);
 }

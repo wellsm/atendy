@@ -45,6 +45,46 @@ describe('parsePolicyPatch', () => {
     throws(() => parsePolicyPatch('{"add_on_extra_minutes":-1}'), PolicyError);
   });
 
+  it('accepts the welcome text and the redirect link', () => {
+    deepEqual(
+      parsePolicyPatch(
+        JSON.stringify({
+          welcome_text: 'Como posso te ajudar?',
+          redirect: { label: 'Agendamento', url: 'https://agenda.example.com/bella' }
+        })
+      ),
+      {
+        welcome_text: 'Como posso te ajudar?',
+        redirect: { label: 'Agendamento', url: 'https://agenda.example.com/bella' }
+      }
+    );
+
+    deepEqual(parsePolicyPatch('{"welcome_text":null,"redirect":null}'), { welcome_text: null, redirect: null });
+
+    const bad = [
+      JSON.stringify({ welcome_text: 'a'.repeat(1001) }),
+      JSON.stringify({ welcome_text: '   ' }),
+      JSON.stringify({ redirect: { label: 'Agenda', url: 'agenda.example.com' } }),
+      JSON.stringify({ redirect: { label: 'Agenda', url: 'javascript:alert(1)' } }),
+      JSON.stringify({ redirect: { label: '', url: 'https://agenda.example.com' } }),
+      JSON.stringify({ redirect: { label: 'a'.repeat(61), url: 'https://agenda.example.com' } }),
+      JSON.stringify({ redirect: { label: 'Agenda', url: `https://a.com/${'a'.repeat(500)}` } }),
+      JSON.stringify({ redirect: { label: 'Agenda', url: 'https://agenda.example.com', extra: 1 } }),
+      JSON.stringify({ redirect: 'https://agenda.example.com' })
+    ];
+
+    for (const raw of bad) {
+      throws(() => parsePolicyPatch(raw), PolicyError, raw);
+    }
+  });
+
+  it('accepts the redirect-only switch as a boolean or null', () => {
+    deepEqual(parsePolicyPatch('{"redirect_only":true}'), { redirect_only: true });
+    deepEqual(parsePolicyPatch('{"redirect_only":null}'), { redirect_only: null });
+
+    throws(() => parsePolicyPatch('{"redirect_only":"yes"}'), PolicyError);
+  });
+
   it('rejects bad JSON, non-objects, unknown keys and bad values', () => {
     const bad = [
       '{',

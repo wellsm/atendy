@@ -53,7 +53,8 @@ export const operatorBridge: {
   refreshLock?: () => Promise<void>;
 } = { active: false, locked: false };
 
-const UNGATED = /^\/panel\/staff\/(lock|unlock|approvals|owner-unlock)$/;
+// Demo phones are the customer talking, never staff: the PIN lock does not apply.
+const UNGATED = /^\/panel\/(staff\/(lock|unlock|approvals|owner-unlock)$|demo-phones\/)/;
 
 /**
  * The permission a 403 `approval_required` is about, from the route that answered it.

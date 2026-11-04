@@ -3,6 +3,9 @@ import type { adminAuthorizer } from './authorizer';
 import type { chargeAdminBillingNowHandler } from './endpoints/charge-billing-now';
 import type { connectStoreWhatsAppHandler } from './endpoints/connect-store-whatsapp';
 import type { createAdminSimulationRunHandler } from './endpoints/create-simulation-run';
+import type { createAdminStoreHandler } from './endpoints/create-store';
+import type { createAdminUserHandler } from './endpoints/create-user';
+import type { deleteAdminUserHandler } from './endpoints/delete-user';
 import type { disconnectStoreWhatsAppHandler } from './endpoints/disconnect-store-whatsapp';
 import type { getAdminConversationHandler } from './endpoints/get-conversation';
 import type { getCostReportHandler } from './endpoints/get-cost-report';
@@ -14,17 +17,45 @@ import type { listAdminConversationsHandler } from './endpoints/list-conversatio
 import type { listAdminSimulationRunsHandler } from './endpoints/list-simulation-runs';
 import type { listAdminStaffHandler } from './endpoints/list-staff';
 import type { listStoresHandler } from './endpoints/list-stores';
+import type { listAdminUsersHandler } from './endpoints/list-users';
 import type { resetAdminStaffPinHandler } from './endpoints/reset-staff-pin';
 import type { runAdminBillingHandler } from './endpoints/run-billing';
 import type { seedDemoMenuHandler } from './endpoints/seed-demo-menu';
 import type { updateAdminStoreHandler } from './endpoints/update-store';
+import type { updateAdminUserStoresHandler } from './endpoints/update-user-stores';
 import type { validateAdminSimulationHandler } from './endpoints/validate-simulation';
+import type { resetAdminDemoStoreHandler } from '../demo/endpoints/reset-store';
 
 export type AdminRoutes = [
   Http.UseRoute<{
     path: 'GET /admin/stores';
     authorizer: typeof adminAuthorizer;
     handler: typeof listStoresHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /admin/stores';
+    authorizer: typeof adminAuthorizer;
+    handler: typeof createAdminStoreHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /admin/users';
+    authorizer: typeof adminAuthorizer;
+    handler: typeof listAdminUsersHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /admin/users';
+    authorizer: typeof adminAuthorizer;
+    handler: typeof createAdminUserHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'PUT /admin/users/{userId}/stores';
+    authorizer: typeof adminAuthorizer;
+    handler: typeof updateAdminUserStoresHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'DELETE /admin/users/{userId}';
+    authorizer: typeof adminAuthorizer;
+    handler: typeof deleteAdminUserHandler;
   }>,
   Http.UseRoute<{
     path: 'PATCH /admin/stores/{storeId}';
@@ -50,6 +81,11 @@ export type AdminRoutes = [
     path: 'POST /admin/stores/{storeId}/demo-menu';
     authorizer: typeof adminAuthorizer;
     handler: typeof seedDemoMenuHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'POST /admin/stores/{storeId}/demo-reset';
+    authorizer: typeof adminAuthorizer;
+    handler: typeof resetAdminDemoStoreHandler;
   }>,
   Http.UseRoute<{
     path: 'GET /admin/stores/{storeId}/whatsapp';

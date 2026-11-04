@@ -2,7 +2,7 @@ import type { AiPath, AiProvider } from '../agent/types';
 import type { ConversationMode, MessageAuthor } from '../conversations/types';
 import type { BillingSummary } from '../payments/types';
 import type { RouterType } from '../stores/types';
-import type { OrderCodeMode } from '../stores/types';
+import type { OrderCodeMode, StoreRedirect, StoreType } from '../stores/types';
 
 export type AdminIdentity = {
   userId: string;
@@ -44,6 +44,9 @@ export type AdminStoreDetail = {
    * `null` = default (3 h).
    */
   orderMemoryHours: number | null;
+  welcomeText: string | null;
+  redirect: StoreRedirect | null;
+  redirectOnly: boolean;
   /**
    * Price of an order the AI took all the way; `null` = `defaultOrderPriceCents`.
    */
@@ -55,6 +58,10 @@ export type AdminStoreDetail = {
   webOrderPercent: number | null;
   defaultWebOrderPercent: number;
   orderCodeMode: OrderCodeMode;
+  /**
+   * Menu or catalog wording; a store without a type is food.
+   */
+  storeType: StoreType;
   models: string[];
   billing: BillingSummary | null;
 };

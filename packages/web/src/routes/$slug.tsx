@@ -13,6 +13,7 @@ import { useCart } from '../lib/cart';
 import { formatMoney } from '../lib/format';
 import { startingPrice, unavailableGroups } from '../lib/menu';
 import { latestPhoneToken } from '../lib/phone-token';
+import { menuWord } from '../lib/store-type';
 import { initials, PAYMENT_LABELS, searchable, useStorefront } from '../lib/storefront';
 
 export const Route = createFileRoute('/$slug')({
@@ -42,12 +43,13 @@ function StorefrontPage() {
   }, [checkout]);
 
   const name = storefront.data?.store.name;
+  const word = menuWord(storefront.data?.store.store_type);
 
   useEffect(() => {
     if (name) {
-      document.title = `${name} · Cardápio`;
+      document.title = `${name} · ${word.charAt(0).toUpperCase()}${word.slice(1)}`;
     }
-  }, [name]);
+  }, [name, word]);
 
   if (storefront.isPending) {
     return <Loading />;
@@ -58,7 +60,7 @@ function StorefrontPage() {
 
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-neutral-50 p-6 text-center">
-        <p className="font-semibold">{notFound ? 'Loja não encontrada' : 'Não foi possível carregar o cardápio'}</p>
+        <p className="font-semibold">{notFound ? 'Loja não encontrada' : 'Não foi possível carregar a loja'}</p>
         <p className="text-sm text-neutral-600">
           {notFound ? 'Confira o endereço com a loja.' : 'Recarregue a página em alguns instantes.'}
         </p>
@@ -83,7 +85,7 @@ function StorefrontPage() {
   };
 
   const current = activeCategory ?? categories[0]?.id;
-  const search = <SearchInput value={query} onChange={setQuery} />;
+  const search = <SearchInput value={query} onChange={setQuery} word={word} />;
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -120,7 +122,7 @@ function StorefrontPage() {
       <main className="mx-auto flex max-w-292 flex-col gap-2 pb-28 md:gap-9 md:px-6 md:pt-7">
         {!categories.length && (
           <p className="m-4 rounded-xl border border-dashed border-neutral-300 p-6 text-sm text-neutral-600 md:m-0 md:p-8">
-            {term ? `Nenhum produto encontrado para “${query.trim()}”.` : 'O cardápio ainda está vazio.'}
+            {term ? `Nenhum produto encontrado para “${query.trim()}”.` : `O ${word} ainda está vazio.`}
           </p>
         )}
 
@@ -171,6 +173,7 @@ function StorefrontPage() {
           phone={account.phone}
           token={account.token}
           open={store.open}
+          retail={store.store_type === 'retail'}
           products={storefront.data.categories.flatMap(({ products }) => products)}
           cart={cart}
           onCheckout={() => {
@@ -194,7 +197,7 @@ function Avatar({ name, className }: { name: string; className: string }) {
   );
 }
 
-function SearchInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function SearchInput({ value, onChange, word }: { value: string; onChange: (value: string) => void; word: string }) {
   return (
     <label className="flex h-11 items-center gap-2.5 rounded-[10px] bg-neutral-100 px-3.5 md:h-10.5">
       <svg
@@ -215,8 +218,8 @@ function SearchInput({ value, onChange }: { value: string; onChange: (value: str
         type="search"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Buscar no cardápio"
-        aria-label="Buscar no cardápio"
+        placeholder={`Buscar no ${word}`}
+        aria-label={`Buscar no ${word}`}
         className="min-w-0 flex-1 bg-transparent text-[15px] outline-none md:text-sm"
       />
     </label>

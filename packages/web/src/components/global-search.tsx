@@ -4,8 +4,9 @@ import { useState } from 'react';
 
 import { customerInitials, customerName } from './conversations/customer';
 import { STATUS_CHIP } from './conversations/order-panel';
-import { formatMoney, formatPhone, formatWhen, handoffLabel, orderCustomerName, STATUS_LABEL } from '../lib/format';
+import { formatMoney, formatPhone, formatWhen, handoffLabel, orderCustomerName, statusLabel } from '../lib/format';
 import { usePanelNavigate } from '../lib/panel-search';
+import { usePanelMenuWord } from '../lib/store-type';
 
 const normalize = (text: string | null | undefined) =>
   (text ?? '')
@@ -23,6 +24,7 @@ const place = (order: PanelOrder) =>
  * loaded; picking one opens its conversation.
  */
 export function GlobalSearch({ conversations, orders }: { conversations: PanelConversation[]; orders: PanelOrder[] }) {
+  const { retail } = usePanelMenuWord();
   const navigate = usePanelNavigate();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -150,7 +152,7 @@ export function GlobalSearch({ conversations, orders }: { conversations: PanelCo
                   <span
                     className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium sm:block ${STATUS_CHIP[order.status]}`}
                   >
-                    {STATUS_LABEL[order.status]}
+                    {statusLabel(order.status, retail)}
                   </span>
                   <span className="w-[84px] shrink-0 text-right text-[13px] font-semibold">
                     {formatMoney(order.total_cents)}

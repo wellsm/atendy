@@ -5,8 +5,9 @@ import { useState } from 'react';
 
 import { customerInitials, customerName, needsPerson } from './customer';
 import { STATUS_CHIP } from './order-panel';
-import { formatMoney, formatWhen, handoffLabel, STATUS_LABEL } from '../../lib/format';
+import { formatMoney, formatWhen, handoffLabel, statusLabel } from '../../lib/format';
 import { usePanelSlug } from '../../lib/panel-slug';
+import { usePanelMenuWord } from '../../lib/store-type';
 
 type Filter = 'all' | 'human' | Extract<OrderStatus, 'placed' | 'accepted' | 'out'>;
 
@@ -46,6 +47,7 @@ export function ConversationList({
   selectedId: string | undefined;
 }) {
   const [filter, setFilter] = useState<Filter>('all');
+  const { retail } = usePanelMenuWord();
   const orderOf = (conversation: PanelConversation) =>
     openOrders.find((order) => order.conversation_id === conversation.id);
   const urgent = (conversation: PanelConversation) =>
@@ -66,7 +68,7 @@ export function ConversationList({
     ['all', 'Todas', undefined],
     ['human', 'Precisam de você', conversations.filter(needsPerson).length],
     ['placed', 'Novos', stageCount('placed')],
-    ['accepted', 'Em preparo', stageCount('accepted')],
+    ['accepted', statusLabel('accepted', retail), stageCount('accepted')],
     ['out', 'Saiu', stageCount('out')]
   ];
 
@@ -122,6 +124,7 @@ function ConversationRow({
   order: PanelOrder | undefined;
   selected: boolean;
 }) {
+  const { retail } = usePanelMenuWord();
   const slug = usePanelSlug();
   const human = needsPerson(conversation);
   const last = conversation.last_message;
@@ -151,7 +154,7 @@ function ConversationRow({
           <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
             {order && (
               <span className={`rounded-full px-[7px] py-px text-[11px] font-medium ${STATUS_CHIP[order.status]}`}>
-                {STATUS_LABEL[order.status]} · {formatMoney(order.total_cents)}
+                {statusLabel(order.status, retail)} · {formatMoney(order.total_cents)}
               </span>
             )}
             {conversation.approval_reason ? (

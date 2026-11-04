@@ -2,8 +2,9 @@ import type { OrderStatus, PanelOrder } from '../../lib/queries';
 
 import { useEffect, useRef, useState } from 'react';
 
-import { formatWhen, orderCustomerName } from '../../lib/format';
+import { formatWhen, orderCustomerName, statusLabel } from '../../lib/format';
 import { usePanelNavigate } from '../../lib/panel-search';
+import { usePanelMenuWord } from '../../lib/store-type';
 import { Actions, Items, Notice, Summary, useOrderStatus } from '../conversations/order-panel';
 
 const STAGES = [
@@ -49,7 +50,13 @@ const useFreshOrders = (orders: PanelOrder[]) => {
 export function OrderBoard({ orders }: { orders: PanelOrder[] }) {
   const [picked, setPicked] = useState<OrderStatus>('placed');
   const fresh = useFreshOrders(orders);
-  const columns = STAGES.map((stage) => ({ ...stage, orders: orders.filter(({ status }) => status === stage.status) }));
+  const { retail } = usePanelMenuWord();
+  const columns = STAGES.map((stage) => ({
+    ...stage,
+    ...(retail &&
+      stage.status === 'accepted' && { title: statusLabel(stage.status, retail), empty: 'Nada em separação.' }),
+    orders: orders.filter(({ status }) => status === stage.status)
+  }));
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-3 p-3 md:p-5">

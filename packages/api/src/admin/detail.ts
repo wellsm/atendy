@@ -44,11 +44,15 @@ export const loadAdminDetail = async (db: DbClient, storeId: string): Promise<Ad
       acceptingOrders: store.accepting_orders
     },
     orderMemoryHours: store.policy?.order_memory_hours ?? null,
+    welcomeText: store.policy?.welcome_text ?? null,
+    redirect: store.policy?.redirect ?? null,
+    redirectOnly: !!store.policy?.redirect_only,
     orderPriceCents: store.order_price_cents ?? null,
     defaultOrderPriceCents: DEFAULT_ORDER_PRICE_CENTS,
     webOrderPercent: store.web_order_percent ?? null,
     defaultWebOrderPercent: DEFAULT_WEB_ORDER_PERCENT,
     orderCodeMode: store.order_code_mode ?? OrderCodeMode.Random,
+    storeType: store.store_type,
     models: [...LLM_MODELS],
     billing: billing ?? null
   };

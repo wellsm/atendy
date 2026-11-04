@@ -1,11 +1,12 @@
 import type { Database } from '@ez4/database';
-import type { Integer, String } from '@ez4/schema';
+import type { Enum, Integer, String } from '@ez4/schema';
 import type {
   DeliveryMode,
   OrderCodeMode,
   PaymentMethod,
   RouterType,
   StorePolicy,
+  StoreType,
   WhatsAppProviderType
 } from '../types';
 
@@ -57,7 +58,11 @@ export interface StoreSchema extends Database.Schema {
   order_code_mode?: OrderCodeMode | null;
   order_seq?: Integer.Min<0> | null;
   /**
-   * Asaas customer and the card subscription that charges each cycle; brand/last 4 only, never the card.
+   * Who pays for this store (`billing_accounts`); null until first use (`BillingAccounts.ensure`).
+   */
+  billing_account_id?: String.UUID | null;
+  /**
+   * Legacy: copied to the store's billing account on first use, then unused (`DROP COLUMN` is manual).
    */
   asaas_customer_id?: string | null;
   asaas_subscription_id?: string | null;
@@ -74,6 +79,10 @@ export interface StoreSchema extends Database.Schema {
   stock_alert_phone?: string | null;
   stock_alert_hour?: Integer.Range<0, 23> | null;
   stock_alert_sent_on?: string | null;
+  /**
+   * Delivery lead time in days, told by the bot only when the store has `delivery_hours`; null = 1 day.
+   */
+  delivery_lead_days?: Integer.Range<1, 90> | null;
   /**
    * Counter POS defaults; null = grid layout, cash control on, blind close off, 80 mm receipt (only 58 or 80 are valid).
    */
@@ -92,6 +101,10 @@ export interface StoreSchema extends Database.Schema {
    */
   courier_fee_mode?: 'order_fee' | 'fixed' | null;
   courier_fee_cents?: Integer.Min<0> | null;
+  /**
+   * Menu (food) or catalog (retail) voice.
+   */
+  store_type: Enum.Default<StoreType, StoreType.Food>;
   created_at: String.DateTime;
   updated_at: String.DateTime;
 }

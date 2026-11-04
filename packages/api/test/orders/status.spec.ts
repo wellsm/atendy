@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import { canTransition, statusNotification } from '../../src/orders/status';
 import { Fulfillment, OrderStatus } from '../../src/orders/types';
+import { StoreType } from '../../src/stores/types';
 
 describe('order status', () => {
   it('allows only the store flow placed → accepted → out → done, with cancel before done', () => {
@@ -53,5 +54,22 @@ describe('order status', () => {
       '❌ Seu pedido #K7Q2MX foi cancelado pela loja.\nSe tiver alguma dúvida, é só responder esta mensagem 💬'
     );
     equal(statusNotification(OrderStatus.Done, order(Fulfillment.Delivery)), undefined);
+  });
+
+  it('talks about packing products, not cooking, in a retail store', () => {
+    const order = (fulfillment: Fulfillment) => ({ id: 'abcd1234', code: 'K7Q2MX', fulfillment });
+
+    equal(
+      statusNotification(OrderStatus.Accepted, order(Fulfillment.Delivery), StoreType.Retail),
+      '✅ Pedido #K7Q2MX aceito! Já estamos separando seus produtos 🛍️'
+    );
+    equal(
+      statusNotification(OrderStatus.Out, order(Fulfillment.Delivery), StoreType.Retail),
+      '🛵 Seu pedido #K7Q2MX saiu para entrega!\nFica de olho, já já chega 😊'
+    );
+    equal(
+      statusNotification(OrderStatus.Out, order(Fulfillment.Pickup), StoreType.Retail),
+      '🛍️ Seu pedido #K7Q2MX está pronto para retirada!'
+    );
   });
 });

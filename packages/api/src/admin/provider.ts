@@ -9,6 +9,37 @@ export declare class AdminProvider implements Http.Provider {
 }
 
 /**
+ * Admin endpoints that call the Clerk Backend API (create store with its org, users and memberships).
+ */
+export declare class AdminClerkProvider implements Http.Provider {
+  variables: {
+    CLERK_SECRET_KEY: Environment.Variable<'CLERK_SECRET_KEY'>;
+    /**
+     * `notifyAdmin` when a store given to a user keeps its own billing account (both have a card).
+     */
+    TELEGRAM_BOT_TOKEN: Environment.Variable<'TELEGRAM_BOT_TOKEN'>;
+    TELEGRAM_CHAT_ID: Environment.Variable<'TELEGRAM_CHAT_ID'>;
+  };
+
+  services: {
+    db: Environment.Service<Db>;
+  };
+}
+
+/**
+ * Admin store detail: also tells whether the demo phones are on (for the phones link).
+ */
+export declare class AdminStoreProvider implements Http.Provider {
+  variables: {
+    DEMO_ENABLED: Environment.Variable<'DEMO_ENABLED'>;
+  };
+
+  services: {
+    db: Environment.Service<Db>;
+  };
+}
+
+/**
  * Admin authorizer: the panel's Clerk login restricted to `ADMIN_USER_IDS` (comma-separated).
  */
 export declare class AdminAuthProvider implements Http.Provider {

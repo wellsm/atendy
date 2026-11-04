@@ -97,7 +97,7 @@ export function ApplyGroup(props: {
         />
       </div>
 
-      {!categories.length && <p className="text-sm text-muted">Não há outros produtos no cardápio.</p>}
+      {!categories.length && <p className="text-sm text-muted">Não há outros produtos.</p>}
 
       {categories.map((category) => {
         const available = category.products.filter(({ hasGroup }) => !hasGroup);
@@ -163,9 +163,7 @@ export function ApplyGroup(props: {
         {apply.isSuccess && <span className="text-sm text-fg-2">{resultText(apply.data)}</span>}
 
         {apply.isError && (
-          <span className="text-sm text-danger-fg">
-            Não foi possível aplicar. Recarregue o cardápio e tente de novo.
-          </span>
+          <span className="text-sm text-danger-fg">Não foi possível aplicar. Recarregue a página e tente de novo.</span>
         )}
       </div>
     </div>

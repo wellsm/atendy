@@ -35,6 +35,28 @@ const parseMedia = (body: string) => {
 
 const TEXT = 'whitespace-pre-wrap break-words text-[15px] leading-snug md:text-sm';
 
+// Only http(s), never ending in punctuation ("veja https://x.com.").
+const URL_PATTERN = /(https?:\/\/\S*[^\s.,!?;:)])/u;
+
+/**
+ * Text with its links clickable (new tab), like WhatsApp; split with a capture group puts the URLs at odd indexes.
+ */
+function TextWithLinks({ text }: { text: string }) {
+  return (
+    <p className={TEXT}>
+      {text.split(URL_PATTERN).map((part, index) =>
+        index % 2 ? (
+          <a key={index} href={part} target="_blank" rel="noreferrer" className="text-accent-fg underline">
+            {part}
+          </a>
+        ) : (
+          part
+        )
+      )}
+    </p>
+  );
+}
+
 /**
  * A message body: plain text, a shared location (pin + link to Google Maps in a new tab), a reaction the bot answered,
  * or a media marker (only voice notes are downloaded: `audioUrl` plays them, with the automatic transcript if any).
@@ -72,7 +94,7 @@ export function MessageBody({ body, audioUrl }: { body: string; audioUrl?: strin
   const media = parseMedia(body);
 
   if (!media) {
-    return <p className={TEXT}>{body}</p>;
+    return <TextWithLinks text={body} />;
   }
 
   const note =
@@ -90,7 +112,7 @@ export function MessageBody({ body, audioUrl }: { body: string; audioUrl?: strin
         </span>
       </span>
       {audioUrl && <audio controls preload="none" src={audioUrl} className="h-10 w-64 max-w-full" />}
-      {media.caption && <p className={TEXT}>{media.caption}</p>}
+      {media.caption && <TextWithLinks text={media.caption} />}
     </div>
   );
 }

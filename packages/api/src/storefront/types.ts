@@ -1,7 +1,7 @@
 import type { Integer, String } from '@ez4/schema';
 import type { PriceMode } from '../menu/types';
 import type { Fulfillment } from '../orders/types';
-import type { DeliveryMode, PaymentMethod } from '../stores/types';
+import type { DeliveryMode, PaymentMethod, StoreType } from '../stores/types';
 
 export type StorefrontStore = {
   name: string;
@@ -24,6 +24,10 @@ export type StorefrontStore = {
    * How the delivery fee is set: the checkout asks the bairro (`by_zone`) or the location (`by_distance`).
    */
   deliveryMode: DeliveryMode;
+  /**
+   * Menu (food) or catalog (retail) wording.
+   */
+  storeType: StoreType;
 };
 
 export type StorefrontOption = {

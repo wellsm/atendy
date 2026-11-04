@@ -1,4 +1,4 @@
-import type { StorePolicy } from './types';
+import type { StorePolicy, StoreRedirect } from './types';
 
 import { NewOrderAfterStatus, PreviousAddress } from './types';
 import { OrderStatus } from '../orders/types';
@@ -6,6 +6,30 @@ import { OrderStatus } from '../orders/types';
 export const DEFAULT_ORDER_MEMORY_HOURS = 3;
 
 export const SOP_MAX_LENGTH = 2000;
+
+export const WELCOME_TEXT_MAX_LENGTH = 1000;
+
+const REDIRECT_LABEL_MAX_LENGTH = 60;
+
+const REDIRECT_URL_MAX_LENGTH = 500;
+
+const isRedirect = (value: unknown): value is StoreRedirect => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const { label, url, ...rest } = value as Record<string, unknown>;
+
+  return (
+    !Object.keys(rest).length &&
+    typeof label === 'string' &&
+    !!label.trim() &&
+    label.length <= REDIRECT_LABEL_MAX_LENGTH &&
+    typeof url === 'string' &&
+    url.length <= REDIRECT_URL_MAX_LENGTH &&
+    /^https?:\/\/[^\s]+$/i.test(url)
+  );
+};
 
 const LIMIT_KEYS = [
   'max_item_qty',
@@ -77,6 +101,35 @@ export const parsePolicyPatch = (raw: string): StorePolicy => {
       }
 
       throw new PolicyError(`sop must be text with at most ${SOP_MAX_LENGTH} characters, or null`);
+    }
+
+    if (key === 'welcome_text') {
+      if (entry === null || (typeof entry === 'string' && entry.trim() && entry.length <= WELCOME_TEXT_MAX_LENGTH)) {
+        patch.welcome_text = entry;
+        continue;
+      }
+
+      throw new PolicyError(`welcome_text must be text with at most ${WELCOME_TEXT_MAX_LENGTH} characters, or null`);
+    }
+
+    if (key === 'redirect') {
+      if (entry === null || isRedirect(entry)) {
+        patch.redirect = entry;
+        continue;
+      }
+
+      throw new PolicyError(
+        `redirect must be { label (up to ${REDIRECT_LABEL_MAX_LENGTH} characters), url (http/https, up to ${REDIRECT_URL_MAX_LENGTH}) }, or null`
+      );
+    }
+
+    if (key === 'redirect_only') {
+      if (entry === null || typeof entry === 'boolean') {
+        patch.redirect_only = entry;
+        continue;
+      }
+
+      throw new PolicyError('redirect_only must be true, false or null');
     }
 
     if (key === 'previous_address') {

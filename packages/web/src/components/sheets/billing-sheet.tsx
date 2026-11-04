@@ -61,7 +61,7 @@ export function BillingSheet({ onClose }: { onClose: () => void }) {
     <Sheet width="md" label="Pagamento" onClose={onClose}>
       <SheetHeader
         title="Pagamento"
-        subtitle="Você paga por pedido atendido pelo bot. O ciclo fecha todo dia 1 e a cobrança cai no cartão no dia 5."
+        subtitle="Você paga por pedido atendido pelo bot. O ciclo fecha todo dia 1 e a cobrança cai no cartão no dia 5. Todas as suas lojas usam o mesmo cartão e a mesma cobrança."
         onClose={onClose}
       />
       <div className="flex-1 space-y-5 overflow-y-auto p-4 md:p-6">
@@ -117,7 +117,11 @@ function BillingSections({ summary }: { summary: BillingSummary }) {
         {!summary.invoices.length && <p className="px-4 py-4 text-sm text-muted sm:px-6">Nenhuma fatura ainda.</p>}
         <ul className="mt-2 divide-y divide-line">
           {summary.invoices.map((invoice) => (
-            <InvoiceRow key={invoice.id} invoice={invoice} />
+            <InvoiceRow
+              key={invoice.id}
+              invoice={invoice}
+              showStore={new Set(summary.invoices.map(({ store_name }) => store_name)).size > 1}
+            />
           ))}
         </ul>
       </div>
@@ -125,13 +129,16 @@ function BillingSections({ summary }: { summary: BillingSummary }) {
   );
 }
 
-function InvoiceRow({ invoice }: { invoice: BillingInvoice }) {
+function InvoiceRow({ invoice, showStore }: { invoice: BillingInvoice; showStore: boolean }) {
   const status = STATUS[invoice.status];
 
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm sm:px-6">
       <div className="min-w-0">
-        <p className="font-medium capitalize">{month.format(new Date(invoice.period_start))}</p>
+        <p className="font-medium">
+          <span className="capitalize">{month.format(new Date(invoice.period_start))}</span>
+          {showStore && ` · ${invoice.store_name}`}
+        </p>
         <p className="text-xs text-muted">
           {invoice.orders} atendimentos · vence {formatDay(invoice.due_date)}
           {invoice.failure_reason &&

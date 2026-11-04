@@ -129,7 +129,43 @@ describe('StoreRepository', () => {
 
     settings = await StoreRepository.getSettings(db, id);
 
-    deepEqual(settings?.delivery, { mode: DeliveryMode.Flat, flatFeeCents: 700, zones: [], bands: [] });
+    deepEqual(settings?.delivery, {
+      mode: DeliveryMode.Flat,
+      flatFeeCents: 700,
+      zones: [],
+      bands: [],
+      hours: [],
+      leadDays: null
+    });
+  });
+
+  it('replaces the delivery hours and lead days with the delivery settings', async () => {
+    const { id } = await StoreRepository.create(db, { name: 'H', slug: `h-${randomUUID()}`, llmModel: 'test/model' });
+    const hours = [
+      { weekday: 1, opens_at: '09:00', closes_at: '12:00' },
+      { weekday: 3, opens_at: '14:00', closes_at: '18:00' }
+    ];
+
+    await StoreRepository.replaceDelivery(db, id, {
+      mode: DeliveryMode.Flat,
+      flatFeeCents: 0,
+      zones: [],
+      hours,
+      leadDays: 3
+    });
+
+    let settings = await StoreRepository.getSettings(db, id);
+
+    deepEqual(settings?.delivery.hours, hours);
+    equal(settings?.delivery.leadDays, 3);
+    deepEqual(await StoreRepository.getHours(db, id), []);
+
+    await StoreRepository.replaceDelivery(db, id, { mode: DeliveryMode.Flat, flatFeeCents: 0, zones: [] });
+
+    settings = await StoreRepository.getSettings(db, id);
+
+    deepEqual(settings?.delivery.hours, []);
+    equal(settings?.delivery.leadDays, null);
   });
 
   it('reads the settings of one store only', async () => {
@@ -155,7 +191,7 @@ describe('StoreRepository', () => {
         { weekday: 0, opens_at: '11:00', closes_at: '15:00' },
         { weekday: 5, opens_at: '18:00', closes_at: '02:00' }
       ],
-      delivery: { mode: DeliveryMode.Flat, flatFeeCents: 0, zones: [], bands: [] },
+      delivery: { mode: DeliveryMode.Flat, flatFeeCents: 0, zones: [], bands: [], hours: [], leadDays: null },
       storeLocation: null,
       paymentMethods: [PaymentMethod.Pix],
       policy: { min_order_cents: 3000 },
@@ -247,7 +283,8 @@ describe('StoreRepository', () => {
       slug,
       active: false,
       accepting_orders: false,
-      timezone: 'America/Sao_Paulo'
+      timezone: 'America/Sao_Paulo',
+      store_type: 'food'
     });
     equal(await StoreRepository.findByOrgId(db, `org_${randomUUID()}`), undefined);
   });

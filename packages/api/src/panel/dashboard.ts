@@ -50,6 +50,10 @@ export type Dashboard = {
     handoffs: number;
     abandoned: number;
     failures: number;
+    /**
+     * The bot sent the store's redirect link.
+     */
+    redirects: number;
     costCents: number;
     /**
      * Current month only: cost so far per elapsed day × days in the month.
@@ -173,6 +177,7 @@ export const buildDashboard = async (db: DbClient, storeId: string, month: strin
       handoffs: handoffs.length - failures.length,
       abandoned: abandoned.length,
       failures: failures.length,
+      redirects: billed.filter(({ outcome }) => outcome === BillingOutcome.Redirect).length,
       costCents,
       forecastCents: current && elapsed ? Math.round((costCents / elapsed) * allDays.length) : null,
       costPerOrderCents: placedByBot + web ? Math.round(costCents / (placedByBot + web)) : null

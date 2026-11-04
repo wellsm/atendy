@@ -7,7 +7,7 @@ import { AiRequestError } from './errors';
 import { JevClient } from './jev-client';
 import { buildJevPlan, decideJevAction, MAX_PRODUCT_CANDIDATES } from './jev-router';
 import { LlmAgent, toolTrace } from './llm';
-import { buildSystemPrompt, buildTurnState, REPLY_SYSTEM_PROMPT } from './prompt';
+import { buildSystemPrompt, buildTurnState, replyPromptFor } from './prompt';
 import { AiCallRepository } from './repository';
 import { executeTool, ToolName } from './tools';
 import { AiPath, AiProvider } from './types';
@@ -131,7 +131,7 @@ const tryJev = async (input: RouterInput) => {
     apiKey: env.OPENROUTER_API_KEY,
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     model: input.store.llm_model,
-    system: REPLY_SYSTEM_PROMPT,
+    system: replyPromptFor(input.store.store_type),
     state: buildTurnState({
       ...input,
       action: {
@@ -159,7 +159,7 @@ export namespace AgentRouter {
       apiKey: input.env.OPENROUTER_API_KEY,
       anthropicApiKey: input.env.ANTHROPIC_API_KEY,
       model: input.store.llm_model,
-      system: buildSystemPrompt(input.store.policy?.sop),
+      system: buildSystemPrompt(input.store.policy?.sop, input.store.store_type),
       state: buildTurnState(input),
       path: AiPath.LlmFallback,
       tools: true

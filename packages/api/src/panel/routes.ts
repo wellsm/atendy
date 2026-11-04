@@ -13,6 +13,7 @@ import type { deleteCategoryHandler } from './endpoints/delete-category';
 import type { deleteMenuGroupHandler } from './endpoints/delete-group';
 import type { deleteImageHandler } from './endpoints/delete-image';
 import type { deleteProductHandler } from './endpoints/delete-product';
+import type { discardDraftHandler } from './endpoints/discard-draft';
 import type { disconnectWhatsAppHandler } from './endpoints/disconnect-whatsapp';
 import type { getBillingHandler } from './endpoints/get-billing';
 import type { getConversationHandler } from './endpoints/get-conversation';
@@ -173,6 +174,11 @@ export type PanelRoutes = [
     path: 'PATCH /panel/conversations/{conversationId}/draft';
     authorizer: typeof panelAuthorizer;
     handler: typeof updateDraftHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'DELETE /panel/conversations/{conversationId}/draft';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof discardDraftHandler;
   }>,
   Http.UseRoute<{
     path: 'POST /panel/conversations/{conversationId}/draft/items';

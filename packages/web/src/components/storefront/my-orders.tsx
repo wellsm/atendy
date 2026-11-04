@@ -38,6 +38,7 @@ export function MyOrders(props: {
   phone: string;
   token: string;
   open: boolean;
+  retail: boolean;
   products: StorefrontProduct[];
   cart: Cart;
   onCheckout: () => void;
@@ -100,7 +101,7 @@ export function MyOrders(props: {
                 <span className="text-xs text-neutral-500">{WHEN.format(new Date(order.placed_at))}</span>
               </div>
               <span className="text-xs font-medium text-neutral-600">
-                {STATUS_TEXT[order.status]} ·{' '}
+                {props.retail && order.status === 'accepted' ? 'Em separação' : STATUS_TEXT[order.status]} ·{' '}
                 {order.source === 'web' ? 'pelo site' : order.source === 'pos' ? 'no balcão' : 'pelo WhatsApp'}
               </span>
               <ul className="flex flex-col gap-0.5 text-sm text-neutral-700">
@@ -127,7 +128,7 @@ export function MyOrders(props: {
               {notice?.code === order.code && (
                 <div className="flex flex-col gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
                   <span>
-                    Adicionamos ao carrinho o que ainda está no cardápio. Fora do cardápio agora:{' '}
+                    Adicionamos ao carrinho o que ainda está disponível. Indisponíveis agora:{' '}
                     {notice.missing.join(', ')}.
                   </span>
                   <button type="button" onClick={props.onCheckout} className="self-start font-semibold underline">

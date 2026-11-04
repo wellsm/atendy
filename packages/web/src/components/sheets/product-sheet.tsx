@@ -12,6 +12,7 @@ import {
   useSaveStockLinks,
   useUpdateProduct
 } from '../../lib/queries';
+import { usePanelMenuWord } from '../../lib/store-type';
 import { Loading } from '../loading';
 import { ProductForm } from '../product-form';
 
@@ -66,19 +67,20 @@ export function ProductEditor({ productId, onClose }: { productId: string; onClo
   const isNew = productId === 'new';
   const categories = menu.data?.categories ?? [];
   const product = categories.flatMap(({ products }) => products).find(({ id }) => id === productId);
+  const { word } = usePanelMenuWord();
 
   return (
     <>
       <SheetHeader
         title={isNew ? 'Novo produto' : (product?.name ?? 'Editar produto')}
-        subtitle="O bot usa o cardápio a partir da próxima mensagem do cliente."
+        subtitle={`O bot usa o ${word} a partir da próxima mensagem do cliente.`}
         onBack={back}
         onClose={onClose}
       />
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-5 md:px-6">
         {menu.isPending && <Loading />}
 
-        {menu.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o cardápio.</p>}
+        {menu.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o {word}.</p>}
 
         {menu.data && isNew && <NewProduct onDone={back} />}
 
@@ -86,7 +88,7 @@ export function ProductEditor({ productId, onClose }: { productId: string; onClo
           <p className="text-sm text-muted">
             Produto não encontrado.{' '}
             <button type="button" onClick={back} className="font-medium text-accent-fg">
-              Voltar ao cardápio
+              Voltar ao {word}
             </button>
           </p>
         )}
@@ -105,13 +107,14 @@ function NewProduct({ onDone }: { onDone: () => void }) {
   const after = useAfterSave();
   const categories = menu.data?.categories ?? [];
   const categoryId = categories.find(({ id }) => id === category)?.id ?? categories[0]?.id;
+  const { word } = usePanelMenuWord();
 
   if (!categoryId) {
     return (
       <p className="text-sm text-muted">
         Crie uma categoria antes.{' '}
         <button type="button" onClick={onDone} className="font-medium text-accent-fg">
-          Voltar ao cardápio
+          Voltar ao {word}
         </button>
       </p>
     );

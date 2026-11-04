@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 
-import { REPLY_SYSTEM_PROMPT, SYSTEM_PROMPT } from './prompt';
+import { redirectPromptFor, replyPromptFor, systemPromptFor } from './prompt';
 import { TOOL_DEFINITIONS } from './tools';
+import { StoreType } from '../stores/types';
 
 /**
  * Short, stable id of the given prompt parts (part boundaries included).
@@ -11,7 +12,15 @@ export const promptFingerprint = (parts: string[]) => {
 };
 
 /**
- * Version of the fixed prompts and tool definitions, stamped on every AI call. Computed, so a prompt edit can never
+ * Version of the fixed prompts (every store type) and tool definitions, stamped on every AI call. Computed, so a prompt edit can never
  * ship under an old version. The store SOP and the per-turn Jev questions are not part of it.
  */
-export const PROMPT_VERSION = promptFingerprint([SYSTEM_PROMPT, REPLY_SYSTEM_PROMPT, JSON.stringify(TOOL_DEFINITIONS)]);
+export const PROMPT_VERSION = promptFingerprint([
+  systemPromptFor(StoreType.Food),
+  replyPromptFor(StoreType.Food),
+  systemPromptFor(StoreType.Retail),
+  replyPromptFor(StoreType.Retail),
+  redirectPromptFor(StoreType.Food),
+  redirectPromptFor(StoreType.Retail),
+  JSON.stringify(TOOL_DEFINITIONS)
+]);

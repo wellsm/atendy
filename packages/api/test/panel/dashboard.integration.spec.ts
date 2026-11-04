@@ -95,6 +95,7 @@ describe('panel dashboard', () => {
         handoffs: 1,
         abandoned: 1,
         failures: 1,
+        redirects: 0,
         costCents: 170,
         forecastCents: undefined,
         costPerOrderCents: 170

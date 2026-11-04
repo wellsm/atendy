@@ -22,6 +22,11 @@ export const DEFAULT_ORDER_PRICE_CENTS = 50;
 export const DEFAULT_WEB_ORDER_PERCENT = 30;
 
 /**
+ * Share billed when the bot sends the store's redirect link (a service the store handles in another system).
+ */
+export const REDIRECT_PERCENT = 10;
+
+/**
  * Handoffs caused by us (AI or WhatsApp failure): the store pays nothing for that order.
  */
 const FAILURE_REASONS = new Set(['technical_error', 'send_failed']);

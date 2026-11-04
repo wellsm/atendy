@@ -4,5 +4,9 @@ export const enum BillingOutcome {
   /**
    * Placed by the customer on the public menu: the store's `web_order_percent`.
    */
-  Web = 'web'
+  Web = 'web',
+  /**
+   * The bot sent the store's redirect link (`policy.redirect`): `REDIRECT_PERCENT`.
+   */
+  Redirect = 'redirect'
 }

@@ -1,6 +1,7 @@
 import { displayOrderCode } from './code';
 import { formatSummaryBody } from './summary';
 import { Fulfillment, OrderStatus } from './types';
+import { StoreType } from '../stores/types';
 
 /**
  * Moves the store makes from the panel. `done` and `canceled` are final; drafts are the customer's.
@@ -20,18 +21,22 @@ export const canTransition = (from: OrderStatus, to: OrderStatus) => {
  */
 export const statusNotification = (
   status: OrderStatus,
-  order: { id: string; code?: string | null; fulfillment?: Fulfillment | null }
+  order: { id: string; code?: string | null; fulfillment?: Fulfillment | null },
+  storeType?: StoreType | null
 ) => {
   const code = `#${displayOrderCode(order)}`;
+  const retail = storeType === StoreType.Retail;
 
   switch (status) {
     case OrderStatus.Accepted:
-      return `✅ Pedido ${code} aceito! Já está sendo preparado 👨‍🍳`;
+      return retail
+        ? `✅ Pedido ${code} aceito! Já estamos separando seus produtos 🛍️`
+        : `✅ Pedido ${code} aceito! Já está sendo preparado 👨‍🍳`;
 
     case OrderStatus.Out:
       return order.fulfillment === Fulfillment.Pickup
         ? `🛍️ Seu pedido ${code} está pronto para retirada!`
-        : `🛵 Seu pedido ${code} saiu para entrega!\nFica de olho, já já chega 😋`;
+        : `🛵 Seu pedido ${code} saiu para entrega!\nFica de olho, já já chega ${retail ? '😊' : '😋'}`;
 
     case OrderStatus.Canceled:
       return `❌ Seu pedido ${code} foi cancelado pela loja.\nSe tiver alguma dúvida, é só responder esta mensagem 💬`;

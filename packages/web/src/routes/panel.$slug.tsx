@@ -31,6 +31,8 @@ function Panel() {
   const [failed, setFailed] = useState(false);
   // The POS is full screen: no sidebar or header.
   const pos = !!useMatch({ from: '/panel/$slug/pos', shouldThrow: false });
+  // The demo phones are full screen too, and outside the staff lock (the customer is talking, not the staff).
+  const phones = !!useMatch({ from: '/panel/$slug/phones', shouldThrow: false });
 
   const current = me.data?.store?.slug === slug;
   const target = current ? undefined : stores.data?.find((store) => store.slug === slug);
@@ -60,6 +62,10 @@ function Panel() {
 
   if (me.isError || stores.isError) {
     return <p className="p-6 text-sm text-red-700">Não foi possível carregar sua loja. Recarregue a página.</p>;
+  }
+
+  if (current && phones) {
+    return <Outlet />;
   }
 
   if (current) {

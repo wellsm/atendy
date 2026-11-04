@@ -2,6 +2,8 @@ import type { DbClient } from '../db';
 
 import { ConversationRepository } from '../conversations/repository';
 import { MessageAuthor } from '../conversations/types';
+import { SimulatorProvider } from '../simulations/provider';
+import { isSimulatedJid } from '../simulations/repository';
 import { EvolutionRequestError } from '../whatsapp/evolution-client';
 import { WhatsAppProviders } from '../whatsapp/providers';
 
@@ -31,7 +33,8 @@ export const sendStaffMessage = async (
   let provider;
 
   try {
-    provider = WhatsAppProviders.forStore(store, process.env);
+    // Fake customers (demo phones) never reach WhatsApp.
+    provider = isSimulatedJid(input.to) ? SimulatorProvider.noop : WhatsAppProviders.forStore(store, process.env);
   } catch {
     throw new StaffSendError('WhatsApp is not connected');
   }

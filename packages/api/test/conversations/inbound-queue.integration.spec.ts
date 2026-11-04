@@ -1,6 +1,6 @@
 import type { Db } from '../../src/db';
 
-import assert, { deepEqual, equal, ok } from 'node:assert/strict';
+import assert, { deepEqual, equal, match, ok } from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 
 import { DatabaseTester } from '@ez4/local-database/test';
@@ -9,10 +9,12 @@ import { QueueTester } from '@ez4/local-queue/test';
 import { TurnError } from '../../src/agent/errors';
 import { OpenRouterClient } from '../../src/agent/openrouter-client';
 import { TurnResponder } from '../../src/agent/turn';
+import { BillingOutcome } from '../../src/billing/types';
 import { handler, InboundEventKind } from '../../src/conversations/queues/inbound';
 import { TECHNICAL_ERROR_REPLY } from '../../src/conversations/replies';
 import { ConversationRepository } from '../../src/conversations/repository';
 import { ConversationMode, MessageAuthor, MessageDirection } from '../../src/conversations/types';
+import { StoreRepository } from '../../src/stores/repository';
 import { EvolutionRequestError } from '../../src/whatsapp/evolution-client';
 import { MEDIA_ONLY_REPLY } from '../../src/whatsapp/media';
 import { WhatsAppProviders } from '../../src/whatsapp/providers';
@@ -196,6 +198,104 @@ describe('inbound queue handler', () => {
       [undefined, 1200, 1200]
     );
     deepEqual(await ConversationRepository.pendingInbound(db, ingested.conversationId), []);
+  });
+
+  it('welcomes with the store text and bills the redirect link only when the bot sends it', async () => {
+    const { storeId } = await seedStore(db);
+    const url = 'https://agenda.example.com/bella';
+
+    await StoreRepository.updatePolicy(db, storeId, {
+      welcome_text: `Como posso te ajudar?\n1️⃣ Comprar produtos\n2️⃣ Agendar horário: ${url}`,
+      redirect: { label: 'Agendamento', url }
+    });
+
+    const sent = stubProvider();
+    const turn = stubTurn(`Para agendar, é só escolher o horário aqui 👇\n${url}`);
+    const hello = await receive(storeId, 'W1', 'oi');
+
+    await run(customerEvent(hello, 'W1'));
+
+    equal(turn.mock.callCount(), 0);
+    ok(sent[2]!.text.startsWith('Como posso te ajudar?'));
+
+    const billed = async () => {
+      const { records } = await db.billing_records.findMany({
+        select: { outcome: true, percent: true },
+        where: { conversation_id: hello.conversationId }
+      });
+
+      return records;
+    };
+
+    // The greeting carries the link, but only a bot reply bills it.
+    deepEqual(await billed(), []);
+
+    const choice = await receive(storeId, 'W2', '2');
+
+    await run(customerEvent(choice, 'W2'));
+
+    deepEqual(await billed(), [{ outcome: BillingOutcome.Redirect, percent: 10 }]);
+  });
+
+  it('serves a redirect-only store: answers while closed, a fixed welcome per visit, then the catalog model', async () => {
+    const { storeId } = await seedStore(db, { hours: [] });
+    const url = 'https://agenda.example.com/bella';
+
+    await seedMenu(db, storeId);
+    await StoreRepository.updatePolicy(db, storeId, {
+      redirect_only: true,
+      redirect: { label: 'Agendamento', url },
+      sop: 'Corte feminino leva 40 minutos.'
+    });
+
+    const sent = stubProvider();
+    const requests: {
+      messages: { role: string; content?: string | null }[];
+      tools?: { function: { name: string } }[];
+    }[] = [];
+
+    mock.method(OpenRouterClient, 'chat', (request: (typeof requests)[number]) => {
+      requests.push(request);
+
+      return Promise.resolve({
+        message: { role: 'assistant' as const, content: `O corte custa R$ 50. Para agendar 👇\n${url}` },
+        usage: { inputTokens: 100, outputTokens: 8, costUsd: 0.00003 },
+        latencyMs: 40
+      });
+    });
+
+    const billed = async (conversationId: string) => {
+      const { records } = await db.billing_records.findMany({
+        select: { outcome: true, percent: true },
+        where: { conversation_id: conversationId }
+      });
+
+      return records;
+    };
+
+    const first = await receive(storeId, 'RS1', 'quero marcar um corte');
+
+    await run(customerEvent(first, 'RS1'));
+
+    // Closed store, specific request: still the fixed welcome with the link, no model call.
+    equal(requests.length, 0);
+    equal(sent.length, 2);
+    ok(sent[1]!.text.includes(url));
+    deepEqual(await billed(first.conversationId), [{ outcome: BillingOutcome.Redirect, percent: 10 }]);
+
+    const second = await receive(storeId, 'RS2', 'quanto custa o corte?');
+
+    await run(customerEvent(second, 'RS2'));
+
+    equal(requests.length, 1);
+    deepEqual(
+      requests[0]!.tools?.map(({ function: tool }) => tool.name),
+      ['search_menu', 'call_human']
+    );
+    match(requests[0]!.messages[0]!.content ?? '', /Corte feminino leva 40 minutos\.$/);
+    equal(sent.at(-1)?.text, `O corte custa R$ 50. Para agendar 👇\n${url}`);
+    // Same visit: the link again bills nothing more.
+    deepEqual(await billed(first.conversationId), [{ outcome: BillingOutcome.Redirect, percent: 10 }]);
   });
 
   it('greets a returning customer once, before the model reply split into messages', async () => {
@@ -854,5 +954,40 @@ describe('inbound queue handler', () => {
     equal(sent[0]?.text, 'Olá! O que vai ser hoje?');
     equal(await db.ai_calls.count({ where: { conversation_id: ingested.conversationId } }), 1);
     deepEqual(await ConversationRepository.pendingInbound(db, ingested.conversationId), []);
+  });
+  it('answers a fake demo customer (@sim, no simulation) without touching WhatsApp', async () => {
+    const { storeId } = await seedStore(db);
+    const forStore = mock.method(WhatsAppProviders, 'forStore', () => {
+      throw new Error('WhatsApp must not be used for @sim customers');
+    });
+    stubTurn('Oi! Qual pizza?');
+
+    const ingested = await ConversationRepository.ingestCustomerMessage(db, {
+      storeId,
+      message: {
+        kind: ParsedEventKind.Message,
+        instance: 'demo',
+        providerMessageId: 'demo:1',
+        fromMe: false,
+        jid: '5500123456789@sim',
+        phone: '5500123456789',
+        pushName: 'Ana',
+        text: 'quero pizza',
+        sentAt: new Date().toISOString()
+      }
+    });
+
+    await run(customerEvent(ingested, 'demo:1'));
+
+    equal(forStore.mock.callCount(), 0);
+    deepEqual(simulationSteps, []);
+
+    const { records: outbound } = await db.messages.findMany({
+      select: { body: true, provider_message_id: true },
+      where: { conversation_id: ingested.conversationId, direction: MessageDirection.Out }
+    });
+
+    ok(outbound.length > 0);
+    ok(outbound.every(({ provider_message_id }) => provider_message_id.startsWith('sim:')));
   });
 });

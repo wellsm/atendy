@@ -11,7 +11,7 @@ import { DEMO_MENU } from '../../src/menu/demo-menu';
 import { MenuRepository } from '../../src/menu/repository';
 import { OrderRepository } from '../../src/orders/repository';
 import { Fulfillment } from '../../src/orders/types';
-import { DeliveryMode, PaymentMethod, RouterType, WhatsAppProviderType } from '../../src/stores/types';
+import { DeliveryMode, PaymentMethod, RouterType, StoreType, WhatsAppProviderType } from '../../src/stores/types';
 import { ParsedEventKind } from '../../src/whatsapp/types';
 
 /**
@@ -54,6 +54,7 @@ export const seedStore = async (
       flat_fee_cents: overrides.flat_fee_cents ?? 0,
       payment_methods: overrides.payment_methods ?? [PaymentMethod.Pix],
       policy: overrides.policy ?? null,
+      store_type: StoreType.Food,
       created_at: now,
       updated_at: now
     }

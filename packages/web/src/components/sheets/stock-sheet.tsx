@@ -246,7 +246,7 @@ function StockList({
           </p>
         )}
 
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex shrink-0 gap-2 overflow-x-auto">
           {STOCK_FILTERS.map(([value, label]) => (
             <button
               key={value}
@@ -367,9 +367,7 @@ function ItemView({
             <section className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold">Usado em</h3>
               {first.links.length === 0 && (
-                <p className="text-sm text-muted">
-                  Nenhum produto usa este item. Vincule no formulário do produto, no cardápio.
-                </p>
+                <p className="text-sm text-muted">Nenhum produto usa este item. Vincule no formulário do produto.</p>
               )}
               {first.links.map((link) => (
                 <p key={`${link.product_id}-${link.option_id}`} className="text-sm">

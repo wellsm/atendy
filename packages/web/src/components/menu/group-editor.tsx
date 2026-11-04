@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { ImageChange, MenuGroup, PriceMode, ProductInput } from '../../lib/queries';
 
 import { centsToInput, parseMoney } from '../../lib/format';
+import { usePanelMenuWord } from '../../lib/store-type';
 import { Toggle } from '../toggle';
 import { OptionPhoto } from './option-photo';
 
@@ -242,6 +243,7 @@ export function GroupEditor(props: {
    */
   optionExtra?: (option: OptionForm) => ReactNode;
 }) {
+  const { retail } = usePanelMenuWord();
   const { group, onChange } = props;
   const priced = group.priceMode === 'max';
 
@@ -270,7 +272,7 @@ export function GroupEditor(props: {
           value={group.name}
           onChange={(event) => onChange((current) => ({ ...current, name: event.target.value }))}
           maxLength={MAX_NAME}
-          placeholder="Nome do grupo (ex.: Sabores, Borda)"
+          placeholder={retail ? 'Nome do grupo (ex.: Cor, Tamanho)' : 'Nome do grupo (ex.: Sabores, Borda)'}
           aria-label="Nome do grupo"
           className={`${INPUT} order-last basis-full font-medium sm:order-none sm:basis-auto sm:flex-1`}
         />
@@ -373,7 +375,7 @@ export function GroupEditor(props: {
               value={option.name}
               onChange={(event) => setOption(option.key, { name: event.target.value })}
               maxLength={MAX_NAME}
-              placeholder="Opção (ex.: Calabresa)"
+              placeholder={retail ? 'Opção (ex.: Vermelho)' : 'Opção (ex.: Calabresa)'}
               aria-label="Nome da opção"
               className={`${INPUT} min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-auto ${option.active ? '' : 'text-faint line-through'}`}
             />

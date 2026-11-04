@@ -14,6 +14,7 @@ import type { ProductSchema } from './menu/schemas/product';
 import type { ProductGroupSchema } from './menu/schemas/product-group';
 import type { OrderSchema } from './orders/schemas/order';
 import type { OrderItemSchema } from './orders/schemas/order-item';
+import type { BillingAccountSchema } from './payments/schemas/billing-account';
 import type { BillingInvoiceSchema } from './payments/schemas/billing-invoice';
 import type { OrderPaymentSchema } from './pos/schemas/order-payment';
 import type { ProspectImportSchema } from './prospecting/schemas/import';
@@ -47,10 +48,20 @@ export declare class Db extends Database.Service<PostgresEngine> {
         id: Index.Primary;
         slug: Index.Unique;
         clerk_org_id: Index.Unique;
+        billing_account_id: Index.Secondary;
       };
     },
     {
       name: 'store_hours';
+      schema: StoreHourSchema;
+      indexes: {
+        id: Index.Primary;
+        store_id: Index.Secondary;
+      };
+    },
+    {
+      // When the store delivers, if not whenever it is open (same shape as `store_hours`).
+      name: 'delivery_hours';
       schema: StoreHourSchema;
       indexes: {
         id: Index.Primary;
@@ -286,6 +297,14 @@ export declare class Db extends Database.Service<PostgresEngine> {
         id: Index.Primary;
         run_id: Index.Secondary;
         conversation_id: Index.Secondary;
+      };
+    },
+    {
+      name: 'billing_accounts';
+      schema: BillingAccountSchema;
+      indexes: {
+        id: Index.Primary;
+        owner_user_id: Index.Unique;
       };
     },
     {

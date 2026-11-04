@@ -4,9 +4,10 @@ import { useState } from 'react';
 
 import { OrderEditor } from './order-editor';
 import { ApiError } from '../../lib/api';
-import { formatMoney, formatWhen, PAYMENT_LABEL, STATUS_LABEL } from '../../lib/format';
+import { formatMoney, formatWhen, PAYMENT_LABEL, statusLabel } from '../../lib/format';
 import { useAssignCourier, useStaff, useUpdateOrder } from '../../lib/queries';
 import { authorName } from '../../lib/staff';
+import { usePanelMenuWord } from '../../lib/store-type';
 
 export const STATUS_CHIP: Record<OrderStatus, string> = {
   placed: 'bg-placed-bg text-placed-fg',
@@ -91,18 +92,21 @@ const placedLabel = (iso: string | null) => {
 };
 
 export function StatusChip({ status, className = '' }: { status: OrderStatus; className?: string }) {
+  const { retail } = usePanelMenuWord();
+
   return (
     <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CHIP[status]} ${className}`}>
-      {STATUS_LABEL[status]}
+      {statusLabel(status, retail)}
     </span>
   );
 }
 
 function Steps({ order }: { order: PanelOrder }) {
+  const { retail } = usePanelMenuWord();
   const current = OPEN_STATUSES.indexOf(order.status);
   const labels = [
     'Novo',
-    'Em preparo',
+    statusLabel('accepted', retail),
     order.fulfillment === 'pickup' || order.source === 'pos' ? 'Pronto' : 'Saiu',
     'Concluído'
   ];

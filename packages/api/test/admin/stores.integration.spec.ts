@@ -1,6 +1,6 @@
 import type { Db } from '../../src/db';
 
-import { deepEqual, equal, ok, rejects } from 'node:assert/strict';
+import { deepEqual, equal, match, ok, rejects } from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 
@@ -20,7 +20,7 @@ import { WhatsAppState } from '../../src/panel/whatsapp';
 import { StockRepository } from '../../src/stock/repository';
 import { LLM_MODELS } from '../../src/stores/models';
 import { DEFAULT_LLM_MODEL, StoreRepository } from '../../src/stores/repository';
-import { RouterType } from '../../src/stores/types';
+import { RouterType, StoreType } from '../../src/stores/types';
 import { placeOrder, productByName, seedConversation, seedMenu, seedStore } from '../support/fixtures';
 
 describe('admin store endpoints', () => {
@@ -68,8 +68,21 @@ describe('admin store endpoints', () => {
     equal(body.health.errorCount24h, 0);
     equal(body.health.openNow, true);
     equal(body.health.acceptingOrders, true);
+    equal(body.demoEnabled, true);
 
     await rejects(detail('00000000-0000-4000-8000-000000000000'), HttpNotFoundError);
+  });
+
+  it('tells the admin whether the demo phones are on', async () => {
+    const { storeId } = await seedStore(db, {});
+
+    process.env.DEMO_ENABLED = 'false';
+
+    try {
+      equal((await detail(storeId)).body.demoEnabled, false);
+    } finally {
+      process.env.DEMO_ENABLED = 'true';
+    }
   });
 
   it('updates router, model and order memory', async () => {
@@ -100,6 +113,41 @@ describe('admin store endpoints', () => {
     await rejects(update(storeId, {}), HttpBadRequestError);
 
     equal((await detail(storeId)).body.store.llmModel, 'test/model');
+  });
+
+  it('sets and clears the welcome text and the redirect link, keeping the rest of the policy', async () => {
+    const { storeId } = await seedStore(db, { policy: { sop: 'Embrulhamos para presente.' } });
+    const redirect = { label: 'Agendamento', url: 'https://agenda.example.com/bella' };
+
+    const { body } = await update(storeId, { welcomeText: 'Comprar ou agendar?', redirect });
+
+    equal(body.welcomeText, 'Comprar ou agendar?');
+    deepEqual(body.redirect, redirect);
+
+    await update(storeId, { welcomeText: null, redirect: null });
+
+    deepEqual(await StoreRepository.getPolicy(db, storeId), {
+      sop: 'Embrulhamos para presente.',
+      welcome_text: null,
+      redirect: null
+    });
+
+    await rejects(update(storeId, { redirect: { label: 'Agenda', url: 'agenda.example.com' } }), badField('redirect'));
+    await rejects(update(storeId, { welcomeText: 'a'.repeat(1001) }), badField('welcome_text'));
+  });
+
+  it('turns a store into a redirect store only while it has a link', async () => {
+    const { storeId } = await seedStore(db);
+    const redirect = { label: 'Agendamento', url: 'https://agenda.example.com/bella' };
+
+    await rejects(update(storeId, { redirectOnly: true }), badField('redirect_only'));
+
+    equal((await update(storeId, { redirectOnly: true, redirect })).body.redirectOnly, true);
+
+    // The link cannot go while the switch is on.
+    await rejects(update(storeId, { redirect: null }), badField('redirect_only'));
+
+    equal((await update(storeId, { redirectOnly: false, redirect: null })).body.redirectOnly, false);
   });
 
   it('still activates a store with the active-only body', async () => {
@@ -233,6 +281,73 @@ describe('admin store endpoints', () => {
 
     equal((await activeItems()).records.length, demo.stock!.length);
     equal(await db.stock_items.count({ where: { store_id: storeId } }), demo.stock!.length * 2);
+  });
+
+  it('seeds the cosmetics demo: one stock item per product, the kit without stock', async () => {
+    const { storeId } = await seedStore(db);
+    const demo = DEMO_MENUS[DemoMenuKind.Cosmetics];
+
+    const { body } = await seedDemo(storeId, { kind: DemoMenuKind.Cosmetics });
+
+    equal(body.products, 27);
+    equal(demo.stock!.length, 26);
+    equal(await db.stock_items.count({ where: { store_id: storeId } }), 26);
+
+    const { soldOutProducts } = await StockRepository.availability(db, storeId);
+    const { records } = await db.products.findMany({
+      select: { id: true, name: true },
+      where: { store_id: storeId }
+    });
+
+    deepEqual(
+      records.filter(({ id }) => soldOutProducts.has(id)).map(({ name }) => name),
+      ['Perfume Malbec Icon']
+    );
+  });
+
+  it('seeds the beauty studio demo: services with their duration, no stock, retail voice', async () => {
+    const { storeId } = await seedStore(db);
+
+    const { body } = await seedDemo(storeId, { kind: DemoMenuKind.BeautyStudio });
+
+    equal(body.products, 24);
+    equal(await db.stock_items.count({ where: { store_id: storeId } }), 0);
+    equal(
+      (await db.stores.findOne({ select: { store_type: true }, where: { id: storeId } }))?.store_type,
+      StoreType.Retail
+    );
+
+    const lash = await db.products.findMany({
+      select: { price_cents: true, description: true },
+      where: { store_id: storeId, name: 'Extensão de Cílios' }
+    });
+
+    equal(lash.records[0]?.price_cents, 18000);
+    match(lash.records[0]?.description ?? '', /Duração: 2 h 30 min/);
+  });
+
+  it('sets the store type from the demo kind and lets the admin change it', async () => {
+    const { storeId } = await seedStore(db);
+    const storeType = async () =>
+      (await db.stores.findOne({ select: { store_type: true }, where: { id: storeId } }))?.store_type;
+
+    equal((await detail(storeId)).body.storeType, StoreType.Food);
+
+    await seedDemo(storeId, { kind: DemoMenuKind.Cosmetics });
+    equal(await storeType(), StoreType.Retail);
+
+    await seedDemo(storeId, { kind: DemoMenuKind.Pizzeria, replace: true });
+    equal(await storeType(), StoreType.Food);
+
+    await seedDemo(storeId, { kind: DemoMenuKind.TobaccoLiquor, replace: true });
+    equal(await storeType(), StoreType.Retail);
+
+    await seedDemo(storeId, { kind: DemoMenuKind.Burger, replace: true });
+    equal(await storeType(), StoreType.Food);
+
+    const { body } = await update(storeId, { storeType: StoreType.Retail });
+    equal(body.storeType, StoreType.Retail);
+    equal(await storeType(), StoreType.Retail);
   });
 
   it('keeps product and option names unique inside every demo menu', () => {

@@ -1,7 +1,7 @@
 import { equal } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { closesAt, formatHours, isClosingSoon, isStoreOpen } from '../../src/stores/hours';
+import { closesAt, deliverySchedule, formatHours, isClosingSoon, isStoreOpen } from '../../src/stores/hours';
 
 const TZ = 'America/Sao_Paulo';
 
@@ -125,5 +125,18 @@ describe('isClosingSoon', () => {
 
     // Friday 23:50 local
     equal(isClosingSoon(always, TZ, new Date('2026-10-10T02:50:00Z'), 30), false);
+  });
+});
+
+describe('deliverySchedule', () => {
+  it('is absent without delivery hours and defaults the lead time to 1 day', () => {
+    equal(deliverySchedule([], 3), undefined);
+
+    const schedule = deliverySchedule([{ weekday: 1, opens_at: '09:00', closes_at: '18:00' }], null);
+
+    equal(schedule?.lead_days, 1);
+    equal(schedule?.hours.split('\n')[0], 'Dom sem entrega');
+    equal(schedule?.hours.split('\n')[1], 'Seg 09:00–18:00');
+    equal(deliverySchedule([{ weekday: 1, opens_at: '09:00', closes_at: '18:00' }], 4)?.lead_days, 4);
   });
 });

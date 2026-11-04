@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import { DatabaseTester } from '@ez4/local-database/test';
 
 import { ConversationMode, MessageAuthor, MessageDirection } from '../src/conversations/types';
-import { DeliveryMode, PaymentMethod, RouterType, WhatsAppProviderType } from '../src/stores/types';
+import { DeliveryMode, PaymentMethod, RouterType, StoreType, WhatsAppProviderType } from '../src/stores/types';
 
 describe('Db schema', () => {
   const db = DatabaseTester.getClient<Db>('Db');
@@ -31,6 +31,7 @@ describe('Db schema', () => {
         delivery_mode: DeliveryMode.Flat,
         flat_fee_cents: 500,
         payment_methods: [PaymentMethod.Pix, PaymentMethod.Cash],
+        store_type: StoreType.Food,
         created_at: now,
         updated_at: now
       }

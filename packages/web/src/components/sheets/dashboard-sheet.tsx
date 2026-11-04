@@ -94,7 +94,8 @@ function DashboardBody({ data }: { data: Dashboard }) {
     { label: 'Fechado pelo bot', count: totals.placed_by_bot, tone: 'bg-on' },
     { label: 'Foi para atendente', count: totals.handoffs, tone: 'bg-accent' },
     { label: 'Abandonado', count: totals.abandoned, tone: 'bg-faint' },
-    { label: 'Falha nossa (sem custo)', count: totals.failures, tone: 'bg-warn-fg' }
+    { label: 'Falha nossa (sem custo)', count: totals.failures, tone: 'bg-warn-fg' },
+    ...(totals.redirects ? [{ label: 'Direcionado (link)', count: totals.redirects, tone: 'bg-fg-2' }] : [])
   ];
 
   return (

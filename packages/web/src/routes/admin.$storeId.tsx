@@ -1,5 +1,6 @@
 import type { FormEvent, ReactNode } from 'react';
 import type { AdminStoreDetail, BillingSummary, DemoMenuKind, InvoiceStatus, RouterType } from '../lib/queries';
+import type { StoreType } from '../lib/store-type';
 
 import { UserButton } from '@clerk/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -15,7 +16,9 @@ import {
   adminWhatsAppHooks,
   useAdminStaff,
   useAdminStore,
+  useAdminUsers,
   useChargeAdminBillingNow,
+  useResetAdminDemo,
   useResetAdminStaffPin,
   useRunAdminBilling,
   useSeedDemoMenu,
@@ -53,7 +56,9 @@ const DEMO_MENU_LABEL: Record<DemoMenuKind, string> = {
   acai: 'Açaí',
   lunchbox: 'Marmitaria',
   japanese: 'Japonês',
-  tobacco_liquor: 'Tabacaria e Adega'
+  tobacco_liquor: 'Tabacaria e Adega',
+  cosmetics: 'Cosméticos',
+  beauty_studio: 'Estúdio de Beleza (serviços)'
 };
 
 function AdminStorePage() {
@@ -101,8 +106,12 @@ function Sections({ storeId, detail }: { storeId: string; detail: AdminStoreDeta
   return (
     <div className="flex flex-col gap-4">
       <ActivationCard storeId={storeId} active={detail.store.active} />
+      <DemoLinksCard storeId={storeId} slug={detail.store.slug} demoEnabled={detail.demo_enabled} />
+      {detail.demo_enabled && <DemoResetCard storeId={storeId} slug={detail.store.slug} />}
       <HealthCard detail={detail} />
       <BotCard storeId={storeId} detail={detail} />
+      <StoreTypeCard storeId={storeId} detail={detail} />
+      <WelcomeCard storeId={storeId} detail={detail} />
       <MemoryCard storeId={storeId} hours={detail.order_memory_hours} />
       <PriceCard storeId={storeId} detail={detail} />
       <OrderCodeCard storeId={storeId} detail={detail} />
@@ -114,6 +123,119 @@ function Sections({ storeId, detail }: { storeId: string; detail: AdminStoreDeta
         <WhatsAppConnect hooks={whatsAppHooks} />
       </div>
     </div>
+  );
+}
+
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <label className="flex flex-col gap-1.5 font-semibold">
+      {label}
+      <span className="flex gap-2">
+        <input
+          readOnly
+          value={value}
+          className="h-11 min-w-0 flex-1 rounded-lg border border-neutral-300 bg-neutral-50 px-3 font-normal text-neutral-700"
+        />
+        <button
+          type="button"
+          onClick={copy}
+          className="h-11 rounded-lg border border-accent px-4 font-semibold text-accent-fg hover:bg-accent-soft"
+        >
+          {copied ? 'Copiado' : 'Copiar'}
+        </button>
+      </span>
+    </label>
+  );
+}
+
+/**
+ * Links to hand a prospect: the store panel and, when the demo is on, the fake phones.
+ */
+function DemoLinksCard({ storeId, slug, demoEnabled }: { storeId: string; slug: string; demoEnabled: boolean }) {
+  const users = useAdminUsers();
+  const members = users.data?.users.filter(({ stores }) => stores.some(({ id }) => id === storeId)) ?? [];
+  const panel = `${window.location.origin}/panel/${slug}`;
+
+  return (
+    <Card title="Links para demo">
+      <div className="flex flex-col gap-3">
+        <CopyField label="Painel da loja" value={panel} />
+        {demoEnabled && <CopyField label="Celulares de teste" value={`${panel}/phones`} />}
+        <p className="text-neutral-600">
+          {users.isPending
+            ? 'Carregando membros…'
+            : members.length
+              ? `Membros: ${members.map(({ email }) => email).join(', ')}.`
+              : 'Nenhum membro ainda.'}{' '}
+          <Link to="/admin/users" className="text-accent-fg hover:underline">
+            Usuários
+          </Link>
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Wipes the store before another demo. Typing the slug confirms it: there is no undo.
+ */
+function DemoResetCard({ storeId, slug }: { storeId: string; slug: string }) {
+  const reset = useResetAdminDemo(storeId);
+  const [typed, setTyped] = useState('');
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (typed.trim() === slug) {
+      reset.mutate(slug, { onSuccess: () => setTyped('') });
+    }
+  };
+
+  return (
+    <Card title="Zerar demo">
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <p className="text-neutral-600">
+          Apaga todas as conversas e mensagens, os pedidos do WhatsApp e do site (o estoque volta), as cobranças e os
+          custos de IA dessas conversas e os clientes sem venda no PDV. Cardápio, estoque, PDV, caixa e configurações
+          ficam. Não dá para desfazer.
+        </p>
+        <label className="flex flex-col gap-1.5">
+          <span>
+            Digite <b className="font-mono">{slug}</b> para confirmar
+          </span>
+          <input
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            autoComplete="off"
+            className={INPUT}
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={typed.trim() !== slug || reset.isPending}
+            className="h-10 rounded-lg bg-red-600 px-4 font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {reset.isPending ? 'Zerando…' : 'Zerar demo'}
+          </button>
+          {reset.isSuccess && (
+            <span className="text-green-700">
+              Apagados: {reset.data.conversations} conversas, {reset.data.orders} pedidos, {reset.data.customers}{' '}
+              clientes.
+            </span>
+          )}
+          {reset.isError && <span className="text-red-700">Não foi possível zerar.</span>}
+        </div>
+      </form>
+    </Card>
   );
 }
 
@@ -355,7 +477,8 @@ function PaymentCard({ storeId, billing }: { storeId: string; billing: BillingSu
           {billing.invoices.map((invoice) => (
             <li key={invoice.id} className="flex flex-wrap justify-between gap-x-3 px-3 py-2">
               <span>
-                {invoice.period_start.slice(0, 7)} · {formatMoney(invoice.amount_cents)} · vence {invoice.due_date}
+                {invoice.period_start.slice(0, 7)} · {invoice.store_name} · {formatMoney(invoice.amount_cents)} · vence{' '}
+                {invoice.due_date}
               </span>
               <span className={invoice.status === 'overdue' ? 'font-medium text-red-700' : 'text-neutral-600'}>
                 {INVOICE_STATUS_LABEL[invoice.status]}
@@ -489,6 +612,136 @@ function MenuCard({ storeId, activeProducts }: { storeId: string; activeProducts
 /**
  * How the store's orders are numbered from now on: 6 random symbols or 1, 2, 3… (old orders keep their code).
  */
+/**
+ * How the bot, its fixed messages and the public page talk: restaurant menu or shop catalog.
+ */
+function StoreTypeCard({ storeId, detail }: { storeId: string; detail: AdminStoreDetail }) {
+  const update = useUpdateAdminStore(storeId);
+
+  return (
+    <Card title="Tipo de loja">
+      <div className="flex flex-wrap items-center gap-3">
+        <select
+          value={detail.store_type}
+          disabled={update.isPending}
+          onChange={(event) => update.mutate({ store_type: event.target.value as StoreType })}
+          className={INPUT}
+        >
+          <option value="food">Alimentação (cardápio)</option>
+          <option value="retail">Produtos (catálogo)</option>
+        </select>
+        {update.isSuccess && <span className="text-green-700">Salvo</span>}
+        {update.isError && <span className="text-red-700">Não foi possível salvar.</span>}
+      </div>
+      <p className="mt-2 text-xs text-neutral-500">
+        Muda o jeito do bot (catálogo, sugestões de produtos), a saudação, as mensagens de status e a página pública.
+        Popular o cardápio demo Cosméticos ou Tabacaria já marca Produtos.
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * For a store that also offers a service in another system (e.g. bookings): its own plain-hello welcome and the link
+ * the bot sends. Empty fields go back to the default.
+ */
+function WelcomeCard({ storeId, detail }: { storeId: string; detail: AdminStoreDetail }) {
+  const update = useUpdateAdminStore(storeId);
+  const [welcome, setWelcome] = useState(detail.welcome_text ?? '');
+  const [label, setLabel] = useState(detail.redirect?.label ?? '');
+  const [url, setUrl] = useState(detail.redirect?.url ?? '');
+  const [redirectOnly, setRedirectOnly] = useState(detail.redirect_only);
+  const half = !label.trim() !== !url.trim();
+  const badUrl = !!url.trim() && !/^https?:\/\/\S+$/i.test(url.trim());
+  const noLink = redirectOnly && !url.trim();
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+
+    if (half || badUrl || noLink) {
+      return;
+    }
+
+    update.mutate({
+      welcome_text: welcome.trim() || null,
+      redirect: url.trim() ? { label: label.trim(), url: url.trim() } : null,
+      redirect_only: redirectOnly
+    });
+  };
+
+  return (
+    <Card title="Boas-vindas e link de direcionamento">
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1">
+          <span>
+            {redirectOnly
+              ? 'Mensagem de boas-vindas (toda nova visita; vazia = o link)'
+              : 'Mensagem de boas-vindas (cliente novo que só disse oi)'}
+          </span>
+          <textarea
+            value={welcome}
+            onChange={(event) => setWelcome(event.target.value)}
+            maxLength={1000}
+            rows={4}
+            placeholder={'Como posso te ajudar?\n1️⃣ Comprar produtos\n2️⃣ Agendar horário'}
+            className={INPUT}
+          />
+        </label>
+        <div className="flex flex-wrap gap-3">
+          <label className="flex flex-col gap-1">
+            <span>Nome do link</span>
+            <input
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              maxLength={60}
+              placeholder="Agendamento"
+              className={`${INPUT} w-48`}
+            />
+          </label>
+          <label className="flex min-w-64 flex-1 flex-col gap-1">
+            <span>URL</span>
+            <input
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              maxLength={500}
+              inputMode="url"
+              placeholder="https://…"
+              className={INPUT}
+            />
+          </label>
+        </div>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={redirectOnly} onChange={(event) => setRedirectOnly(event.target.checked)} />
+          <span>Loja só de direcionamento (não vende: manda o link e tira dúvidas do catálogo)</span>
+        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={update.isPending || half || badUrl || noLink}
+            className="rounded-md bg-accent px-4 py-2 font-medium text-white disabled:opacity-50"
+          >
+            {update.isPending ? 'Salvando…' : 'Salvar'}
+          </button>
+          {half && <span className="text-amber-700">Preencha nome e URL do link, ou deixe os dois vazios.</span>}
+          {badUrl && <span className="text-amber-700">A URL começa com https://</span>}
+          {noLink && <span className="text-amber-700">A loja de direcionamento precisa do link.</span>}
+          {update.isSuccess && <span className="text-green-700">Salvo</span>}
+          {update.isError && <span className="text-red-700">Não foi possível salvar.</span>}
+        </div>
+      </form>
+      <p className="mt-2 text-xs text-neutral-500">
+        A mensagem troca a do link do {detail.store_type === 'retail' ? 'catálogo' : 'cardápio'} na saudação de quem só
+        disse oi (vazia = padrão). O bot manda o link quando o cliente quer esse serviço; cada ciclo em que ele manda
+        cobra 10 % do preço por pedido (a saudação nunca cobra).
+      </p>
+      <p className="mt-1 text-xs text-neutral-500">
+        Loja só de direcionamento: responde a qualquer hora, a primeira mensagem de cada visita é fixa (sem IA) e as
+        seguintes usam a IA com o SOP da loja e o catálogo, sem montar pedidos. Cada visita com o link cobra 10 %.
+      </p>
+    </Card>
+  );
+}
+
 function OrderCodeCard({ storeId, detail }: { storeId: string; detail: AdminStoreDetail }) {
   const update = useUpdateAdminStore(storeId);
 

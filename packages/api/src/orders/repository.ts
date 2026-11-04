@@ -1473,6 +1473,22 @@ export namespace OrderRepository {
   };
 
   /**
+   * The attendant gives up on the conversation's draft: it becomes abandoned now (kept in history, never billed again,
+   * no stock taken). False when the conversation has no draft.
+   */
+  export const discardStaffDraft = async (db: DbClient, conversationId: string) => {
+    const draftId = await findDraftId(db, conversationId);
+
+    if (!draftId) {
+      return false;
+    }
+
+    await abandonDraft(db, { id: draftId, conversation_id: conversationId }, new Date().toISOString());
+
+    return true;
+  };
+
+  /**
    * Every draft (of one store, or all) whose conversation got no message inside its store's memory window: the daily
    * cron and the panel lists run it, so drafts of customers who never came back are marked too.
    */

@@ -17,6 +17,7 @@ import { ApiError } from '../lib/api';
 import { centsToInput } from '../lib/format';
 import { unavailableText } from '../lib/menu';
 import { useProductStockLinks } from '../lib/queries';
+import { usePanelMenuWord } from '../lib/store-type';
 import { ApplyGroup } from './menu/apply-group';
 import {
   detachGroup,
@@ -49,10 +50,10 @@ const FIELD_ERROR: Record<string, string> = {
   name: 'O nome do produto precisa ter de 1 a 80 caracteres.',
   description: 'A descrição pode ter no máximo 300 caracteres.',
   price_cents: 'O preço precisa ser entre R$ 0 e R$ 100.000.',
-  category_id: 'Escolha uma categoria do cardápio.',
+  category_id: 'Escolha uma categoria.',
   groups: 'Confira os grupos: nome, quantidade de opções e "escolhe de … a …".',
   options: 'Confira as opções: nomes repetidos ou vazios, ou preço inválido.',
-  ids: 'O cardápio mudou em outra aba. Recarregue a página e tente de novo.',
+  ids: 'Os produtos mudaram em outra aba. Recarregue a página e tente de novo.',
   shared_groups:
     'Um grupo compartilhado ficou com menos opções do que outro produto deixa escolher. Recarregue e confira.',
   links: 'O produto foi salvo, mas o estoque vinculado não. Confira os itens e as quantidades e salve de novo.',
@@ -69,7 +70,7 @@ const errorText = (error: unknown) => {
   }
 
   if (error instanceof ApiError && error.status === 404) {
-    return 'Este produto não existe mais. Volte ao cardápio.';
+    return 'Este produto não existe mais. Volte à lista de produtos.';
   }
 
   return 'Não foi possível salvar. Tente novamente.';
@@ -176,6 +177,7 @@ export function ProductForm(props: {
   deleting?: boolean;
   deleteError?: unknown;
 }) {
+  const { retail } = usePanelMenuWord();
   const [form, setForm] = useState(() => toForm(props.product, props.categoryId));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [applying, setApplying] = useState<string>();
@@ -367,7 +369,7 @@ export function ProductForm(props: {
                   value={form.name}
                   onChange={(event) => setForm({ ...form, name: event.target.value })}
                   maxLength={MAX_NAME}
-                  placeholder="Pizza Grande"
+                  placeholder={retail ? 'Perfume Floral 100 ml' : 'Pizza Grande'}
                   className={INPUT}
                 />
               </label>
@@ -420,7 +422,7 @@ export function ProductForm(props: {
               </label>
 
               <span className="-mt-2 text-xs text-muted sm:col-span-2">
-                Deixe 0 quando o preço vem das opções (ex.: cada sabor tem seu preço).
+                Deixe 0 quando o preço vem das opções (ex.: {retail ? 'cada tamanho' : 'cada sabor'} tem seu preço).
               </span>
 
               <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
@@ -432,7 +434,7 @@ export function ProductForm(props: {
                   onChange={(event) => setForm({ ...form, description: event.target.value })}
                   maxLength={MAX_DESCRIPTION}
                   rows={3}
-                  placeholder="8 fatias. Até 2 sabores."
+                  placeholder={retail ? 'Fragrância floral, frasco de 100 ml.' : '8 fatias. Até 2 sabores.'}
                   className={INPUT}
                 />
               </label>
@@ -474,7 +476,9 @@ export function ProductForm(props: {
           <div className="mt-2 flex items-end justify-between gap-3">
             <div className="flex flex-col">
               <h2 className="font-semibold">Grupos de opções</h2>
-              <span className="text-sm text-muted">Sabores, borda, adicionais, ponto da carne…</span>
+              <span className="text-sm text-muted">
+                {retail ? 'Cores, tamanhos, kits…' : 'Sabores, borda, adicionais, ponto da carne…'}
+              </span>
             </div>
             <span className="shrink-0 text-xs text-faint">
               {form.groups.length}/{MAX_GROUPS} grupos
@@ -544,8 +548,8 @@ export function ProductForm(props: {
 
           {!form.groups.length && (
             <p className="rounded-xl border border-dashed border-line-2 p-5 text-sm text-muted">
-              Sem grupos: o cliente pede o produto como está, pelo preço base. Adicione um grupo para sabores, tamanhos
-              ou adicionais.
+              Sem grupos: o cliente pede o produto como está, pelo preço base. Adicione um grupo para{' '}
+              {retail ? 'cores, tamanhos ou kits' : 'sabores, tamanhos ou adicionais'}.
             </p>
           )}
 

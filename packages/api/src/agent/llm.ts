@@ -1,5 +1,5 @@
 import type { ChatMessage } from './openrouter-client';
-import type { ToolContext, ToolResult } from './tools';
+import type { ToolContext, ToolName, ToolResult } from './tools';
 import type { AiPath, AiToolTrace } from './types';
 
 import { AnthropicClient } from './anthropic-client';
@@ -33,6 +33,10 @@ export type LlmRunInput = {
    * `false` for the cheap reply: no tools are offered and tool calls are ignored.
    */
   tools: boolean;
+  /**
+   * Only these tools are offered (redirect stores); a call to any other is refused without running.
+   */
+  toolNames?: ToolName[];
 };
 
 const parseArguments = (raw: string): unknown => {
@@ -72,6 +76,10 @@ export namespace LlmAgent {
       throw new AiRequestError(`${directModel ? 'ANTHROPIC' : 'OPENROUTER'}_API_KEY is not set`, provider, 0);
     }
 
+    const offered = input.toolNames
+      ? TOOL_DEFINITIONS.filter(({ function: tool }) => input.toolNames!.includes(tool.name as ToolName))
+      : TOOL_DEFINITIONS;
+
     const messages: ChatMessage[] = [
       { role: 'system', content: input.system },
       { role: 'user', content: input.state }
@@ -84,7 +92,7 @@ export namespace LlmAgent {
       const request = {
         apiKey,
         messages,
-        ...(input.tools ? { tools: TOOL_DEFINITIONS } : {}),
+        ...(input.tools ? { tools: offered } : {}),
         ...(input.tools && lastRound ? { toolChoice: 'none' as const } : {})
       };
 
@@ -122,7 +130,9 @@ export namespace LlmAgent {
 
       for (const call of calls) {
         const args = parseArguments(call.function.arguments);
-        const output = await executeTool(ctx, call.function.name, args);
+        const output: ToolResult = offered.some(({ function: tool }) => tool.name === call.function.name)
+          ? await executeTool(ctx, call.function.name, args)
+          : { ok: false, error: 'unknown_tool', message: 'This tool is not available here' };
 
         traces.push(toolTrace(call.function.name, args, output));
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(output) });

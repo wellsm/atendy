@@ -17,6 +17,7 @@ import { Route as AdminStoreIdRouteImport } from './routes/admin.$storeId'
 import { Route as AdminCostsRouteImport } from './routes/admin.costs'
 import { Route as AdminPromptRouteImport } from './routes/admin.prompt'
 import { Route as AdminProspectingRouteImport } from './routes/admin.prospecting'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as CourierTokenRouteImport } from './routes/courier.$token'
 import { Route as PanelIndexRouteImport } from './routes/panel.index'
 import { Route as PanelSlugRouteImport } from './routes/panel.$slug'
@@ -29,6 +30,7 @@ import { Route as AdminSimulationsRunIdRouteImport } from './routes/admin.simula
 import { Route as PanelSlugIndexRouteImport } from './routes/panel.$slug/index'
 import { Route as PanelSlugBillingRouteImport } from './routes/panel.$slug/billing'
 import { Route as PanelSlugConversationsRouteImport } from './routes/panel.$slug/conversations'
+import { Route as PanelSlugPhonesRouteImport } from './routes/panel.$slug/phones'
 import { Route as PanelSlugPosRouteImport } from './routes/panel.$slug/pos'
 import { Route as PanelSlugSettingsRouteImport } from './routes/panel.$slug/settings'
 import { Route as PanelSlugWhatsappRouteImport } from './routes/panel.$slug/whatsapp'
@@ -73,6 +75,11 @@ const AdminPromptRoute = AdminPromptRouteImport.update({
 const AdminProspectingRoute = AdminProspectingRouteImport.update({
   id: '/admin/prospecting',
   path: '/admin/prospecting',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CourierTokenRoute = CourierTokenRouteImport.update({
@@ -136,6 +143,11 @@ const PanelSlugConversationsRoute = PanelSlugConversationsRouteImport.update({
   path: '/conversations',
   getParentRoute: () => PanelSlugRoute,
 } as any)
+const PanelSlugPhonesRoute = PanelSlugPhonesRouteImport.update({
+  id: '/phones',
+  path: '/phones',
+  getParentRoute: () => PanelSlugRoute,
+} as any)
 const PanelSlugPosRoute = PanelSlugPosRouteImport.update({
   id: '/pos',
   path: '/pos',
@@ -170,6 +182,7 @@ export interface FileRoutesByFullPath {
   '/admin/costs': typeof AdminCostsRoute
   '/admin/prompt': typeof AdminPromptRoute
   '/admin/prospecting': typeof AdminProspectingRoute
+  '/admin/users': typeof AdminUsersRoute
   '/courier/$token': typeof CourierTokenRoute
   '/panel/$slug': typeof PanelSlugRouteWithChildren
   '/sign-in/sso-callback': typeof SignInSsoCallbackRoute
@@ -180,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/admin/simulations/$runId': typeof AdminSimulationsRunIdRoute
   '/panel/$slug/billing': typeof PanelSlugBillingRoute
   '/panel/$slug/conversations': typeof PanelSlugConversationsRoute
+  '/panel/$slug/phones': typeof PanelSlugPhonesRoute
   '/panel/$slug/pos': typeof PanelSlugPosRoute
   '/panel/$slug/settings': typeof PanelSlugSettingsRoute
   '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
@@ -197,6 +211,7 @@ export interface FileRoutesByTo {
   '/admin/costs': typeof AdminCostsRoute
   '/admin/prompt': typeof AdminPromptRoute
   '/admin/prospecting': typeof AdminProspectingRoute
+  '/admin/users': typeof AdminUsersRoute
   '/courier/$token': typeof CourierTokenRoute
   '/sign-in/sso-callback': typeof SignInSsoCallbackRoute
   '/admin': typeof AdminIndexRoute
@@ -206,6 +221,7 @@ export interface FileRoutesByTo {
   '/admin/simulations/$runId': typeof AdminSimulationsRunIdRoute
   '/panel/$slug/billing': typeof PanelSlugBillingRoute
   '/panel/$slug/conversations': typeof PanelSlugConversationsRoute
+  '/panel/$slug/phones': typeof PanelSlugPhonesRoute
   '/panel/$slug/pos': typeof PanelSlugPosRoute
   '/panel/$slug/settings': typeof PanelSlugSettingsRoute
   '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
@@ -224,6 +240,7 @@ export interface FileRoutesById {
   '/admin/costs': typeof AdminCostsRoute
   '/admin/prompt': typeof AdminPromptRoute
   '/admin/prospecting': typeof AdminProspectingRoute
+  '/admin/users': typeof AdminUsersRoute
   '/courier/$token': typeof CourierTokenRoute
   '/panel/$slug': typeof PanelSlugRouteWithChildren
   '/sign-in/sso-callback': typeof SignInSsoCallbackRoute
@@ -234,6 +251,7 @@ export interface FileRoutesById {
   '/admin/simulations/$runId': typeof AdminSimulationsRunIdRoute
   '/panel/$slug/billing': typeof PanelSlugBillingRoute
   '/panel/$slug/conversations': typeof PanelSlugConversationsRoute
+  '/panel/$slug/phones': typeof PanelSlugPhonesRoute
   '/panel/$slug/pos': typeof PanelSlugPosRoute
   '/panel/$slug/settings': typeof PanelSlugSettingsRoute
   '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
@@ -253,6 +271,7 @@ export interface FileRouteTypes {
     | '/admin/costs'
     | '/admin/prompt'
     | '/admin/prospecting'
+    | '/admin/users'
     | '/courier/$token'
     | '/panel/$slug'
     | '/sign-in/sso-callback'
@@ -263,6 +282,7 @@ export interface FileRouteTypes {
     | '/admin/simulations/$runId'
     | '/panel/$slug/billing'
     | '/panel/$slug/conversations'
+    | '/panel/$slug/phones'
     | '/panel/$slug/pos'
     | '/panel/$slug/settings'
     | '/panel/$slug/whatsapp'
@@ -280,6 +300,7 @@ export interface FileRouteTypes {
     | '/admin/costs'
     | '/admin/prompt'
     | '/admin/prospecting'
+    | '/admin/users'
     | '/courier/$token'
     | '/sign-in/sso-callback'
     | '/admin'
@@ -289,6 +310,7 @@ export interface FileRouteTypes {
     | '/admin/simulations/$runId'
     | '/panel/$slug/billing'
     | '/panel/$slug/conversations'
+    | '/panel/$slug/phones'
     | '/panel/$slug/pos'
     | '/panel/$slug/settings'
     | '/panel/$slug/whatsapp'
@@ -306,6 +328,7 @@ export interface FileRouteTypes {
     | '/admin/costs'
     | '/admin/prompt'
     | '/admin/prospecting'
+    | '/admin/users'
     | '/courier/$token'
     | '/panel/$slug'
     | '/sign-in/sso-callback'
@@ -316,6 +339,7 @@ export interface FileRouteTypes {
     | '/admin/simulations/$runId'
     | '/panel/$slug/billing'
     | '/panel/$slug/conversations'
+    | '/panel/$slug/phones'
     | '/panel/$slug/pos'
     | '/panel/$slug/settings'
     | '/panel/$slug/whatsapp'
@@ -334,6 +358,7 @@ export interface RootRouteChildren {
   AdminCostsRoute: typeof AdminCostsRoute
   AdminPromptRoute: typeof AdminPromptRoute
   AdminProspectingRoute: typeof AdminProspectingRoute
+  AdminUsersRoute: typeof AdminUsersRoute
   CourierTokenRoute: typeof CourierTokenRoute
   PanelSlugRoute: typeof PanelSlugRouteWithChildren
   SignInSsoCallbackRoute: typeof SignInSsoCallbackRoute
@@ -402,6 +427,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/prospecting'
       fullPath: '/admin/prospecting'
       preLoaderRoute: typeof AdminProspectingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/courier/$token': {
@@ -488,6 +520,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PanelSlugConversationsRouteImport
       parentRoute: typeof PanelSlugRoute
     }
+    '/panel/$slug/phones': {
+      id: '/panel/$slug/phones'
+      path: '/phones'
+      fullPath: '/panel/$slug/phones'
+      preLoaderRoute: typeof PanelSlugPhonesRouteImport
+      parentRoute: typeof PanelSlugRoute
+    }
     '/panel/$slug/pos': {
       id: '/panel/$slug/pos'
       path: '/pos'
@@ -529,6 +568,7 @@ declare module '@tanstack/react-router' {
 interface PanelSlugRouteChildren {
   PanelSlugBillingRoute: typeof PanelSlugBillingRoute
   PanelSlugConversationsRoute: typeof PanelSlugConversationsRoute
+  PanelSlugPhonesRoute: typeof PanelSlugPhonesRoute
   PanelSlugPosRoute: typeof PanelSlugPosRoute
   PanelSlugSettingsRoute: typeof PanelSlugSettingsRoute
   PanelSlugWhatsappRoute: typeof PanelSlugWhatsappRoute
@@ -540,6 +580,7 @@ interface PanelSlugRouteChildren {
 const PanelSlugRouteChildren: PanelSlugRouteChildren = {
   PanelSlugBillingRoute: PanelSlugBillingRoute,
   PanelSlugConversationsRoute: PanelSlugConversationsRoute,
+  PanelSlugPhonesRoute: PanelSlugPhonesRoute,
   PanelSlugPosRoute: PanelSlugPosRoute,
   PanelSlugSettingsRoute: PanelSlugSettingsRoute,
   PanelSlugWhatsappRoute: PanelSlugWhatsappRoute,
@@ -560,6 +601,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCostsRoute: AdminCostsRoute,
   AdminPromptRoute: AdminPromptRoute,
   AdminProspectingRoute: AdminProspectingRoute,
+  AdminUsersRoute: AdminUsersRoute,
   CourierTokenRoute: CourierTokenRoute,
   PanelSlugRoute: PanelSlugRouteWithChildren,
   SignInSsoCallbackRoute: SignInSsoCallbackRoute,

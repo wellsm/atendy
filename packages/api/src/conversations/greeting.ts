@@ -1,4 +1,5 @@
 import { normalizeText } from '../menu/search';
+import { StoreType } from '../stores/types';
 
 /**
  * Words a "just saying hello" batch may have. Anything else (an item, "pedido", "cardápio") goes to the model.
@@ -73,6 +74,21 @@ export const isGreetingOnly = (bodies: string[]) => {
 };
 
 /**
+ * First messages of each visit to a `redirect_only` store: the hello and the store's welcome (default: the link).
+ */
+export const buildRedirectWelcome = (input: {
+  period: string;
+  name?: string;
+  storeName: string;
+  redirect: { label: string; url: string };
+  welcomeText?: string | null;
+}) => [
+  `${input.period}${input.name ? `, ${input.name}` : ''}! 👋 Este é o atendimento da loja *${input.storeName.replace(/\*/g, '').trim()}* 😊`,
+  input.welcomeText?.trim() ||
+    `👉 *${input.redirect.label.replace(/\*/g, '').trim()}*: é só usar o link abaixo\n${input.redirect.url}\n\nSe tiver alguma dúvida, é só perguntar por aqui 💬`
+];
+
+/**
  * The store's fixed greeting, one entry per WhatsApp message. `standalone`: a new customer who only said hello gets the
  * full welcome with the menu link and no model reply; otherwise one message goes before the model's reply.
  */
@@ -83,6 +99,11 @@ export const buildGreeting = (input: {
   menuUrl: string;
   newCustomer: boolean;
   standalone: boolean;
+  storeType?: StoreType | null;
+  /**
+   * The store's own last message of the standalone welcome (admin `welcome_text`), instead of the catalog link.
+   */
+  welcomeText?: string | null;
 }) => {
   const hello = `${input.period}${input.name ? `, ${input.name}` : ''}! 👋`;
   const store = `*${input.storeName.replace(/\*/g, '').trim()}*`;
@@ -100,12 +121,13 @@ export const buildGreeting = (input: {
   return [
     hello,
     `Seja bem-vindo(a)! Este é o atendimento da loja ${store} 😊\nSou o atendente virtual 🤖 e posso montar seu pedido por aqui.`,
-    [
-      'Vi que é sua primeira vez com a gente, que bom te ver por aqui! ✨',
-      'Se preferir, nosso cardápio completo está aqui e dá para pedir direto por ele 👇',
-      input.menuUrl,
-      '',
-      'Ou é só me dizer o que vai querer 💬 E se quiser falar com um atendente, é só pedir 🙋'
-    ].join('\n')
+    input.welcomeText?.trim() ||
+      [
+        'Vi que é sua primeira vez com a gente, que bom te ver por aqui! ✨',
+        `Se preferir, nosso ${input.storeType === StoreType.Retail ? 'catálogo' : 'cardápio'} completo está aqui e dá para pedir direto por ele 👇`,
+        input.menuUrl,
+        '',
+        'Ou é só me dizer o que vai querer 💬 E se quiser falar com um atendente, é só pedir 🙋'
+      ].join('\n')
   ];
 };

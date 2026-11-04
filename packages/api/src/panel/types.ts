@@ -4,7 +4,14 @@ import type { PriceMode } from '../menu/types';
 import type { Cart, OrderRepository } from '../orders/repository';
 import type { Fulfillment, OrderSource, OrderStatus } from '../orders/types';
 import type { HourRange } from '../stores/hours';
-import type { DeliveryMode, NewOrderAfterStatus, PaymentMethod, PreviousAddress, StorePolicy } from '../stores/types';
+import type {
+  DeliveryMode,
+  NewOrderAfterStatus,
+  PaymentMethod,
+  PreviousAddress,
+  StorePolicy,
+  StoreType
+} from '../stores/types';
 
 import { displayOrderCode } from '../orders/code';
 
@@ -30,6 +37,10 @@ export type PanelStore = {
    * The hours say open right now (store timezone). Independent of `acceptingOrders`.
    */
   openNow: boolean;
+  /**
+   * Menu or catalog wording; a store without a type is food.
+   */
+  storeType: StoreType;
 };
 
 export const toPanelStore = (
@@ -39,6 +50,7 @@ export const toPanelStore = (
     slug: string;
     active: boolean;
     accepting_orders: boolean;
+    store_type: StoreType;
   },
   openNow: boolean
 ): PanelStore => ({
@@ -47,7 +59,8 @@ export const toPanelStore = (
   slug: store.slug,
   active: store.active,
   acceptingOrders: store.accepting_orders,
-  openNow
+  openNow,
+  storeType: store.store_type
 });
 
 export type PanelHourRange = {
@@ -80,6 +93,14 @@ export type PanelDelivery = {
    * `by_distance` only; the API always answers with the list (empty for the other modes).
    */
   bands?: PanelDeliveryBand[];
+  /**
+   * When the store delivers; empty or absent = whenever it is open. The API always answers with the list.
+   */
+  hours?: PanelHourRange[];
+  /**
+   * Lead time in days told with the delivery hours; null = 1 day.
+   */
+  leadDays?: number | null;
 };
 
 /**

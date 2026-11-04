@@ -116,7 +116,14 @@ describe('settings validators', () => {
         flatFeeCents: 0,
         zones: [{ neighborhood: ' Centro ', feeCents: 500 }]
       }),
-      { mode: DeliveryMode.ByZone, flatFeeCents: 0, zones: [{ neighborhood: 'Centro', feeCents: 500 }], bands: [] }
+      {
+        mode: DeliveryMode.ByZone,
+        flatFeeCents: 0,
+        zones: [{ neighborhood: 'Centro', feeCents: 500 }],
+        bands: [],
+        hours: [],
+        leadDays: null
+      }
     );
   });
 
@@ -133,8 +140,34 @@ describe('settings validators', () => {
         flatFeeCents: 800,
         zones: [{ neighborhood: 'Centro', feeCents: 500 }]
       }),
-      { mode: DeliveryMode.Flat, flatFeeCents: 800, zones: [], bands: [] }
+      { mode: DeliveryMode.Flat, flatFeeCents: 800, zones: [], bands: [], hours: [], leadDays: null }
     );
+  });
+
+  it('sorts the delivery hours and checks them and the lead days on their own fields', () => {
+    const base = { mode: DeliveryMode.Flat, flatFeeCents: 0, zones: [] };
+    const valid = validateDelivery({
+      ...base,
+      hours: [
+        { weekday: 5, opens_at: '09:00', closes_at: '18:00' },
+        { weekday: 1, opens_at: '09:00', closes_at: '18:00' }
+      ],
+      leadDays: 2
+    });
+
+    deepEqual(
+      valid.hours.map(({ weekday }) => weekday),
+      [1, 5]
+    );
+    equal(valid.leadDays, 2);
+
+    throws(
+      () => validateDelivery({ ...base, hours: [{ weekday: 1, opens_at: '9h', closes_at: '18:00' }] }),
+      failsOn('delivery_hours')
+    );
+    throws(() => validateDelivery({ ...base, leadDays: 0 }), failsOn('delivery_lead_days'));
+    throws(() => validateDelivery({ ...base, leadDays: 91 }), failsOn('delivery_lead_days'));
+    throws(() => validateDelivery({ ...base, leadDays: 1.5 }), failsOn('delivery_lead_days'));
   });
 
   it('requires one payment method and drops repeats', () => {

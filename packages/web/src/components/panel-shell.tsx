@@ -19,12 +19,14 @@ import { usePanelSlug } from '../lib/panel-slug';
 import {
   useBilling,
   useConversations,
+  useMe,
   useMenu,
   useOrders,
   useStockSummary,
   useUpdateStore,
   useWhatsAppState
 } from '../lib/queries';
+import { usePanelMenuWord } from '../lib/store-type';
 import { usePanelTheme } from '../lib/theme';
 
 const MONTH = new Intl.DateTimeFormat('pt-BR', { month: 'long' });
@@ -235,6 +237,7 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
   const wa = whatsapp.data && WHATSAPP[whatsapp.data.state];
   const card = billing.data?.card;
   const { can } = useOperator();
+  const { word, title } = usePanelMenuWord();
 
   return (
     <>
@@ -247,7 +250,7 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
           rel="noreferrer"
           className="text-xs font-medium text-accent-fg hover:underline"
         >
-          Ver cardápio público ↗
+          Ver {word} público ↗
         </a>
         <div className="mt-2.5">
           <AcceptingSwitch store={store} />
@@ -275,7 +278,7 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
         )}
         <SheetButton
           sheet="menu"
-          title="Cardápio"
+          title={title}
           subtitle={menu.data ? `${products.length} produtos · ${paused} pausados` : 'Produtos e preços'}
           onPick={onPick}
         />
@@ -388,6 +391,8 @@ export function PanelShell({ store, children }: { store: PanelStore; children: R
   const closedOrders = useOrders('closed');
   const orders = [...(openOrders.data?.orders ?? []), ...(closedOrders.data?.orders ?? [])];
   const sidebar = { store, theme, onTheme: setTheme, onPick: () => setDrawer(false) };
+  const slug = usePanelSlug();
+  const demoEnabled = useMe().data?.demo_enabled;
 
   return (
     <div className="flex h-dvh overflow-hidden bg-page text-fg">
@@ -422,6 +427,17 @@ export function PanelShell({ store, children }: { store: PanelStore; children: R
           <GlobalSearch conversations={conversations.data?.conversations ?? []} orders={orders} />
           <span className="hidden flex-1 lg:block" />
           <TodaySummary orders={orders} />
+          {demoEnabled && (
+            <Link
+              to="/panel/$slug/phones"
+              params={{ slug }}
+              aria-label="Celulares de teste"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[13px] text-fg-2 hover:bg-hover"
+            >
+              <span aria-hidden>📱</span>
+              <span className="hidden sm:inline">Celulares de teste</span>
+            </Link>
+          )}
           {locked && (
             <button
               type="button"

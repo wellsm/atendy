@@ -4,7 +4,7 @@ import type { DemoMenuKind } from '../../menu/demo-menus';
 import { DatabaseRunner } from '@ez4/local-database/run';
 
 import { DEMO_MENU } from '../../menu/demo-menu';
-import { DEMO_MENUS } from '../../menu/demo-menus';
+import { DEMO_MENUS, demoStoreType } from '../../menu/demo-menus';
 import { MenuRepository } from '../../menu/repository';
 import { StoreRepository } from '../../stores/repository';
 
@@ -36,6 +36,8 @@ if (REPLACE === '1') {
 
   await MenuRepository.importMenu(db, STORE_ID, menu);
 }
+
+await StoreRepository.setStoreType(db, STORE_ID, demoStoreType(KIND as DemoMenuKind | undefined));
 
 // Open 24h every day so the manual smoke test works at any time.
 await StoreRepository.replaceHours(

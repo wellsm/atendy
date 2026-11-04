@@ -2,7 +2,7 @@ import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { Integer, String } from '@ez4/schema';
 import type { RouterType } from '../../stores/types';
-import type { OrderCodeMode } from '../../stores/types';
+import type { OrderCodeMode, StoreRedirect, StoreType } from '../../stores/types';
 import type { AdminProvider } from '../provider';
 import type { AdminIdentity, AdminStoreDetail } from '../types';
 
@@ -38,6 +38,22 @@ export declare class UpdateStoreRequest implements Http.Request {
      * Order codes: 6 random symbols or 1, 2, 3…
      */
     orderCodeMode?: OrderCodeMode;
+    /**
+     * Menu (food) or catalog (retail) wording for the bot and the public page.
+     */
+    storeType?: StoreType;
+    /**
+     * Last message of the welcome a new customer gets for a plain hello; `null` = the catalog link.
+     */
+    welcomeText?: string | null;
+    /**
+     * One service the store handles elsewhere (the bot sends the link; billed at 10 %); `null` removes it.
+     */
+    redirect?: StoreRedirect | null;
+    /**
+     * The store never sells: fixed welcome with the link, then catalog questions and handoff. Needs `redirect`.
+     */
+    redirectOnly?: boolean;
   };
 }
 
@@ -55,12 +71,34 @@ export async function updateAdminStoreHandler(
   { db }: Service.Context<AdminProvider>
 ): Promise<UpdateStoreResponse> {
   const { storeId } = request.parameters;
-  const { active, router, llmModel, orderMemoryHours, orderPriceCents, webOrderPercent, orderCodeMode } = request.body;
+  const {
+    active,
+    router,
+    llmModel,
+    orderMemoryHours,
+    orderPriceCents,
+    webOrderPercent,
+    orderCodeMode,
+    storeType,
+    welcomeText,
+    redirect,
+    redirectOnly
+  } = request.body;
 
   if (
-    [active, router, llmModel, orderMemoryHours, orderPriceCents, webOrderPercent, orderCodeMode].every(
-      (value) => value === undefined
-    )
+    [
+      active,
+      router,
+      llmModel,
+      orderMemoryHours,
+      orderPriceCents,
+      webOrderPercent,
+      orderCodeMode,
+      storeType,
+      welcomeText,
+      redirect,
+      redirectOnly
+    ].every((value) => value === undefined)
   ) {
     throw new HttpBadRequestError('Nothing to update.');
   }
@@ -69,9 +107,22 @@ export async function updateAdminStoreHandler(
     throw new HttpBadRequestError('Unknown model.', { field: 'llm_model' });
   }
 
-  const policy = orderMemoryHours === undefined ? undefined : parseOrderMemory(orderMemoryHours);
+  const policy = {
+    ...(orderMemoryHours !== undefined && parsePolicyKey('order_memory_hours', orderMemoryHours)),
+    ...(welcomeText !== undefined && parsePolicyKey('welcome_text', welcomeText)),
+    ...(redirect !== undefined && parsePolicyKey('redirect', redirect)),
+    ...(redirectOnly !== undefined && parsePolicyKey('redirect_only', redirectOnly))
+  };
 
   await requireAdminStore(db, storeId);
+
+  if (redirect !== undefined || redirectOnly !== undefined) {
+    const merged = { ...(await StoreRepository.getPolicy(db, storeId)), ...policy };
+
+    if (merged.redirect_only && !merged.redirect) {
+      throw new HttpBadRequestError('A redirect store needs a redirect link.', { field: 'redirect_only' });
+    }
+  }
 
   if (active !== undefined) {
     await StoreRepository.setActive(db, storeId, active);
@@ -85,7 +136,7 @@ export async function updateAdminStoreHandler(
     await StoreRepository.setLlmModel(db, storeId, llmModel);
   }
 
-  if (policy) {
+  if (Object.keys(policy).length) {
     await StoreRepository.updatePolicy(db, storeId, policy);
   }
 
@@ -101,18 +152,22 @@ export async function updateAdminStoreHandler(
     await StoreRepository.setOrderCodeMode(db, storeId, orderCodeMode);
   }
 
+  if (storeType !== undefined) {
+    await StoreRepository.setStoreType(db, storeId, storeType);
+  }
+
   return { status: 200, body: await loadAdminDetail(db, storeId) };
 }
 
 /**
  * Same rule as `admin:set-policy`.
  */
-const parseOrderMemory = (hours: number | null) => {
+const parsePolicyKey = (key: string, value: unknown) => {
   try {
-    return parsePolicyPatch(JSON.stringify({ order_memory_hours: hours }));
+    return parsePolicyPatch(JSON.stringify({ [key]: value }));
   } catch (error) {
     if (error instanceof PolicyError) {
-      throw new HttpBadRequestError(error.message, { field: 'order_memory_hours' });
+      throw new HttpBadRequestError(error.message, { field: key });
     }
 
     throw error;

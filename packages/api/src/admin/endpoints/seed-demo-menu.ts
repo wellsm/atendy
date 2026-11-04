@@ -7,8 +7,9 @@ import type { AdminIdentity } from '../types';
 
 import { HttpConflictError } from '@ez4/gateway';
 
-import { countProducts, DEMO_MENUS } from '../../menu/demo-menus';
+import { countProducts, DEMO_MENUS, demoStoreType } from '../../menu/demo-menus';
 import { MenuRepository } from '../../menu/repository';
+import { StoreRepository } from '../../stores/repository';
 import { requireAdminStore } from '../detail';
 
 export declare class SeedDemoMenuRequest implements Http.Request {
@@ -34,7 +35,7 @@ export declare class SeedDemoMenuResponse implements Http.Response {
 
 /**
  * Demo menu of a business type. Without `replace`, only for a store with no product at all (active or not).
- * Hours stay as the store set them.
+ * Hours stay as the store set them; the store type follows the kind (`demoStoreType`).
  */
 export async function seedDemoMenuHandler(
   request: Http.Incoming<SeedDemoMenuRequest>,
@@ -48,6 +49,7 @@ export async function seedDemoMenuHandler(
 
   if (replace) {
     await MenuRepository.replaceMenu(db, storeId, menu);
+    await StoreRepository.setStoreType(db, storeId, demoStoreType(kind));
 
     return { status: 200, body: { products: countProducts(menu) } };
   }
@@ -57,6 +59,7 @@ export async function seedDemoMenuHandler(
   }
 
   await MenuRepository.importMenu(db, storeId, menu);
+  await StoreRepository.setStoreType(db, storeId, demoStoreType(kind));
 
   return { status: 200, body: { products: countProducts(menu) } };
 }

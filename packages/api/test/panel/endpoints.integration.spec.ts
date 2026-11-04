@@ -56,6 +56,19 @@ describe('panel endpoints', () => {
 
     ok(text.includes('Pizzaria Nova'));
     ok(text.includes(response.body.store.id));
+
+    // The user who created it pays for it.
+    const { billing_account_id: accountId } = (await db.stores.findOne({
+      select: { billing_account_id: true },
+      where: { id: response.body.store.id }
+    }))!;
+
+    const account = await db.billing_accounts.findOne({
+      select: { owner_user_id: true },
+      where: { id: accountId ?? '' }
+    });
+
+    equal(account?.owner_user_id, 'user_1');
   });
 
   it('refuses a second store for the same org', async () => {
@@ -88,13 +101,23 @@ describe('panel endpoints', () => {
     const orgId = `org_${randomUUID()}`;
     telegramOk();
 
-    deepEqual((await me()).body, { hasOrg: false, store: null });
-    deepEqual((await me(orgId)).body, { hasOrg: true, store: null });
+    deepEqual((await me()).body, { hasOrg: false, store: null, demoEnabled: true });
+    deepEqual((await me(orgId)).body, { hasOrg: true, store: null, demoEnabled: true });
 
     const {
       body: { store }
     } = await create(orgId, { name: 'Minha Loja', acceptRisk: true });
 
-    deepEqual((await me(orgId)).body, { hasOrg: true, store });
+    deepEqual((await me(orgId)).body, { hasOrg: true, store, demoEnabled: true });
+  });
+
+  it('tells the panel whether the demo phones are on', async () => {
+    process.env.DEMO_ENABLED = 'false';
+
+    try {
+      equal((await me()).body.demoEnabled, false);
+    } finally {
+      process.env.DEMO_ENABLED = 'true';
+    }
   });
 });

@@ -78,7 +78,8 @@ export async function getStorefrontHandler(
         deliveryFromCents: deliveryFromCents(settings.delivery),
         minOrderCents: settings.policy.min_order_cents ?? null,
         paymentMethods: settings.paymentMethods,
-        deliveryMode: settings.delivery.mode
+        deliveryMode: settings.delivery.mode,
+        storeType: store.store_type
       },
       categories: await withImageUrls(productImages, categories)
     }

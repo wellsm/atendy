@@ -6,6 +6,7 @@ import { ApiError } from '../../lib/api';
 import { centsToInput, formatMoney, parseMoney, PAYMENT_LABEL } from '../../lib/format';
 import {
   useAddDraftItem,
+  useDiscardDraft,
   useDraft,
   useMenu,
   usePlaceDraft,
@@ -104,6 +105,49 @@ export function OrderEditor({ conversationId }: { conversationId: string }) {
           </button>
         </>
       )}
+
+      {/* Also without items: a draft may hold only fulfillment or an address. */}
+      {cart && <DiscardDraft conversationId={conversationId} />}
+    </div>
+  );
+}
+
+/**
+ * Asks once before dropping the whole order in progress.
+ */
+function DiscardDraft({ conversationId }: { conversationId: string }) {
+  const discard = useDiscardDraft(conversationId);
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="h-[42px] rounded-lg border border-danger-line text-sm font-semibold text-danger-fg hover:bg-danger-soft"
+      >
+        Descartar pedido
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-danger-line bg-danger-soft p-3">
+      <p className="text-[13px] text-danger-fg">Descartar o pedido em montagem? O cliente não recebe mensagem.</p>
+      {discard.isError && <p className="text-xs text-danger-fg">Não foi possível descartar. Tente de novo.</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={discard.isPending}
+          onClick={() => discard.mutate()}
+          className="h-9 flex-1 rounded-lg bg-danger text-[13px] font-semibold text-white disabled:opacity-50"
+        >
+          {discard.isPending ? 'Descartando…' : 'Descartar'}
+        </button>
+        <button type="button" onClick={() => setConfirming(false)} className="h-9 px-2 text-[13px] text-muted">
+          Voltar
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,16 +1,17 @@
 import type { Db } from '../../src/db';
 
-import { deepEqual, equal, rejects } from 'node:assert/strict';
+import { deepEqual, equal, ok, rejects } from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, it } from 'node:test';
 
-import { HttpBadRequestError, HttpConflictError } from '@ez4/gateway';
+import { HttpBadRequestError, HttpConflictError, HttpNotFoundError } from '@ez4/gateway';
 import { DatabaseTester } from '@ez4/local-database/test';
 import { QueueTester } from '@ez4/local-queue/test';
 
 import { ConversationRepository } from '../../src/conversations/repository';
-import { ConversationMode } from '../../src/conversations/types';
+import { ConversationMode, MessageAuthor } from '../../src/conversations/types';
 import { addDraftItemHandler } from '../../src/panel/endpoints/add-draft-item';
+import { discardDraftHandler } from '../../src/panel/endpoints/discard-draft';
 import { getDraftHandler } from '../../src/panel/endpoints/get-draft';
 import { placeDraftHandler } from '../../src/panel/endpoints/place-draft';
 import { removeDraftItemHandler } from '../../src/panel/endpoints/remove-draft-item';
@@ -119,6 +120,43 @@ describe('attendant order (panel draft)', () => {
       triggers: ['orders', 'conversations'],
       conversationId
     });
+  });
+
+  it('discards the order in progress: abandoned, unlinked, no message and nothing billed', async () => {
+    const { identity, parameters, menu, conversationId } = await setup();
+    const discard = () => discardDraftHandler({ identity, parameters } as never, { db, panelEvents });
+
+    await rejects(discard(), HttpConflictError);
+
+    await ConversationRepository.setMode(db, {
+      conversationId,
+      mode: ConversationMode.Human,
+      reason: 'staff_took_over'
+    });
+
+    await rejects(discard(), HttpNotFoundError);
+
+    const added = await addDraftItemHandler(
+      {
+        identity,
+        parameters,
+        body: { productId: productByName(menu, 'Coca-Cola 2L').id, qty: 1, selections: [] }
+      } as never,
+      { db, panelEvents }
+    );
+
+    deepEqual((await discard()).body, { discarded: true });
+
+    const order = await db.orders.findOne({
+      select: { status: true, abandoned_at: true },
+      where: { id: added.body.cart.orderId }
+    });
+
+    equal(order?.status, 'abandoned');
+    ok(order?.abandoned_at);
+    equal((await getDraftHandler({ identity, parameters } as never, { db })).body.cart, null);
+    equal(await db.messages.count({ where: { conversation_id: conversationId, author: MessageAuthor.Staff } }), 0);
+    equal(await db.billing_records.count({ where: { conversation_id: conversationId } }), 0);
   });
 
   it('lets the attendant add a product whose required option is sold out', async () => {

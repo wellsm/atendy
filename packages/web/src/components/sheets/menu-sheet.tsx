@@ -22,6 +22,7 @@ import {
   useSetOptionActive,
   useSetProductActive
 } from '../../lib/queries';
+import { usePanelMenuWord } from '../../lib/store-type';
 import { Loading } from '../loading';
 import { GroupLibrary } from '../menu/group-library';
 import { Toggle } from '../toggle';
@@ -74,22 +75,27 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
   const edit = useOperator().allows('menu_edit');
   const product = edit ? search.product : undefined;
   const groups = edit && search.groups;
+  const { word, title, retail } = usePanelMenuWord();
 
   return (
-    <Sheet width="lg" label="Cardápio" onClose={onClose}>
+    <Sheet width="lg" label={title} onClose={onClose}>
       {product && <ProductEditor key={product} productId={product} onClose={onClose} />}
 
       {!product && groups && (
         <>
           <SheetHeader
             title="Grupos de opções"
-            subtitle="Sabores, bebidas, adicionais: um grupo serve para vários produtos."
+            subtitle={
+              retail
+                ? 'Cores, tamanhos, kits: um grupo serve para vários produtos.'
+                : 'Sabores, bebidas, adicionais: um grupo serve para vários produtos.'
+            }
             onBack={() => void navigate({ sheet: 'menu' })}
             onClose={onClose}
           />
           <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4 md:px-6">
             {menu.isPending && <Loading />}
-            {menu.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o cardápio.</p>}
+            {menu.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o {word}.</p>}
             {menu.data && <GroupLibrary categories={menu.data.categories} />}
           </div>
         </>
@@ -98,13 +104,13 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
       {!product && !groups && (
         <>
           <SheetHeader
-            title="Cardápio"
-            subtitle="O bot usa o cardápio a partir da próxima mensagem do cliente."
+            title={title}
+            subtitle={`O bot usa o ${word} a partir da próxima mensagem do cliente.`}
             onClose={onClose}
           />
           <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4 md:px-6">
             {menu.isPending && <Loading />}
-            {menu.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o cardápio.</p>}
+            {menu.isError && <p className="text-sm text-danger-fg">Não foi possível carregar o {word}.</p>}
             {menu.data && <Menu categories={menu.data.categories} />}
           </div>
         </>
@@ -114,6 +120,7 @@ export function MenuSheet({ onClose }: { onClose: () => void }) {
 }
 
 function Menu({ categories }: { categories: MenuCategory[] }) {
+  const { retail } = usePanelMenuWord();
   const slug = usePanelSlug();
   const edit = useOperator().allows('menu_edit');
   const reorder = useReorderCategories();
@@ -298,7 +305,7 @@ function Menu({ categories }: { categories: MenuCategory[] }) {
 
           {!categories.length && (
             <p className="rounded-xl border border-dashed border-line-2 p-6 text-sm text-muted">
-              Comece criando uma categoria (ex.: Pizzas).
+              Comece criando uma categoria (ex.: {retail ? 'Perfumes' : 'Pizzas'}).
             </p>
           )}
 

@@ -36,6 +36,10 @@ export type BillingCard = {
 
 export type BillingInvoice = {
   id: string;
+  /**
+   * The store this invoice charges (an account pays several stores in one charge).
+   */
+  storeName: string;
   periodStart: string;
   periodEnd: string;
   orders: number;

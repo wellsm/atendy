@@ -1,5 +1,6 @@
 import type { CostReport } from './costs';
 import type { LossReason, StockFilter, StockUnit } from './stock';
+import type { StoreType } from './store-type';
 
 import { useAuth, useOrganizationList } from '@clerk/react';
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,17 +19,35 @@ export type PanelStore = {
    * The hours say open right now. Independent of `accepting_orders`.
    */
   open_now: boolean;
+  /**
+   * Menu (food) or catalog (retail) wording.
+   */
+  store_type: StoreType;
 };
 
 export type Me = {
   has_org: boolean;
   store: PanelStore | null;
+  /**
+   * The demo phones (`/panel/<slug>/phones`) are on for this stage.
+   */
+  demo_enabled: boolean;
 };
 
 export type RouterType = 'jev' | 'llm';
 
 export type DemoMenuKind =
-  'pizzeria' | 'burger' | 'snack_bar' | 'pasta' | 'pastry' | 'acai' | 'lunchbox' | 'japanese' | 'tobacco_liquor';
+  | 'pizzeria'
+  | 'burger'
+  | 'snack_bar'
+  | 'pasta'
+  | 'pastry'
+  | 'acai'
+  | 'lunchbox'
+  | 'japanese'
+  | 'tobacco_liquor'
+  | 'cosmetics'
+  | 'beauty_studio';
 
 export type AdminStore = {
   id: string;
@@ -46,6 +65,8 @@ export type AdminStoreRow = AdminStore & {
   error_count_24h: number;
 };
 
+export type StoreRedirect = { label: string; url: string };
+
 export type AdminStoreDetail = {
   store: AdminStore;
   health: {
@@ -58,6 +79,15 @@ export type AdminStoreDetail = {
   };
   order_memory_hours: number | null;
   /**
+   * Last message of the plain-hello welcome; null = the catalog link.
+   */
+  welcome_text: string | null;
+  /**
+   * A service the store handles elsewhere: the bot sends the link, billed at 10 %.
+   */
+  redirect: StoreRedirect | null;
+  redirect_only: boolean;
+  /**
    * Price of an order the AI took all the way; null = `default_order_price_cents`.
    */
   order_price_cents: number | null;
@@ -68,7 +98,12 @@ export type AdminStoreDetail = {
   web_order_percent: number | null;
   default_web_order_percent: number;
   order_code_mode: 'random' | 'sequential';
+  store_type: StoreType;
   models: string[];
+  /**
+   * The demo phones (`DEMO_ENABLED`) are on: the store page shows the phones link.
+   */
+  demo_enabled: boolean;
   billing: BillingSummary | null;
 };
 
@@ -431,6 +466,24 @@ export const useUpdateDraft = (conversationId: string) =>
   useDraftMutation(conversationId, (input: DraftUpdate) => ['PATCH', '', input]);
 
 /**
+ * "Descartar pedido": the draft becomes abandoned (history only); the customer gets no message.
+ */
+export const useDiscardDraft = (conversationId: string) => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api<{ discarded: true }>('DELETE', `/panel/conversations/${conversationId}/draft`),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['draft', conversationId] }),
+        queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] }),
+        queryClient.invalidateQueries({ queryKey: ['orders'] })
+      ])
+  });
+};
+
+/**
  * "Fechar pedido": the draft becomes an open order (the open orders list shows it).
  */
 export const usePlaceDraft = (conversationId: string) => {
@@ -510,6 +563,14 @@ export type DeliverySettings = {
    * `by_distance` only.
    */
   bands?: DeliveryBand[];
+  /**
+   * When the store delivers; empty = whenever it is open.
+   */
+  hours?: HourRange[];
+  /**
+   * Lead time in days told by the bot with the delivery hours; null = 1 day.
+   */
+  lead_days?: number | null;
 };
 
 /**
@@ -631,6 +692,10 @@ export type InvoiceStatus = 'pending' | 'paid' | 'overdue' | 'in_review';
 
 export type BillingInvoice = {
   id: string;
+  /**
+   * One account pays all of an owner's stores: each invoice is one store's part of the monthly charge.
+   */
+  store_name: string;
   period_start: string;
   period_end: string;
   orders: number;
@@ -973,6 +1038,10 @@ export const useUpdateAdminStore = (storeId: string) => {
       order_price_cents?: number | null;
       web_order_percent?: number | null;
       order_code_mode?: 'random' | 'sequential';
+      store_type?: StoreType;
+      welcome_text?: string | null;
+      redirect?: StoreRedirect | null;
+      redirect_only?: boolean;
     }) => api<AdminStoreDetail>('PATCH', `/admin/stores/${storeId}`, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'stores'] })
   });
@@ -986,6 +1055,23 @@ export const useSeedDemoMenu = (storeId: string) => {
     mutationFn: (input: { kind: DemoMenuKind; replace?: boolean }) =>
       api<{ products: number }>('POST', `/admin/stores/${storeId}/demo-menu`, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'stores'] })
+  });
+};
+
+/**
+ * Demo reset (`DEMO_ENABLED` only): deletes the store's conversations, their orders, billing and AI calls. `slug`
+ * confirms it.
+ */
+export const useResetAdminDemo = (storeId: string) => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (slug: string) =>
+      api<{ conversations: number; orders: number; customers: number }>('POST', `/admin/stores/${storeId}/demo-reset`, {
+        slug
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin'] })
   });
 };
 
@@ -1292,6 +1378,10 @@ export type Dashboard = {
     handoffs: number;
     abandoned: number;
     failures: number;
+    /**
+     * The bot sent the store's redirect link (admin `redirect`).
+     */
+    redirects: number;
     cost_cents: number;
     forecast_cents: number | null;
     cost_per_order_cents: number | null;
@@ -2395,5 +2485,90 @@ export const useResetAdminStaffPin = (storeId: string) => {
   return useMutation({
     mutationFn: (input: { staff_id: string; pin: string }) =>
       api<{ id: string }>('PUT', `/admin/stores/${storeId}/staff/${input.staff_id}/pin`, { pin: input.pin })
+  });
+};
+
+export type DemoThread = {
+  conversation_id: string | null;
+  mode: 'bot' | 'human' | null;
+  typing: boolean;
+  messages: { id: string; author: PanelMessage['author']; body: string; created_at: string }[];
+};
+
+/**
+ * What a demo phone shows. Polls faster while the bot is answering or right after a send.
+ *
+ * shortcut: polling, the panel socket is bound to one store per connection; move to a socket when phones need instant
+ * updates.
+ */
+export const useDemoThread = (slug: string, phone: string, sentAt: number) => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['demo-thread', slug, phone],
+    queryFn: () => api<DemoThread>('GET', `/panel/demo-phones/thread?${new URLSearchParams({ slug, phone })}`),
+    refetchInterval: (query) => (query.state.data?.typing || Date.now() - sentAt < 10_000 ? 2_000 : 5_000),
+    refetchIntervalInBackground: false,
+    retry: (count, error) => !(error instanceof ApiError && error.status < 500) && count < 2
+  });
+};
+
+export const useSendDemoMessage = () => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { slug: string; phone: string; name: string; text: string; client_message_id: string }) =>
+      api<{ conversation_id: string }>('POST', '/panel/demo-phones/messages', input),
+    onSuccess: (_data, input) => queryClient.invalidateQueries({ queryKey: ['demo-thread', input.slug, input.phone] })
+  });
+};
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  stores: { id: string; name: string; slug: string }[];
+};
+
+export const useAdminUsers = () => {
+  const api = useApi();
+
+  return useQuery({
+    queryKey: ['admin', 'users'],
+    queryFn: () => api<{ users: AdminUser[] }>('GET', '/admin/users')
+  });
+};
+
+export const useSaveAdminUser = () => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { userId?: string; email: string; storeIds: string[] }) =>
+      input.userId
+        ? api<{ user: AdminUser }>('PUT', `/admin/users/${input.userId}/stores`, { store_ids: input.storeIds })
+        : api<{ user: AdminUser }>('POST', '/admin/users', { email: input.email, store_ids: input.storeIds }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+  });
+};
+
+export const useDeleteAdminUser = () => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => api<{ id: string }>('DELETE', `/admin/users/${userId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+  });
+};
+
+export const useCreateAdminStore = () => {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { name: string; slug?: string }) =>
+      api<{ store: { id: string; name: string; slug: string } }>('POST', '/admin/stores', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'stores'] })
   });
 };

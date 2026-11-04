@@ -208,7 +208,7 @@ describe('panel settings endpoints', () => {
 
     deepEqual(response.body, {
       hours: [{ weekday: 5, opensAt: '18:00', closesAt: '02:00' }],
-      delivery: { mode: DeliveryMode.Flat, flatFeeCents: 600, zones: [], bands: [] },
+      delivery: { mode: DeliveryMode.Flat, flatFeeCents: 600, zones: [], bands: [], hours: [], leadDays: null },
       paymentMethods: [PaymentMethod.Pix, PaymentMethod.Cash],
       policy: {
         minOrderCents: 3000,
@@ -336,6 +336,30 @@ describe('panel settings endpoints', () => {
       }),
       700
     );
+  });
+
+  it('saves the delivery hours and lead days with the delivery settings', async () => {
+    const { identity, storeId } = await setup();
+    const body = {
+      mode: DeliveryMode.Flat,
+      flatFeeCents: 0,
+      zones: [],
+      hours: [{ weekday: 2, opensAt: '09:00', closesAt: '18:00' }],
+      leadDays: 2
+    };
+
+    await rejects(
+      updateDeliveryHandler({ identity, body: { ...body, leadDays: 0 } } as never, { db }),
+      badField('delivery_lead_days')
+    );
+
+    const response = await updateDeliveryHandler({ identity, body } as never, { db });
+
+    deepEqual(response.body.delivery.hours, body.hours);
+    equal(response.body.delivery.leadDays, 2);
+    deepEqual((await StoreRepository.getSettings(db, storeId))?.delivery.hours, [
+      { weekday: 2, opens_at: '09:00', closes_at: '18:00' }
+    ]);
   });
 
   it('requires at least one payment method', async () => {

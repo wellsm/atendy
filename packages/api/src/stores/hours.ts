@@ -87,15 +87,33 @@ export const isClosingSoon = (hours: HourRange[], timeZone: string, now: Date, m
 const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 /**
- * One line per weekday (Sunday first), e.g. `Sex 11:00–14:00, 18:00–23:00` or `Seg fechado`.
+ * One line per weekday (Sunday first), e.g. `Sex 11:00–14:00, 18:00–23:00` or `Seg fechado` (`closed` names a day
+ * without ranges).
  */
-export const formatHours = (hours: HourRange[]) => {
+export const formatHours = (hours: HourRange[], closed = 'fechado') => {
   return WEEKDAY_LABELS.map((label, weekday) => {
     const ranges = hours
       .filter((range) => range.weekday === weekday)
       .sort((a, b) => a.opens_at.localeCompare(b.opens_at))
       .map(({ opens_at, closes_at }) => `${opens_at}–${closes_at}`);
 
-    return `${label} ${ranges.length ? ranges.join(', ') : 'fechado'}`;
+    return `${label} ${ranges.length ? ranges.join(', ') : closed}`;
   }).join('\n');
 };
+
+export type DeliverySchedule = {
+  /**
+   * `formatHours` of the delivery hours (`Dom sem entrega`).
+   */
+  hours: string;
+  lead_days: number;
+};
+
+/**
+ * What the bot tells about delivery, only for a store with delivery hours (without them it delivers whenever open).
+ */
+export const deliverySchedule = (
+  hours: HourRange[],
+  leadDays: number | null | undefined
+): DeliverySchedule | undefined =>
+  hours.length ? { hours: formatHours(hours, 'sem entrega'), lead_days: leadDays ?? 1 } : undefined;

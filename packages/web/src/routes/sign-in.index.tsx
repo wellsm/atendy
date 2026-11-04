@@ -24,6 +24,9 @@ const LINK_BUTTON = 'text-sm text-neutral-600 hover:text-neutral-900';
 
 const RESEND_SECONDS = 30;
 
+// Per build (`VITE_*` are baked in): dev turns Google off so demo logins use only email + code.
+const GOOGLE_SIGN_IN = import.meta.env.VITE_DISABLE_GOOGLE_SIGN_IN !== 'true';
+
 /**
  * The account needs a step these screens don't cover (2FA, required fields set in the Clerk dashboard).
  */
@@ -154,26 +157,30 @@ function EmailStep({ onCodeSent }: { onCodeSent: (email: string, flow: 'sign_in'
     <>
       <AuthHeading title="Entrar no Atendy">Primeira vez? Use o mesmo caminho — criamos sua conta.</AuthHeading>
 
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void google()}
-        className="flex h-[52px] w-full items-center justify-center gap-2.5 rounded-xl border border-neutral-300 bg-white text-[15px] font-medium hover:bg-neutral-50 disabled:opacity-50 lg:h-12 lg:rounded-[10px]"
-      >
-        <span
-          aria-hidden
-          className="flex size-5 items-center justify-center rounded-full border-2 border-neutral-400 text-[11px] font-bold text-neutral-600"
-        >
-          G
-        </span>
-        Continuar com Google
-      </button>
+      {GOOGLE_SIGN_IN && (
+        <>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void google()}
+            className="flex h-[52px] w-full items-center justify-center gap-2.5 rounded-xl border border-neutral-300 bg-white text-[15px] font-medium hover:bg-neutral-50 disabled:opacity-50 lg:h-12 lg:rounded-[10px]"
+          >
+            <span
+              aria-hidden
+              className="flex size-5 items-center justify-center rounded-full border-2 border-neutral-400 text-[11px] font-bold text-neutral-600"
+            >
+              G
+            </span>
+            Continuar com Google
+          </button>
 
-      <div className="flex items-center gap-3 text-[13px] text-neutral-400">
-        <span className="h-px flex-1 bg-neutral-200" />
-        ou
-        <span className="h-px flex-1 bg-neutral-200" />
-      </div>
+          <div className="flex items-center gap-3 text-[13px] text-neutral-400">
+            <span className="h-px flex-1 bg-neutral-200" />
+            ou
+            <span className="h-px flex-1 bg-neutral-200" />
+          </div>
+        </>
+      )}
 
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4 lg:gap-5">
         <label className="flex flex-col gap-1.5 text-sm font-medium" htmlFor="email">

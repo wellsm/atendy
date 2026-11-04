@@ -3,9 +3,10 @@ import type { PanelOrder } from '../../lib/queries';
 import { useState } from 'react';
 
 import { Sheet, SheetHeader } from './sheet';
-import { formatMoney, formatWhen, orderCustomerName, STATUS_LABEL } from '../../lib/format';
+import { formatMoney, formatWhen, orderCustomerName, statusLabel } from '../../lib/format';
 import { usePanelNavigate } from '../../lib/panel-search';
 import { useOrders } from '../../lib/queries';
+import { usePanelMenuWord } from '../../lib/store-type';
 import { STATUS_CHIP } from '../conversations/order-panel';
 import { Loading } from '../loading';
 
@@ -47,6 +48,7 @@ const inTab = (order: PanelOrder, tab: Tab) => {
  * Open and finished orders, newest first; a row opens its conversation.
  */
 export function HistorySheet({ onClose }: { onClose: () => void }) {
+  const { retail } = usePanelMenuWord();
   const navigate = usePanelNavigate();
   const openOrders = useOrders('open');
   const closedOrders = useOrders('closed');
@@ -115,7 +117,7 @@ export function HistorySheet({ onClose }: { onClose: () => void }) {
               </span>
               <span className="flex flex-col items-end gap-1 md:hidden">
                 <b className="text-sm font-semibold">{formatMoney(order.total_cents)}</b>
-                <span className={`px-[7px] py-px text-[11px] ${chip}`}>{STATUS_LABEL[order.status]}</span>
+                <span className={`px-[7px] py-px text-[11px] ${chip}`}>{statusLabel(order.status, retail)}</span>
               </span>
 
               <span className="hidden flex-col gap-0.5 text-fg-2 md:flex">
@@ -130,7 +132,7 @@ export function HistorySheet({ onClose }: { onClose: () => void }) {
               <span className="hidden text-fg-2 md:block">{fulfillmentText(order)}</span>
               <span className="hidden text-right font-semibold md:block">{formatMoney(order.total_cents)}</span>
               <span className={`hidden justify-self-end px-2 py-0.5 text-xs md:block ${chip}`}>
-                {STATUS_LABEL[order.status]}
+                {statusLabel(order.status, retail)}
               </span>
             </button>
           );

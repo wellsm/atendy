@@ -11,6 +11,7 @@ import {
   BillingStep as Step,
   DEFAULT_ORDER_PRICE_CENTS,
   DEFAULT_WEB_ORDER_PERCENT,
+  REDIRECT_PERCENT,
   stepsFromCart
 } from './progress';
 import { BillingOutcome } from './types';
@@ -28,6 +29,10 @@ type Billing = {
    * Fixed percent instead of the one computed from `steps` (web orders).
    */
   percent?: number;
+  /**
+   * Start of the window a no-order row belongs to, instead of the order cycle (redirect stores: one per visit).
+   */
+  since?: string;
 };
 
 const RECORD_FIELDS = { id: true, percent: true, price_cents: true } as const;
@@ -50,7 +55,7 @@ const cycleStart = async (db: DbClient, conversationId: string, excludeOrderId?:
  * The row this billing updates: the order's own, else the no-order row of the same cycle (a handoff before any draft
  * that later became this order).
  */
-const findCurrent = async (db: DbClient, conversationId: string, orderId: string | null) => {
+const findCurrent = async (db: DbClient, conversationId: string, orderId: string | null, window?: string) => {
   if (orderId) {
     const {
       records: [own]
@@ -61,7 +66,7 @@ const findCurrent = async (db: DbClient, conversationId: string, orderId: string
     }
   }
 
-  const since = await cycleStart(db, conversationId, orderId ?? undefined);
+  const since = window ?? (await cycleStart(db, conversationId, orderId ?? undefined));
 
   const {
     records: [open]
@@ -83,7 +88,7 @@ const findCurrent = async (db: DbClient, conversationId: string, orderId: string
  */
 const save = async (db: DbClient, billing: Billing) => {
   const percent = billing.percent ?? billingPercent(billing.steps, billing.handoffReason);
-  const current = await findCurrent(db, billing.conversationId, billing.orderId);
+  const current = await findCurrent(db, billing.conversationId, billing.orderId, billing.since);
   const now = new Date().toISOString();
 
   if (current && current.percent >= percent) {
@@ -198,6 +203,42 @@ export namespace BillingRepository {
     const [lastPlaced, store] = await Promise.all([
       OrderRepository.findLastPlaced(db, input.conversationId),
       db.stores.findOne({ select: { policy: true }, where: { id: conversation.store_id } })
+    ]);
+
+    if (lastPlaced && Date.parse(lastPlaced.placedAt) >= Date.parse(orderMemorySince(store?.policy, new Date()))) {
+      return;
+    }
+
+    await save(db, { ...base, orderId: null, steps: [] });
+  };
+
+  /**
+   * The bot sent the store's redirect link: `REDIRECT_PERCENT` of the cycle, on the open draft when there is one.
+   * Without a draft, nothing when the last placed order is still the current one (already billed). `since`: bill once
+   * per that window instead of once per order cycle (redirect stores).
+   */
+  export const recordRedirect = async (
+    db: DbClient,
+    input: { storeId: string; conversationId: string; since?: string }
+  ) => {
+    const conversation = await db.conversations.findOne({
+      select: { draft_order_id: true },
+      where: { id: input.conversationId }
+    });
+
+    const base = { ...input, outcome: BillingOutcome.Redirect, handoffReason: null, percent: REDIRECT_PERCENT };
+
+    if (conversation?.draft_order_id) {
+      const cart = await OrderRepository.getCart(db, conversation.draft_order_id);
+
+      await save(db, { ...base, orderId: conversation.draft_order_id, steps: stepsFromCart(cart) });
+
+      return;
+    }
+
+    const [lastPlaced, store] = await Promise.all([
+      OrderRepository.findLastPlaced(db, input.conversationId),
+      db.stores.findOne({ select: { policy: true }, where: { id: input.storeId } })
     ]);
 
     if (lastPlaced && Date.parse(lastPlaced.placedAt) >= Date.parse(orderMemorySince(store?.policy, new Date()))) {

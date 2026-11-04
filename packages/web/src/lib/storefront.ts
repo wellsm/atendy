@@ -1,4 +1,5 @@
 import type { MenuCategory, MenuGroup, MenuProduct } from './queries';
+import type { StoreType } from './store-type';
 
 import { useQuery } from '@tanstack/react-query';
 
@@ -18,6 +19,7 @@ export type StorefrontStore = {
   min_order_cents: number | null;
   payment_methods: PaymentMethod[];
   delivery_mode: 'flat' | 'by_zone' | 'by_distance';
+  store_type: StoreType;
 };
 
 export type StorefrontProduct = Omit<MenuProduct, 'category_id' | 'active'>;

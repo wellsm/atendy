@@ -50,7 +50,7 @@ export async function getSettingsHandler(
     status: 200,
     body: {
       hours: toPanelHours(settings.hours),
-      delivery: settings.delivery,
+      delivery: { ...settings.delivery, hours: toPanelHours(settings.delivery.hours) },
       paymentMethods: settings.paymentMethods,
       policy: toPanelPolicy(settings.policy),
       storeLocation: settings.storeLocation,

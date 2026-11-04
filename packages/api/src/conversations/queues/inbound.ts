@@ -7,8 +7,10 @@ import type { VoiceNotes } from '../../storage';
 
 import { notifyAdmin } from '../../admin/telegram';
 import { TurnError } from '../../agent/errors';
+import { RedirectResponder } from '../../agent/redirect';
 import { transcribeVoiceNotes } from '../../agent/transcription';
 import { TurnResponder } from '../../agent/turn';
+import { BillingRepository } from '../../billing/repository';
 import { OrderRepository } from '../../orders/repository';
 import { notifyPanel } from '../../realtime/notify';
 import { PanelTrigger } from '../../realtime/types';
@@ -21,7 +23,7 @@ import { EvolutionRequestError } from '../../whatsapp/evolution-client';
 import { parseLocationBody } from '../../whatsapp/location';
 import { isMediaOnly, MEDIA_ONLY_REPLY } from '../../whatsapp/media';
 import { WhatsAppProviders } from '../../whatsapp/providers';
-import { buildGreeting, firstName, greetingPeriod, isGreetingOnly } from '../greeting';
+import { buildGreeting, buildRedirectWelcome, firstName, greetingPeriod, isGreetingOnly } from '../greeting';
 import { buildClosedReply, CLOSED_REPLY_COOLDOWN_MS, splitMessages, TECHNICAL_ERROR_REPLY } from '../replies';
 import { ConversationRepository } from '../repository';
 import { ConversationMode, MessageAuthor } from '../types';
@@ -265,7 +267,10 @@ export async function handler(
     }
   };
 
-  if (!store.accepting_orders || !isStoreOpen(hours, store.timezone, new Date())) {
+  // A store that only sends customers to its link (`redirect_only`) always answers: the link works when it is closed.
+  const redirect = store.policy?.redirect_only ? store.policy.redirect : null;
+
+  if (!redirect && (!store.accepting_orders || !isStoreOpen(hours, store.timezone, new Date()))) {
     const text = buildClosedReply({ acceptingOrders: store.accepting_orders, hours });
 
     const lastSentAt = await ConversationRepository.lastBotReplyAt(db, { conversationId: conversation.id, body: text });
@@ -299,19 +304,48 @@ export async function handler(
     ? await ConversationRepository.greetingCustomer(db, conversation.customer_id)
     : undefined;
 
-  // A new customer who only said hello gets the full welcome (menu link included) and no model reply.
-  const standalone = !!customer?.newCustomer && isGreetingOnly(messages.map(({ body }) => body));
+  // A new customer who only said hello gets the full welcome (menu link included) and no model reply; a redirect
+  // store's welcome (its link) is the whole answer to every new visit.
+  const standalone = redirect
+    ? !!customer
+    : !!customer?.newCustomer && isGreetingOnly(messages.map(({ body }) => body));
+
+  const welcome = (input: { period: string; name?: string }) =>
+    redirect
+      ? buildRedirectWelcome({
+          ...input,
+          storeName: store.name,
+          redirect,
+          welcomeText: store.policy?.welcome_text
+        })
+      : undefined;
 
   let greeting = customer
-    ? buildGreeting({
+    ? (welcome({ period: greetingPeriod(store.timezone, now), name: firstName(customer.name) }) ??
+      buildGreeting({
         period: greetingPeriod(store.timezone, now),
         name: firstName(customer.name),
         storeName: store.name,
         menuUrl,
         newCustomer: customer.newCustomer,
-        standalone
-      })
+        standalone,
+        storeType: store.store_type,
+        welcomeText: store.policy?.welcome_text
+      }))
     : [];
+
+  // Only a link that reached the customer bills: once per cycle, or once per visit for a redirect store.
+  const billRedirect = async (texts: string[]) => {
+    const url = store.policy?.redirect?.url;
+
+    if (url && texts.some((text) => text.includes(url))) {
+      await BillingRepository.recordRedirect(db, {
+        storeId: store.id,
+        conversationId: conversation.id,
+        ...(redirect && { since: orderMemorySince(store.policy, now) })
+      });
+    }
+  };
 
   // Only media the bot cannot open: a fixed answer, no model call.
   if (messages.every(({ body }) => isMediaOnly(body))) {
@@ -324,6 +358,12 @@ export async function handler(
   if (standalone) {
     await reply(greeting);
     await ConversationRepository.markProcessed(db, pendingIds);
+
+    // The plain-hello welcome of a selling store never bills, even with the link in it.
+    if (redirect) {
+      await billRedirect(greeting);
+    }
+
     await notifyChanged(false);
     return;
   }
@@ -334,18 +374,17 @@ export async function handler(
   const stopTyping = provider.startTyping({ to: customerJid });
 
   try {
-    turn = await TurnResponder.respond({
-      db,
-      env: variables,
-      store,
-      hours,
-      conversationId: conversation.id,
-      customerId: conversation.customer_id,
-      messages,
-      menuUrl,
-      approvedReason: conversation.approved_reason,
-      greeted: greeting.length > 0
-    });
+    const scope = { db, env: variables, store, hours, conversationId: conversation.id, messages };
+
+    turn = redirect
+      ? await RedirectResponder.respond({ ...scope, customerId: conversation.customer_id, redirect })
+      : await TurnResponder.respond({
+          ...scope,
+          customerId: conversation.customer_id,
+          menuUrl,
+          approvedReason: conversation.approved_reason,
+          greeted: greeting.length > 0
+        });
   } catch (error) {
     // AI failures go back to the queue only while nothing changed and attempts remain; then a human takes over.
     if (!(error instanceof TurnError) || (error.retryable && request.attempt < request.maxAttempts)) {
@@ -380,8 +419,11 @@ export async function handler(
     return;
   }
 
+  let sent = false;
+
   try {
     await reply([...greeting, ...splitMessages(turn.text)]);
+    sent = true;
   } catch (error) {
     // WhatsApp rejected the reply: a retry would replay the turn and repeat its change, so a human takes over.
     if (!turn.mutated || !(error instanceof EvolutionRequestError)) {
@@ -392,5 +434,11 @@ export async function handler(
   }
 
   await ConversationRepository.markProcessed(db, pendingIds);
+
+  // Billed after the batch is processed, so a failure here never replays the reply.
+  if (sent) {
+    await billRedirect([turn.text]);
+  }
+
   await notifyChanged(turn.mutated);
 }

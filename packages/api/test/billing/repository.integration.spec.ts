@@ -1,6 +1,6 @@
 import type { Db } from '../../src/db';
 
-import { deepEqual, equal } from 'node:assert/strict';
+import { deepEqual, equal, notEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { DatabaseTester } from '@ez4/local-database/test';
@@ -117,6 +117,83 @@ describe('BillingRepository', () => {
     await BillingRepository.recordPlaced(db, { ...scope, orderId: placed.order_id });
 
     equal((await records(scope.conversationId)).length, 1);
+  });
+
+  it('bills a redirect at 10 % once per cycle; the order placed later raises the same row', async () => {
+    const { scope, addCoke } = await setup(99);
+
+    await BillingRepository.recordRedirect(db, scope);
+    await BillingRepository.recordRedirect(db, scope);
+
+    deepEqual(await records(scope.conversationId), [
+      {
+        order_id: null,
+        outcome: BillingOutcome.Redirect,
+        handoff_reason: null,
+        steps: [],
+        percent: 10,
+        amount_cents: 10
+      }
+    ]);
+
+    await addCoke();
+    await OrderRepository.setFulfillment(db, scope, Fulfillment.Pickup);
+    await OrderRepository.setPayment(db, scope, { method: PaymentMethod.Pix });
+
+    const placed = await OrderRepository.place(db, scope);
+
+    await BillingRepository.recordPlaced(db, { ...scope, orderId: placed.order_id });
+
+    deepEqual(
+      (await records(scope.conversationId)).map(({ order_id, outcome, percent }) => [order_id, outcome, percent]),
+      [[placed.order_id, BillingOutcome.Placed, 100]]
+    );
+
+    // The link again after that order, inside the memory window: that cycle was already billed.
+    await BillingRepository.recordRedirect(db, scope);
+
+    equal((await records(scope.conversationId)).length, 1);
+  });
+
+  it('bills a redirect again only once its window (`since`) starts after the last row', async () => {
+    const { scope } = await setup();
+    const before = new Date(Date.now() - 60_000).toISOString();
+
+    await BillingRepository.recordRedirect(db, { ...scope, since: before });
+    await BillingRepository.recordRedirect(db, { ...scope, since: before });
+
+    equal((await records(scope.conversationId)).length, 1);
+
+    // A new visit: the window starts after the first row.
+    await BillingRepository.recordRedirect(db, { ...scope, since: new Date(Date.now() + 1000).toISOString() });
+
+    deepEqual(
+      (await records(scope.conversationId)).map(({ outcome, percent }) => [outcome, percent]),
+      [
+        [BillingOutcome.Redirect, 10],
+        [BillingOutcome.Redirect, 10]
+      ]
+    );
+  });
+
+  it('bills a redirect on the open draft, and a later handoff raises it', async () => {
+    const { scope, addCoke } = await setup();
+
+    await addCoke();
+    await BillingRepository.recordRedirect(db, scope);
+
+    const [row] = await records(scope.conversationId);
+
+    equal(row?.outcome, BillingOutcome.Redirect);
+    notEqual(row?.order_id, null);
+    equal(row?.percent, 10);
+
+    await handOff(scope.conversationId, 'agent_requested');
+
+    deepEqual(
+      (await records(scope.conversationId)).map(({ outcome, percent }) => [outcome, percent]),
+      [[BillingOutcome.Handoff, 40]]
+    );
   });
 
   it('charges nothing for our failures, but never lowers what was already billed', async () => {

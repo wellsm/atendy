@@ -10,6 +10,7 @@ import { DuplicateUniqueKeyError } from '@ez4/pgclient';
 import { ConversationMode, MessageAuthor, MessageDirection } from './types';
 import { BillingRepository } from '../billing/repository';
 import { OrderStatus } from '../orders/types';
+import { deliverySchedule } from '../stores/hours';
 
 /**
  * Orders that reached the store (a customer with none is new to it).
@@ -149,7 +150,7 @@ export namespace ConversationRepository {
       return undefined;
     }
 
-    const [store, customer, { records: hours }] = await Promise.all([
+    const [store, customer, { records: hours }, { records: deliveryHours }] = await Promise.all([
       db.stores.findOne({
         select: {
           id: true,
@@ -165,12 +166,18 @@ export namespace ConversationRepository {
           policy: true,
           whatsapp_provider: true,
           whatsapp_instance: true,
-          whatsapp_instance_token: true
+          whatsapp_instance_token: true,
+          store_type: true,
+          delivery_lead_days: true
         },
         where: { id: conversation.store_id }
       }),
       db.customers.findOne({ select: { whatsapp_jid: true }, where: { id: conversation.customer_id } }),
       db.store_hours.findMany({
+        select: { weekday: true, opens_at: true, closes_at: true },
+        where: { store_id: conversation.store_id }
+      }),
+      db.delivery_hours.findMany({
         select: { weekday: true, opens_at: true, closes_at: true },
         where: { store_id: conversation.store_id }
       })
@@ -180,7 +187,12 @@ export namespace ConversationRepository {
       return undefined;
     }
 
-    return { conversation, store, customerJid: customer.whatsapp_jid, hours: hours as HourRange[] };
+    return {
+      conversation,
+      store: { ...store, delivery_schedule: deliverySchedule(deliveryHours, store.delivery_lead_days) },
+      customerJid: customer.whatsapp_jid,
+      hours: hours as HourRange[]
+    };
   };
 
   export const latestInboundMessageId = async (db: DbClient, conversationId: string) => {

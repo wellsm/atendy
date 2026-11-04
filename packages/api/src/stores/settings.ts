@@ -65,7 +65,17 @@ export type DeliverySettings = {
    * `by_distance` only; absent = none.
    */
   bands?: DeliveryBand[];
+  /**
+   * When the store delivers; empty or absent = whenever it is open.
+   */
+  hours?: HourRange[];
+  /**
+   * Lead time in days (1–90) told with the delivery hours; null or absent = 1 day.
+   */
+  leadDays?: number | null;
 };
+
+export const MAX_LEAD_DAYS = 90;
 
 const isCents = (value: number) => Number.isInteger(value) && value >= 0;
 
@@ -90,20 +100,21 @@ const sameDayInterval = (range: HourRange) => {
 const compareRanges = (a: HourRange, b: HourRange) => a.weekday - b.weekday || a.opens_at.localeCompare(b.opens_at);
 
 /**
- * Valid week of opening ranges, sorted by weekday and opening time.
+ * Valid week of opening ranges, sorted by weekday and opening time. `field` names the list in errors (opening or
+ * delivery hours).
  */
-export const validateHours = (hours: HourRange[]) => {
+export const validateHours = (hours: HourRange[], field = 'hours') => {
   if (hours.length > MAX_HOUR_RANGES) {
-    throw new SettingsError('hours', `At most ${MAX_HOUR_RANGES} ranges.`);
+    throw new SettingsError(field, `At most ${MAX_HOUR_RANGES} ranges.`);
   }
 
   for (const range of hours) {
     if (!Number.isInteger(range.weekday) || range.weekday < 0 || range.weekday > 6) {
-      throw new SettingsError('hours', 'Weekday must be 0 (Sunday) to 6 (Saturday).');
+      throw new SettingsError(field, 'Weekday must be 0 (Sunday) to 6 (Saturday).');
     }
 
     if (!TIME_PATTERN.test(range.opens_at) || !TIME_PATTERN.test(range.closes_at)) {
-      throw new SettingsError('hours', 'Times must be HH:MM.');
+      throw new SettingsError(field, 'Times must be HH:MM.');
     }
   }
 
@@ -114,7 +125,7 @@ export const validateHours = (hours: HourRange[]) => {
     const current = sorted[index]!;
 
     if (previous.weekday === current.weekday && sameDayInterval(current).start < sameDayInterval(previous).end) {
-      throw new SettingsError('hours', 'Ranges of the same day overlap.');
+      throw new SettingsError(field, 'Ranges of the same day overlap.');
     }
   }
 
@@ -155,12 +166,26 @@ export const validateDelivery = (input: DeliverySettings): Required<DeliverySett
     throw new SettingsError('flat_fee_cents', 'The delivery fee must be zero or more.');
   }
 
+  const leadDays = input.leadDays ?? null;
+
+  if (leadDays !== null && (!Number.isInteger(leadDays) || leadDays < 1 || leadDays > MAX_LEAD_DAYS)) {
+    throw new SettingsError('delivery_lead_days', `The lead time must be 1 to ${MAX_LEAD_DAYS} days.`);
+  }
+
+  const schedule = { hours: validateHours(input.hours ?? [], 'delivery_hours'), leadDays };
+
   if (input.mode === DeliveryMode.Flat) {
-    return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones: [], bands: [] };
+    return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones: [], bands: [], ...schedule };
   }
 
   if (input.mode === DeliveryMode.ByDistance) {
-    return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones: [], bands: validateBands(input.bands ?? []) };
+    return {
+      mode: input.mode,
+      flatFeeCents: input.flatFeeCents,
+      zones: [],
+      bands: validateBands(input.bands ?? []),
+      ...schedule
+    };
   }
 
   if (!input.zones.length) {
@@ -195,7 +220,7 @@ export const validateDelivery = (input: DeliverySettings): Required<DeliverySett
     return { neighborhood, feeCents: zone.feeCents };
   });
 
-  return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones, bands: [] };
+  return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones, bands: [], ...schedule };
 };
 
 export const validatePaymentMethods = (methods: PaymentMethod[]) => {

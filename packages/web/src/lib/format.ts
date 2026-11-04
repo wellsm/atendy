@@ -84,6 +84,12 @@ export const STATUS_LABEL: Record<string, string> = {
   abandoned: 'Abandonado'
 };
 
+/**
+ * Status label by store type: a shop separates the products ("Em separação") instead of preparing them.
+ */
+export const statusLabel = (status: string, retail: boolean) =>
+  retail && status === 'accepted' ? 'Em separação' : (STATUS_LABEL[status] ?? status);
+
 const HANDOFF_LABEL: Record<string, string> = {
   customer_asked: 'Cliente pediu atendente',
   new_customer_review: 'Revisar pedido de cliente novo',
@@ -98,7 +104,8 @@ const HANDOFF_LABEL: Record<string, string> = {
   send_failed: 'Falha ao enviar resposta',
   staff_replied_from_phone: 'Respondida pelo celular',
   staff_replied_from_panel: 'Respondida pelo painel',
-  staff_took_over: 'Assumida pela loja'
+  staff_took_over: 'Assumida pela loja',
+  delivery_schedule: 'Entrega fora do horário de entrega'
 };
 
 /**

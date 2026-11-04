@@ -12,6 +12,7 @@ import { StoreRepository } from '../../stores/repository';
 import { validateDelivery } from '../../stores/settings';
 import { DeliveryMode } from '../../stores/types';
 import { requireStore, withSettingsErrors } from '../store';
+import { fromPanelHours, toPanelHours } from '../types';
 
 export declare class UpdateDeliveryRequest implements Http.Request {
   identity: PanelIdentity;
@@ -27,7 +28,8 @@ export declare class UpdateDeliveryResponse implements Http.Response {
 }
 
 /**
- * Flat fee, neighborhood list or distance bands; only the list of the chosen mode is kept.
+ * Flat fee, neighborhood list or distance bands (only the list of the chosen mode is kept), plus the delivery hours
+ * and lead days.
  */
 export async function updateDeliveryHandler(
   request: Http.Incoming<UpdateDeliveryRequest>,
@@ -35,7 +37,9 @@ export async function updateDeliveryHandler(
 ): Promise<UpdateDeliveryResponse> {
   const store = await requireStore(db, request.identity);
   await authorize(db, store, request.identity, request.headers, Permission.Settings);
-  const delivery = await withSettingsErrors(() => validateDelivery(request.body));
+  const delivery = await withSettingsErrors(() =>
+    validateDelivery({ ...request.body, hours: fromPanelHours(request.body.hours ?? []) })
+  );
 
   if (delivery.mode === DeliveryMode.ByDistance && !(await StoreRepository.getStoreLocation(db, store.id))) {
     throw new HttpBadRequestError('Locate the store address before delivering by distance.', {
@@ -45,5 +49,5 @@ export async function updateDeliveryHandler(
 
   await StoreRepository.replaceDelivery(db, store.id, delivery);
 
-  return { status: 200, body: { delivery } };
+  return { status: 200, body: { delivery: { ...delivery, hours: toPanelHours(delivery.hours) } } };
 }

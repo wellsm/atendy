@@ -120,7 +120,7 @@ export async function updateOrderHandler(
     throw new HttpNotFoundError('Order not found');
   }
 
-  const base = statusNotification(status, { ...order, fulfillment: changed.fulfillment });
+  const base = statusNotification(status, { ...order, fulfillment: changed.fulfillment }, store.store_type);
   // Web orders repeat what was ordered on the accept: the customer never talked to the store.
   const text = base && order.source === OrderSource.Web ? webStatusNotification(base, status, order) : base;
 

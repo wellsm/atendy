@@ -20,7 +20,7 @@ import { useState } from 'react';
 
 import { Sheet } from './sheet';
 import { ApiError } from '../../lib/api';
-import { centsToInput, parseMoney, PAYMENT_LABEL, STATUS_LABEL } from '../../lib/format';
+import { centsToInput, parseMoney, PAYMENT_LABEL, statusLabel } from '../../lib/format';
 import { usePanelNavigate, usePanelSearch } from '../../lib/panel-search';
 import {
   useLocateStore,
@@ -35,6 +35,7 @@ import {
   useUpdateStockAlert,
   useUpdateStore
 } from '../../lib/queries';
+import { usePanelMenuWord } from '../../lib/store-type';
 import { Loading } from '../loading';
 import { StaffTab } from '../staff/staff-settings';
 import { Toggle } from '../toggle';
@@ -413,6 +414,13 @@ type DayRange = { opens: string; closes: string };
 
 const DEFAULT_RANGE: DayRange = { opens: '18:00', closes: '23:00' };
 
+const DELIVERY_RANGE: DayRange = { opens: '09:00', closes: '18:00' };
+
+const toRanges = (days: Record<number, DayRange[]>): HourRange[] =>
+  WEEK.flatMap(({ weekday }) =>
+    days[weekday]!.map(({ opens, closes }) => ({ weekday, opens_at: opens, closes_at: closes }))
+  );
+
 const toDays = (hours: HourRange[]) => {
   const days: Record<number, DayRange[]> = {};
 
@@ -442,6 +450,39 @@ function HoursSection({ hours }: { hours: HourRange[] }) {
     update.reset();
   };
 
+  return (
+    <Section
+      title="Horários"
+      description="Fora destes horários o bot avisa que a loja está fechada. Abrir e fechar no mesmo horário = 24h."
+      onSubmit={() => update.mutate({ hours: toRanges(days) })}
+      saving={update.isPending}
+      saved={update.isSuccess}
+      error={update.error}
+    >
+      <WeekEditor days={days} onChange={change} dayState="aberto" offText="Fechado" newRange={DEFAULT_RANGE} />
+    </Section>
+  );
+}
+
+/**
+ * The week's ranges, one row per day (toggle, ranges, "+ Horário", "Copiar para todos os dias"): opening hours and
+ * delivery hours.
+ */
+function WeekEditor({
+  days,
+  onChange: change,
+  dayState,
+  offText,
+  newRange,
+  className = '-mt-2'
+}: {
+  days: Record<number, DayRange[]>;
+  onChange: (days: Record<number, DayRange[]>) => void;
+  dayState: string;
+  offText: string;
+  newRange: DayRange;
+  className?: string;
+}) {
   const setRange = (weekday: number, index: number, patch: Partial<DayRange>) =>
     change({
       ...days,
@@ -451,92 +492,74 @@ function HoursSection({ hours }: { hours: HourRange[] }) {
   const copyToAll = (weekday: number) =>
     change(Object.fromEntries(WEEK.map((day) => [day.weekday, days[weekday]!.map((range) => ({ ...range }))])));
 
-  const save = () =>
-    update.mutate({
-      hours: WEEK.flatMap(({ weekday }) =>
-        days[weekday]!.map(({ opens, closes }) => ({ weekday, opens_at: opens, closes_at: closes }))
-      )
-    });
-
   return (
-    <Section
-      title="Horários"
-      description="Fora destes horários o bot avisa que a loja está fechada. Abrir e fechar no mesmo horário = 24h."
-      onSubmit={save}
-      saving={update.isPending}
-      saved={update.isSuccess}
-      error={update.error}
-    >
-      <ul className="-mt-2 divide-y divide-line">
-        {WEEK.map(({ weekday, label }) => {
-          const ranges = days[weekday]!;
-          const open = ranges.length > 0;
+    <ul className={`${className} divide-y divide-line`}>
+      {WEEK.map(({ weekday, label }) => {
+        const ranges = days[weekday]!;
+        const open = ranges.length > 0;
 
-          return (
-            <li key={weekday} className="grid gap-2 py-3.5 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-start sm:gap-4">
-              <label className="flex w-fit items-center gap-2.5 py-1.5 text-sm font-medium">
-                <Toggle
-                  checked={open}
-                  label={`${label}: aberto`}
-                  onChange={(checked) => change({ ...days, [weekday]: checked ? [{ ...DEFAULT_RANGE }] : [] })}
-                />
-                {label}
-              </label>
+        return (
+          <li key={weekday} className="grid gap-2 py-3.5 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-start sm:gap-4">
+            <label className="flex w-fit items-center gap-2.5 py-1.5 text-sm font-medium">
+              <Toggle
+                checked={open}
+                label={`${label}: ${dayState}`}
+                onChange={(checked) => change({ ...days, [weekday]: checked ? [{ ...newRange }] : [] })}
+              />
+              {label}
+            </label>
 
-              <div className="flex flex-col gap-2">
-                {!open && <span className="text-sm text-faint sm:pt-1.5">Fechado</span>}
+            <div className="flex flex-col gap-2">
+              {!open && <span className="text-sm text-faint sm:pt-1.5">{offText}</span>}
 
-                {ranges.map((range, index) => (
-                  <div key={index} className="flex flex-wrap items-center gap-2">
-                    <input
-                      type="time"
-                      required
-                      aria-label={`${label}: abre`}
-                      value={range.opens}
-                      onChange={(event) => setRange(weekday, index, { opens: event.target.value })}
-                      className={`${INPUT} py-1.5`}
-                    />
-                    <span className="text-sm text-muted">até</span>
-                    <input
-                      type="time"
-                      required
-                      aria-label={`${label}: fecha`}
-                      value={range.closes}
-                      onChange={(event) => setRange(weekday, index, { closes: event.target.value })}
-                      className={`${INPUT} py-1.5`}
-                    />
-                    {rangeHint(range) && (
-                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
-                        {rangeHint(range)}
-                      </span>
-                    )}
-                    <RemoveButton
-                      label="Remover horário"
-                      onClick={() => change({ ...days, [weekday]: ranges.filter((_, i) => i !== index) })}
-                    />
-                  </div>
-                ))}
+              {ranges.map((range, index) => (
+                <div key={index} className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="time"
+                    required
+                    aria-label={`${label}: abre`}
+                    value={range.opens}
+                    onChange={(event) => setRange(weekday, index, { opens: event.target.value })}
+                    className={`${INPUT} py-1.5`}
+                  />
+                  <span className="text-sm text-muted">até</span>
+                  <input
+                    type="time"
+                    required
+                    aria-label={`${label}: fecha`}
+                    value={range.closes}
+                    onChange={(event) => setRange(weekday, index, { closes: event.target.value })}
+                    className={`${INPUT} py-1.5`}
+                  />
+                  {rangeHint(range) && (
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">{rangeHint(range)}</span>
+                  )}
+                  <RemoveButton
+                    label="Remover horário"
+                    onClick={() => change({ ...days, [weekday]: ranges.filter((_, i) => i !== index) })}
+                  />
+                </div>
+              ))}
 
-                {open && (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                    <button
-                      type="button"
-                      onClick={() => change({ ...days, [weekday]: [...ranges, { ...DEFAULT_RANGE }] })}
-                      className="font-medium text-accent-fg hover:underline"
-                    >
-                      + Horário
-                    </button>
-                    <button type="button" onClick={() => copyToAll(weekday)} className="text-muted hover:underline">
-                      Copiar para todos os dias
-                    </button>
-                  </div>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </Section>
+              {open && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => change({ ...days, [weekday]: [...ranges, { ...newRange }] })}
+                    className="font-medium text-accent-fg hover:underline"
+                  >
+                    + Horário
+                  </button>
+                  <button type="button" onClick={() => copyToAll(weekday)} className="text-muted hover:underline">
+                    Copiar para todos os dias
+                  </button>
+                </div>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -577,9 +600,14 @@ function DeliverySection({ delivery, location }: { delivery: DeliverySettings; l
     }))
   );
 
+  const [schedule, setSchedule] = useState(() => !!delivery.hours?.length);
+  const [deliveryDays, setDeliveryDays] = useState(() => toDays(delivery.hours ?? []));
+  const [leadDays, setLeadDays] = useState(delivery.lead_days != null ? String(delivery.lead_days) : '');
+
   const touch = () => update.reset();
 
   const flatFeeCents = parseMoney(flatFee);
+  const leadDaysValue = leadDays.trim() ? Number(leadDays) : null;
   const zoneFees = zones.map(({ fee }) => parseMoney(fee));
   const bandMeters = bands.map(({ km }) => parseKm(km));
   const bandFees = bands.map(({ fee }) => parseMoney(fee));
@@ -596,7 +624,7 @@ function DeliverySection({ delivery, location }: { delivery: DeliverySettings; l
             ? 'Taxa de faixa inválida. Use por exemplo 5,00.'
             : undefined;
 
-  const invalid =
+  const modeInvalid =
     mode === 'flat'
       ? flatFeeCents === undefined
         ? 'Taxa inválida. Use por exemplo 5,00.'
@@ -611,6 +639,16 @@ function DeliverySection({ delivery, location }: { delivery: DeliverySettings; l
               ? 'Taxa de bairro inválida. Use por exemplo 5,00.'
               : undefined;
 
+  const scheduleInvalid = !schedule
+    ? undefined
+    : !toRanges(deliveryDays).length
+      ? 'Marque pelo menos um dia de entrega.'
+      : leadDaysValue !== null && (!Number.isInteger(leadDaysValue) || leadDaysValue < 1 || leadDaysValue > 90)
+        ? 'Prazo de 1 a 90 dias.'
+        : undefined;
+
+  const invalid = modeInvalid ?? scheduleInvalid;
+
   const save = () =>
     update.mutate({
       mode,
@@ -622,7 +660,9 @@ function DeliverySection({ delivery, location }: { delivery: DeliverySettings; l
       bands:
         mode === 'by_distance'
           ? bands.map((_, index) => ({ max_meters: bandMeters[index]!, fee_cents: bandFees[index]! }))
-          : []
+          : [],
+      hours: schedule ? toRanges(deliveryDays) : [],
+      lead_days: schedule ? leadDaysValue : null
     });
 
   return (
@@ -796,6 +836,55 @@ function DeliverySection({ delivery, location }: { delivery: DeliverySettings; l
           </div>
         </div>
       )}
+
+      <div className="mt-6 border-t border-line pt-5">
+        <label className="flex w-fit items-center gap-2.5 text-sm font-medium">
+          <Toggle
+            checked={schedule}
+            label="Horário de entrega diferente do atendimento"
+            onChange={(checked) => {
+              setSchedule(checked);
+              touch();
+            }}
+          />
+          Horário de entrega diferente do atendimento
+        </label>
+        <p className="mt-1 text-xs text-muted">
+          Desligado, a loja entrega sempre que está aberta. Ligado, o bot informa os dias, os horários e o prazo de
+          entrega, e passa para um atendente quem pedir outro dia ou horário.
+        </p>
+
+        {schedule && (
+          <>
+            <WeekEditor
+              days={deliveryDays}
+              onChange={(days) => {
+                setDeliveryDays(days);
+                touch();
+              }}
+              dayState="entrega"
+              offText="Sem entrega"
+              newRange={DELIVERY_RANGE}
+              className="mt-2"
+            />
+            <label className="mt-3 block max-w-52 text-sm font-medium">
+              Prazo de entrega
+              <AffixInput
+                suffix="dias"
+                inputMode="numeric"
+                placeholder="1"
+                value={leadDays}
+                onChange={(event) => {
+                  setLeadDays(event.target.value);
+                  touch();
+                }}
+                className="mt-1.5"
+              />
+            </label>
+            <span className="mt-1 block text-xs text-muted">Vazio = 1 dia depois do pedido.</span>
+          </>
+        )}
+      </div>
     </Section>
   );
 }
@@ -986,16 +1075,18 @@ const ADDRESS_MODES: { value: PreviousAddress; title: string; example: string }[
 
 const REPEAT_STATUSES: OrderStatus[] = ['done', 'canceled', 'abandoned', 'out', 'accepted', 'placed'];
 
-const NEW_ORDER_MODES: { value: NewOrderAfterStatus; title: string; example: string }[] = [
+const NEW_ORDER_MODES: { value: NewOrderAfterStatus; title: string; example: string; retailExample?: string }[] = [
   {
     value: 'done',
     title: 'Só depois de concluído (padrão)',
-    example: 'Um pedido por vez. Em preparo, o cliente só acrescenta o que você permitir abaixo.'
+    example: 'Um pedido por vez. Em preparo, o cliente só acrescenta o que você permitir abaixo.',
+    retailExample: 'Um pedido por vez. Em separação, o cliente só acrescenta o que você permitir abaixo.'
   },
   {
     value: 'out',
     title: 'Depois que sair',
-    example: 'Enquanto está em preparo, só acréscimos.'
+    example: 'Enquanto está em preparo, só acréscimos.',
+    retailExample: 'Enquanto está em separação, só acréscimos.'
   },
   {
     value: 'accepted',
@@ -1041,6 +1132,7 @@ const parseLimit = (text: string, money: boolean) => {
 };
 
 function PolicySection({ policy }: { policy: PolicySettings }) {
+  const { retail } = usePanelMenuWord();
   const update = useUpdatePolicy();
   const [values, setValues] = useState<Record<LimitKey, string>>(
     () =>
@@ -1256,7 +1348,7 @@ function PolicySection({ policy }: { policy: PolicySettings }) {
                       }
                       className="sr-only"
                     />
-                    {STATUS_LABEL[status]}
+                    {statusLabel(status, retail)}
                   </label>
                 );
               })}
@@ -1272,7 +1364,7 @@ function PolicySection({ policy }: { policy: PolicySettings }) {
           já foi enviado.
         </span>
         <div className="mt-2 grid gap-2 sm:grid-cols-3">
-          {NEW_ORDER_MODES.map(({ value, title, example }) => (
+          {NEW_ORDER_MODES.map(({ value, title, example, retailExample }) => (
             <label
               key={value}
               className={`flex cursor-pointer gap-2.5 rounded-lg border p-3 text-sm ${newOrderAfter === value ? 'border-accent bg-accent-soft' : 'border-line-2'}`}
@@ -1289,7 +1381,7 @@ function PolicySection({ policy }: { policy: PolicySettings }) {
               />
               <span className="flex flex-col gap-1">
                 <span className="font-medium">{title}</span>
-                <span className="text-xs text-muted">{example}</span>
+                <span className="text-xs text-muted">{(retail && retailExample) || example}</span>
               </span>
             </label>
           ))}
@@ -1341,13 +1433,14 @@ function AddOnFields(props: {
   extraMinutes: string;
   onExtraMinutes: (value: string) => void;
 }) {
+  const { retail } = usePanelMenuWord();
   const menu = useMenu();
   const categories: MenuCategory[] = menu.data?.categories ?? [];
   const selected = props.ids ?? categories.filter(({ name }) => isDrinkCategory(name)).map(({ id }) => id);
 
   return (
     <fieldset className="mt-6">
-      <legend className="text-sm font-medium">Acréscimos em pedido em preparo</legend>
+      <legend className="text-sm font-medium">Acréscimos em pedido {retail ? 'em separação' : 'em preparo'}</legend>
       <span className="mt-1 block text-xs text-muted">
         Depois que você aceitar, o cliente ainda pode acrescentar itens destas categorias. O bot confirma o item, o
         valor e avisa do tempo extra. Remover ou trocar itens continua com um atendente.
@@ -1355,7 +1448,7 @@ function AddOnFields(props: {
 
       {menu.isPending && <span className="mt-2 block text-xs text-muted">Carregando categorias…</span>}
       {!menu.isPending && !categories.length && (
-        <span className="mt-2 block text-xs text-muted">Cadastre categorias no cardápio para escolher.</span>
+        <span className="mt-2 block text-xs text-muted">Cadastre categorias de produtos para escolher.</span>
       )}
 
       <div className="mt-2 flex flex-wrap gap-1.5">

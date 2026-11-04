@@ -2,6 +2,7 @@ import { deepEqual, equal } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { buildGreeting, firstName, greetingPeriod, isGreetingOnly } from '../../src/conversations/greeting';
+import { StoreType } from '../../src/stores/types';
 
 describe('greeting', () => {
   it('picks the period by the store timezone', () => {
@@ -44,6 +45,37 @@ describe('greeting', () => {
     equal(messages[1]!.includes('*Pizzaria Bella*'), true);
     equal(messages[2]!.includes('http://web.test/bella'), true);
     equal(messages[2]!.includes('é só pedir'), true);
+    equal(messages[2]!.includes('nosso cardápio completo'), true);
+  });
+
+  it('offers the catalog, not the menu, in a retail store', () => {
+    const messages = buildGreeting({
+      period: 'Boa tarde',
+      storeName: 'Bella Cosméticos',
+      menuUrl: 'http://web.test/bella',
+      newCustomer: true,
+      standalone: true,
+      storeType: StoreType.Retail
+    });
+
+    equal(messages[2]!.includes('nosso catálogo completo'), true);
+    equal(messages.join('\n').includes('cardápio'), false);
+  });
+
+  it('swaps the catalog message for the store welcome text', () => {
+    const base = { period: 'Boa tarde', storeName: 'Bella Cosméticos', menuUrl: 'http://web.test/bella' };
+    const welcomeText = 'Como posso te ajudar?\n1️⃣ Comprar produtos\n2️⃣ Agendar horário';
+    const messages = buildGreeting({ ...base, newCustomer: true, standalone: true, welcomeText });
+
+    equal(messages.length, 3);
+    equal(messages[2], welcomeText);
+    equal(messages.join('\n').includes('http://web.test/bella'), false);
+
+    // Only the plain-hello welcome changes.
+    deepEqual(
+      buildGreeting({ ...base, newCustomer: true, standalone: false, welcomeText }),
+      buildGreeting({ ...base, newCustomer: true, standalone: false })
+    );
   });
 
   it('sends one message before the model reply otherwise', () => {

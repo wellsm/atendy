@@ -7,6 +7,7 @@ import { afterEach, describe, it, mock } from 'node:test';
 import { DatabaseTester } from '@ez4/local-database/test';
 
 import { BillingOutcome } from '../../src/billing/types';
+import { BillingAccounts } from '../../src/payments/accounts';
 import { PaymentsRepository } from '../../src/payments/repository';
 import { InvoiceStatus } from '../../src/payments/types';
 import { seedConversation, seedStore } from '../support/fixtures';
@@ -145,6 +146,103 @@ describe('PaymentsRepository', () => {
 
     equal((await invoicesOf(storeId)).length, 1);
     equal(calls.length, 2);
+  });
+
+  it('charges every store of an account once, with the total and each store in the description', async () => {
+    const owner = `user_${randomUUID()}`;
+    const { storeId: sales } = await seedStore(db);
+    const { storeId: bookings } = await seedStore(db);
+
+    await db.stores.updateOne({ data: { name: 'Bella Loja' }, where: { id: sales } });
+    await db.stores.updateOne({ data: { name: 'Bella Agenda' }, where: { id: bookings } });
+
+    await withSubscription(sales);
+    await BillingAccounts.assignOwner(db, sales, owner);
+    await BillingAccounts.assignOwner(db, bookings, owner);
+    // Each store alone stays below the minimum charge; the account does not.
+    await seedUsage(sales, [600]);
+    await seedUsage(bookings, [500]);
+
+    const calls = fakeAsaas({
+      'GET /subscriptions/sub_1/payments': {
+        data: [{ id: 'pay_acc', status: 'PENDING', value: 10, dueDate: '2026-11-05' }]
+      },
+      'PUT /payments/pay_acc': { id: 'pay_acc', status: 'PENDING', value: 11, dueDate: '2026-11-05' }
+    });
+
+    await PaymentsRepository.runDaily(db, CONFIG, NOV_2, [sales]);
+
+    deepEqual(
+      calls.map(({ method, path }) => `${method} ${path.split('?')[0]}`),
+      ['GET /subscriptions/sub_1/payments', 'PUT /payments/pay_acc']
+    );
+    equal(calls[1]?.body?.value, 11);
+    ok(String(calls[1]?.body?.description).includes('Bella Loja: R$ 6,00'));
+    ok(String(calls[1]?.body?.description).includes('Bella Agenda: R$ 5,00'));
+
+    for (const [storeId, amount] of [
+      [sales, 600],
+      [bookings, 500]
+    ] as const) {
+      const [invoice] = await invoicesOf(storeId);
+
+      equal(invoice?.amount_cents, amount);
+      equal(invoice?.asaas_payment_id, 'pay_acc');
+    }
+
+    // Either store's panel shows the whole account.
+    const summary = await PaymentsRepository.summary(db, bookings);
+
+    deepEqual(summary?.card, { brand: 'VISA', last4: '1111' });
+    deepEqual(summary?.invoices.map(({ storeName, amountCents }) => [storeName, amountCents]).sort(), [
+      ['Bella Agenda', 500],
+      ['Bella Loja', 600]
+    ]);
+
+    // A refused charge blocks both stores after the grace days; paying lifts both.
+    const event = (name: string) =>
+      PaymentsRepository.applyWebhook(db, { event: name, paymentId: 'pay_acc', invoiceUrl: null, now: NOV_2 });
+
+    await event('PAYMENT_OVERDUE');
+    await PaymentsRepository.runDaily(db, CONFIG, new Date('2026-11-13T12:00:00Z'), [sales]);
+
+    equal((await PaymentsRepository.summary(db, bookings))?.blocked, true);
+    equal((await PaymentsRepository.summary(db, sales))?.blocked, true);
+
+    await event('PAYMENT_RECEIVED');
+
+    equal((await PaymentsRepository.summary(db, bookings))?.blocked, false);
+    equal((await PaymentsRepository.summary(db, sales))?.blocked, false);
+  });
+
+  it('adds the invoice of a store that joined after the close to the account payment', async () => {
+    const owner = `user_${randomUUID()}`;
+    const { storeId: sales } = await seedStore(db);
+    const { storeId: joiner } = await seedStore(db);
+
+    await withSubscription(sales);
+    await BillingAccounts.assignOwner(db, sales, owner);
+    await seedUsage(sales, [2000]);
+    await seedUsage(joiner, [1500]);
+
+    const subscription = {
+      'GET /subscriptions/sub_1/payments': {
+        data: [{ id: 'pay_j', status: 'PENDING', value: 10, dueDate: '2026-11-05' }]
+      },
+      'PUT /payments/pay_j': { id: 'pay_j', status: 'PENDING', value: 20, dueDate: '2026-11-05' }
+    };
+
+    // Both close on their own: the joiner had no card, so its invoice has no payment.
+    fakeAsaas(subscription);
+    await PaymentsRepository.runDaily(db, CONFIG, NOV_2, [sales, joiner]);
+    await BillingAccounts.assignOwner(db, joiner, owner);
+
+    const calls = fakeAsaas(subscription);
+
+    await PaymentsRepository.runDaily(db, CONFIG, new Date('2026-11-03T12:00:00Z'), [sales]);
+
+    equal(calls.find(({ method }) => method === 'PUT')?.body?.value, 35);
+    equal((await invoicesOf(joiner))[0]?.asaas_payment_id, 'pay_j');
   });
 
   it('carries a small month over and deletes the placeholder charge', async () => {

@@ -3,9 +3,10 @@ import type { PosHeldSale } from '../../lib/queries';
 import { useState } from 'react';
 
 import { ApiError } from '../../lib/api';
-import { formatMoney, formatWhen, STATUS_LABEL } from '../../lib/format';
+import { formatMoney, formatWhen, statusLabel } from '../../lib/format';
 import { useCancelPosSale, useFinalizedPosSales, useStaff } from '../../lib/queries';
 import { authorName } from '../../lib/staff';
+import { usePanelMenuWord } from '../../lib/store-type';
 
 const ERROR_TEXT: Record<string, string> = {
   reason: 'Informe o motivo (até 200 caracteres).',
@@ -15,6 +16,7 @@ const ERROR_TEXT: Record<string, string> = {
 };
 
 function SaleRow({ sale }: { sale: PosHeldSale }) {
+  const { retail } = usePanelMenuWord();
   const cancel = useCancelPosSale();
   const staff = useStaff().data?.staff;
   const madeBy = authorName(sale.created_by, staff);
@@ -31,7 +33,7 @@ function SaleRow({ sale }: { sale: PosHeldSale }) {
           </span>
           <span className="text-xs text-muted">
             {formatWhen(sale.placed_at)} ·{' '}
-            {sale.canceled_at ? 'Cancelada' : sale.status === 'out' ? 'Pronto' : STATUS_LABEL[sale.status]}
+            {sale.canceled_at ? 'Cancelada' : sale.status === 'out' ? 'Pronto' : statusLabel(sale.status, retail)}
             {madeBy && ` · ${madeBy}`}
             {sale.canceled_at && canceledBy && ` · cancelada por ${canceledBy}`}
           </span>

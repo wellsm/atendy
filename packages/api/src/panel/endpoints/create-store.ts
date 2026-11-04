@@ -7,6 +7,7 @@ import type { PanelIdentity, PanelStore } from '../types';
 import { HttpBadRequestError, HttpConflictError } from '@ez4/gateway';
 
 import { notifyAdmin } from '../../admin/telegram';
+import { BillingAccounts } from '../../payments/accounts';
 import { DEFAULT_LLM_MODEL, StoreRepository } from '../../stores/repository';
 import { slugify } from '../slug';
 import { toPanelStore } from '../types';
@@ -80,6 +81,9 @@ export async function createStoreHandler(
   if (!store) {
     throw new Error(`Store of org ${orgId} not found after insert.`);
   }
+
+  // The user who created it pays for it, with their other stores.
+  await BillingAccounts.assignOwner(db, store.id, request.identity.userId);
 
   await notifyAdmin(`Nova loja aguardando ativação: ${store.name} (${store.slug}) ${store.id}`);
 
