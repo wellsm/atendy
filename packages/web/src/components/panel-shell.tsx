@@ -12,7 +12,7 @@ import { GlobalSearch } from './global-search';
 import { Logo } from './logo';
 import { SoundToggle } from './sound-toggle';
 import { StoreMenu } from './store-menu';
-import { formatMoney } from '../lib/format';
+import { formatMoney, formatWhen } from '../lib/format';
 import { useOperator } from '../lib/operator';
 import { keepPanelState } from '../lib/panel-search';
 import { usePanelSlug } from '../lib/panel-slug';
@@ -22,6 +22,7 @@ import {
   useMe,
   useMenu,
   useOrders,
+  useStaff,
   useStockSummary,
   useUpdateStore,
   useWhatsAppState
@@ -40,33 +41,53 @@ const WHATSAPP: Record<WhatsAppState, { label: string; dot: string }> = {
 
 const isToday = (iso: string | null) => !!iso && new Date(iso).toDateString() === new Date().toDateString();
 
+const OPEN_OPTIONS = [
+  ['Automático', null],
+  ['Aberta', true],
+  ['Fechada', false]
+] as const;
+
 /**
- * The store's own on/off switch, plus why the bot still refuses when the hours say closed.
+ * Whether the store takes orders now, and the manual Aberta/Fechada over its hours (it ends by itself when the hours
+ * next change).
  */
-function AcceptingSwitch({ store }: { store: PanelStore }) {
+function OpenControl({ store }: { store: PanelStore }) {
   const update = useUpdateStore();
-  const accepting = update.isPending ? !store.accepting_orders : store.accepting_orders;
+  const override = store.open_override;
 
   return (
-    <div className="flex flex-col gap-0.5">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={accepting}
-        disabled={update.isPending}
-        onClick={() => update.mutate({ accepting_orders: !store.accepting_orders })}
-        className="flex items-center gap-2 text-sm disabled:opacity-60"
+    <div className="flex flex-col gap-1.5">
+      <span className="flex flex-wrap items-center gap-x-2 text-sm">
+        <span className={`size-2 shrink-0 rounded-full ${store.open_now ? 'bg-on' : 'bg-off'}`} />
+        <span className={store.open_now ? 'font-medium text-ok-fg' : 'text-muted'}>
+          {store.open_now ? 'Aberta' : 'Fechada'}
+        </span>
+        <span className="text-xs text-muted">
+          {override === null
+            ? 'pelo horário'
+            : store.open_override_until
+              ? `manual, até ${formatWhen(store.open_override_until)}`
+              : 'manual'}
+        </span>
+      </span>
+      <div
+        role="group"
+        aria-label="Abrir ou fechar a loja"
+        className="flex rounded-lg border border-line-2 p-0.5 text-xs"
       >
-        <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${accepting ? 'bg-on' : 'bg-off'}`}>
-          <span
-            className={`absolute top-0.5 size-4 rounded-full bg-white transition-all ${accepting ? 'left-4.5' : 'left-0.5'}`}
-          />
-        </span>
-        <span className={accepting ? 'font-medium text-ok-fg' : 'text-muted'}>
-          {accepting ? 'Aceitando pedidos' : 'Pedidos pausados'}
-        </span>
-      </button>
-      {accepting && !store.open_now && <span className="text-xs text-warn-fg">Fechada pelo horário</span>}
+        {OPEN_OPTIONS.map(([label, open]) => (
+          <button
+            key={label}
+            type="button"
+            aria-pressed={override === open}
+            disabled={update.isPending}
+            onClick={() => update.mutate({ open })}
+            className={`flex-1 rounded-md px-1.5 py-1 disabled:opacity-60 ${override === open ? 'bg-accent-soft font-medium text-accent-fg' : 'text-fg-2'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {update.isError && <span className="text-xs text-danger-fg">Não foi possível alterar.</span>}
     </div>
   );
@@ -226,6 +247,33 @@ function SheetButton({
   );
 }
 
+/**
+ * "Funcionários" with how many are active and deliver; asks for the list only when the operator may open it.
+ */
+function StaffButton({ onPick }: { onPick: () => void }) {
+  const { can } = useOperator();
+
+  return can('staff') ? <StaffButtonCount onPick={onPick} /> : null;
+}
+
+function StaffButtonCount({ onPick }: { onPick: () => void }) {
+  const staff = useStaff();
+  const active = staff.data?.staff.filter((member) => member.active) ?? [];
+
+  return (
+    <SheetButton
+      sheet="staff"
+      title="Funcionários"
+      subtitle={
+        staff.data
+          ? `${active.length} ativos · ${active.filter((member) => member.delivers || member.role === 'courier').length} fazem entrega`
+          : 'PIN, perfis e entregadores'
+      }
+      onPick={onPick}
+    />
+  );
+}
+
 function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
   const slug = usePanelSlug();
   const menu = useMenu();
@@ -253,7 +301,7 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
           Ver {word} público ↗
         </a>
         <div className="mt-2.5">
-          <AcceptingSwitch store={store} />
+          <OpenControl store={store} />
         </div>
       </div>
 
@@ -282,25 +330,33 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
           subtitle={menu.data ? `${products.length} produtos · ${paused} pausados` : 'Produtos e preços'}
           onPick={onPick}
         />
-        <SheetButton
-          sheet="stock"
-          title="Estoque"
-          subtitle={
-            stock.data ? (
-              <>
-                {stock.data.low > 0 && (
-                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold text-white">
-                    {stock.data.low}
-                  </span>
+        {can('stock') && (
+          <Link
+            to="/panel/$slug/stock"
+            params={{ slug }}
+            onClick={onPick}
+            className="flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3 py-2.5 hover:bg-hover"
+          >
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-sm font-medium">Estoque</span>
+              <span className="flex items-center gap-1.5 truncate text-xs text-muted">
+                {stock.data ? (
+                  <>
+                    {stock.data.low > 0 && (
+                      <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold text-white">
+                        {stock.data.low}
+                      </span>
+                    )}
+                    {stock.data.low} baixos · {stock.data.sold_out} esgotados
+                  </>
+                ) : (
+                  'Insumos e saldo'
                 )}
-                {stock.data.low} baixos · {stock.data.sold_out} esgotados
-              </>
-            ) : (
-              'Insumos e saldo'
-            )
-          }
-          onPick={onPick}
-        />
+              </span>
+            </span>
+            <span className="text-faint">›</span>
+          </Link>
+        )}
         <SheetButton
           sheet="whatsapp"
           title="WhatsApp"
@@ -316,6 +372,7 @@ function Sidebar({ store, theme, onTheme, onPick }: SidebarProps) {
           }
           onPick={onPick}
         />
+        <StaffButton onPick={onPick} />
         <SheetButton sheet="settings" title="Configurações" subtitle="Horários, entrega, pagamento" onPick={onPick} />
         <SheetButton
           sheet="billing"

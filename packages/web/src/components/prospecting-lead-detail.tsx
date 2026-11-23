@@ -5,9 +5,9 @@ import { SystemChip } from './prospecting-leads-parts';
 import { formatPhone, formatWhen } from '../lib/format';
 import { useUpdateProspect } from '../lib/queries';
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
+const INPUT = 'rounded-md border border-line-2 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
-const LINK = 'rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100';
+const LINK = 'rounded-md border border-line-2 px-3 py-1.5 text-sm hover:bg-surface-2';
 
 /**
  * Keys of `info` that a structured field already shows, only when that field is filled.
@@ -73,7 +73,7 @@ const actionsFor = (lead: ProspectLead): [ProspectStatus, string][] => {
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex gap-2">
-      <dt className="w-24 shrink-0 text-neutral-500">{label}</dt>
+      <dt className="w-24 shrink-0 text-muted">{label}</dt>
       <dd className="min-w-0 flex-1">{children}</dd>
     </div>
   );
@@ -98,7 +98,7 @@ export function LeadDetail({ lead }: { lead: ProspectLead }) {
   ];
 
   return (
-    <div className="flex flex-col gap-3 rounded-md bg-neutral-50 p-3 text-sm">
+    <div className="flex flex-col gap-3 rounded-md bg-hover p-3 text-sm">
       <dl className="flex flex-col gap-1">
         {lead.category && <Fact label="Categoria">{lead.category}</Fact>}
         {place && <Fact label="Local">{place}</Fact>}
@@ -125,14 +125,14 @@ export function LeadDetail({ lead }: { lead: ProspectLead }) {
               {lead.systems.map((system) => (
                 <div key={`${system.kind}-${system.name}`} className="flex flex-wrap items-center gap-2">
                   <SystemChip system={system} />
-                  {system.source && <span className="text-xs text-neutral-500">{system.source}</span>}
+                  {system.source && <span className="text-xs text-muted">{system.source}</span>}
                 </div>
               ))}
             </div>
           ) : lead.situation === 'online_order' ? (
-            <span className="text-neutral-600">Pedir on-line (plataforma não identificada)</span>
+            <span className="text-fg-2">Pedir on-line (plataforma não identificada)</span>
           ) : (
-            <span className="text-neutral-600">Nenhum sistema encontrado</span>
+            <span className="text-fg-2">Nenhum sistema encontrado</span>
           )}
         </Fact>
       </dl>
@@ -154,7 +154,7 @@ export function LeadDetail({ lead }: { lead: ProspectLead }) {
       </div>
 
       {extra.length > 0 && (
-        <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-600">
+        <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-2">
           {extra.map(([key, value]) => (
             <div key={key}>
               <dt className="inline font-medium">{key}: </dt>
@@ -164,13 +164,13 @@ export function LeadDetail({ lead }: { lead: ProspectLead }) {
         </dl>
       )}
 
-      {lead.failure_reason && <p className="text-red-700">Falha: {lead.failure_reason}</p>}
+      {lead.failure_reason && <p className="text-danger-fg">Falha: {lead.failure_reason}</p>}
 
       {lead.sent_message ? (
         <div className="flex flex-col gap-1">
           <p className="font-medium">Mensagem enviada</p>
           <p className="whitespace-pre-wrap">{lead.sent_message}</p>
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-muted">
             {sentDates
               .filter(([, date]) => date)
               .map(([label, date]) => `${label} ${formatWhen(date)}`)
@@ -205,7 +205,7 @@ export function LeadDetail({ lead }: { lead: ProspectLead }) {
         }}
         className={INPUT}
       />
-      {update.isError && <p className="text-red-700">Não foi possível salvar.</p>}
+      {update.isError && <p className="text-danger-fg">Não foi possível salvar.</p>}
 
       {actions.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -215,7 +215,7 @@ export function LeadDetail({ lead }: { lead: ProspectLead }) {
               type="button"
               disabled={update.isPending}
               onClick={() => update.mutate({ id: lead.id, status: next })}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 disabled:opacity-50"
+              className="rounded-md border border-line-2 px-3 py-1.5 disabled:opacity-50"
             >
               {label}
             </button>

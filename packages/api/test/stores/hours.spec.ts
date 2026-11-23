@@ -1,7 +1,14 @@
 import { equal } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { closesAt, deliverySchedule, formatHours, isClosingSoon, isStoreOpen } from '../../src/stores/hours';
+import {
+  closesAt,
+  deliverySchedule,
+  formatHours,
+  isClosingSoon,
+  isStoreOpen,
+  nextScheduleChange
+} from '../../src/stores/hours';
 
 const TZ = 'America/Sao_Paulo';
 
@@ -138,5 +145,45 @@ describe('deliverySchedule', () => {
     equal(schedule?.hours.split('\n')[0], 'Dom sem entrega');
     equal(schedule?.hours.split('\n')[1], 'Seg 09:00–18:00');
     equal(deliverySchedule([{ weekday: 1, opens_at: '09:00', closes_at: '18:00' }], 4)?.lead_days, 4);
+  });
+});
+
+describe('nextScheduleChange', () => {
+  // Friday 18:00–00:00 continuing into Saturday 00:00–02:00, then Saturday 18:00–23:00.
+  const hours = [
+    { weekday: 5, opens_at: '18:00', closes_at: '00:00' },
+    { weekday: 6, opens_at: '00:00', closes_at: '02:00' },
+    { weekday: 6, opens_at: '18:00', closes_at: '23:00' }
+  ];
+
+  it('finds the next opening from a closed moment', () => {
+    // Friday 10:00 local → Friday 18:00 local
+    equal(nextScheduleChange(hours, TZ, new Date('2026-10-09T13:00:30Z'), true), '2026-10-09T21:00:00.000Z');
+  });
+
+  it('skips a range that only continues the previous one', () => {
+    // Friday 20:00 local: closes Saturday 02:00, reopens Saturday 18:00
+    const now = new Date('2026-10-09T23:00:00Z');
+
+    equal(nextScheduleChange(hours, TZ, now, false), '2026-10-10T05:00:00.000Z');
+    equal(nextScheduleChange(hours, TZ, now, true), '2026-10-10T21:00:00.000Z');
+  });
+
+  it('wraps to next week', () => {
+    // Saturday 23:30 local → Friday 18:00 local
+    equal(nextScheduleChange(hours, TZ, new Date('2026-10-11T02:30:00Z'), true), '2026-10-16T21:00:00.000Z');
+  });
+
+  it('returns null without a change', () => {
+    equal(nextScheduleChange([], TZ, new Date(), true), null);
+    equal(
+      nextScheduleChange(
+        [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, opens_at: '00:00', closes_at: '00:00' })),
+        TZ,
+        new Date(),
+        false
+      ),
+      null
+    );
   });
 });

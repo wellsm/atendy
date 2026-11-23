@@ -1,14 +1,15 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
 import type { OperatorHeaders } from '../../staff/authorize';
-import type { PaymentMethod } from '../../stores/types';
+import type { PaymentBrands, PaymentMethod } from '../../stores/types';
 import type { PanelStaffProvider } from '../provider';
 import type { PanelIdentity } from '../types';
 
 import { authorize } from '../../staff/authorize';
 import { Permission } from '../../staff/permissions';
+import { acceptedBrands } from '../../stores/payment';
 import { StoreRepository } from '../../stores/repository';
-import { validatePaymentMethods } from '../../stores/settings';
+import { validatePayment } from '../../stores/settings';
 import { requireStore, withSettingsErrors } from '../store';
 
 export declare class UpdatePaymentRequest implements Http.Request {
@@ -16,6 +17,10 @@ export declare class UpdatePaymentRequest implements Http.Request {
   headers: OperatorHeaders;
   body: {
     paymentMethods: PaymentMethod[];
+    /**
+     * Per card/voucher method; a missing key = every brand.
+     */
+    paymentBrands?: PaymentBrands | null;
   };
 }
 
@@ -23,6 +28,7 @@ export declare class UpdatePaymentResponse implements Http.Response {
   status: 200;
   body: {
     paymentMethods: PaymentMethod[];
+    paymentBrands: PaymentBrands;
   };
 }
 
@@ -32,9 +38,11 @@ export async function updatePaymentHandler(
 ): Promise<UpdatePaymentResponse> {
   const store = await requireStore(db, request.identity);
   await authorize(db, store, request.identity, request.headers, Permission.Settings);
-  const paymentMethods = await withSettingsErrors(() => validatePaymentMethods(request.body.paymentMethods));
+  const { methods, brands } = await withSettingsErrors(() =>
+    validatePayment({ methods: request.body.paymentMethods, brands: request.body.paymentBrands })
+  );
 
-  await StoreRepository.setPaymentMethods(db, store.id, paymentMethods);
+  await StoreRepository.setPayment(db, store.id, { methods, brands });
 
-  return { status: 200, body: { paymentMethods } };
+  return { status: 200, body: { paymentMethods: methods, paymentBrands: acceptedBrands(methods, brands) } };
 }

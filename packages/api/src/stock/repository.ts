@@ -1,5 +1,5 @@
 import type { DbClient } from '../db';
-import type { DemoStockItem, DemoStockLink, LinkTarget, StockUnit, StockUsage } from './types';
+import type { DemoStockItem, DemoStockLink, LinkTarget, StockUsage } from './types';
 import type { StockItemInput, StockPackageInput } from './validation';
 
 import { randomUUID } from 'node:crypto';
@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { Order } from '@ez4/database';
 
 import { averageCost } from './cost';
-import { LossReason, StockFilter, StockMovementKind } from './types';
+import { LossReason, StockFilter, StockMovementKind, StockUnit } from './types';
 import { mergeUsage, soldOutTargets } from './usage';
 import { StockError, validateItem, validatePackages } from './validation';
 
@@ -142,6 +142,25 @@ export type StockMovementView = {
 };
 
 /**
+ * A movement in the store-wide history: the item it changed, by name and unit.
+ */
+export type StoreStockMovementView = {
+  id: string;
+  kind: StockMovementKind;
+  qtyDelta: number;
+  balanceAfter: number;
+  unitCostMillicents: number | null;
+  orderId: string | null;
+  reason: string | null;
+  note: string | null;
+  author: string;
+  createdAt: string;
+  itemId: string;
+  itemName: string;
+  itemUnit: StockUnit;
+};
+
+/**
  * What an item is linked to: exactly one of `productId`/`optionId` is set, `name` is that product's or option's.
  */
 export type StockItemLinkView = {
@@ -260,6 +279,45 @@ const validateNote = (note: string | undefined) => {
   }
 
   return value;
+};
+
+export type EntryLine = { itemId: string; packageId?: string; qty: number; totalCostCents?: number };
+
+export type LossLine = { itemId: string; packageId?: string; qty: number };
+
+const MAX_LINES = 200;
+
+/**
+ * A batch has 1 to `MAX_LINES` lines, each a whole quantity of at least 1.
+ */
+const validateLines = (lines: { qty: number }[]) => {
+  if (!lines.length || lines.length > MAX_LINES) {
+    throw new StockError('lines', `Send 1 to ${MAX_LINES} lines.`);
+  }
+
+  for (const { qty } of lines) {
+    validateQty(qty);
+  }
+};
+
+/**
+ * Base units in one `qty` of the line: the package factor, 1 without a package.
+ */
+const packageFactor = async (db: DbClient, storeId: string, line: { itemId: string; packageId?: string }) => {
+  if (!line.packageId) {
+    return 1;
+  }
+
+  const pack = await db.stock_packages.findOne({
+    select: { store_id: true, stock_item_id: true, factor: true },
+    where: { id: line.packageId }
+  });
+
+  if (!pack || pack.store_id !== storeId || pack.stock_item_id !== line.itemId) {
+    throw new StockError('package', 'Package not found.');
+  }
+
+  return pack.factor;
 };
 
 type PackagePlan = {
@@ -530,58 +588,60 @@ export namespace StockRepository {
   };
 
   /**
-   * Stock entry (purchase). With a package, the base quantity is `qty × factor`; the total cost, when sent, becomes
-   * the unit cost that updates the item's average.
+   * Stock entries (purchases) in one transaction: a bad line writes nothing. With a package, a line's base quantity is
+   * `qty × factor`; its total cost, when sent, becomes the unit cost that updates the item's average. Supplier and
+   * invoice go into every movement's note (`NF <invoice> · <supplier>`).
    */
-  export const recordEntry = async (
+  export const recordEntries = async (
     db: DbClient,
     storeId: string,
-    input: { itemId: string; packageId?: string; qty: number; totalCostCents?: number; author: string }
+    input: { lines: EntryLine[]; supplier?: string; invoice?: string; author: string }
   ) => {
-    validateQty(input.qty);
+    validateLines(input.lines);
 
-    if (input.totalCostCents !== undefined && (!Number.isInteger(input.totalCostCents) || input.totalCostCents < 0)) {
-      throw new StockError('total_cost', 'Cost must be a whole number of cents, zero or more.');
-    }
-
-    let factor = 1;
-
-    if (input.packageId) {
-      const pack = await db.stock_packages.findOne({
-        select: { store_id: true, stock_item_id: true, factor: true },
-        where: { id: input.packageId }
-      });
-
-      if (!pack || pack.store_id !== storeId || pack.stock_item_id !== input.itemId) {
-        throw new StockError('package', 'Package not found.');
+    for (const { totalCostCents } of input.lines) {
+      if (totalCostCents !== undefined && (!Number.isInteger(totalCostCents) || totalCostCents < 0)) {
+        throw new StockError('total_cost', 'Cost must be a whole number of cents, zero or more.');
       }
-
-      factor = pack.factor;
     }
 
-    const baseQty = input.qty * factor;
+    const invoice = input.invoice?.trim();
+    const note = validateNote([invoice && `NF ${invoice}`, input.supplier?.trim()].filter(Boolean).join(' · '));
+    const moves: StockMove[] = [];
+
+    for (const line of input.lines) {
+      const baseQty = line.qty * (await packageFactor(db, storeId, line));
+
+      moves.push({
+        itemId: line.itemId,
+        delta: baseQty,
+        kind: StockMovementKind.Purchase,
+        ...(line.totalCostCents !== undefined && { unitCost: Math.round((line.totalCostCents * 1000) / baseQty) }),
+        ...(note && { note }),
+        author: input.author
+      });
+    }
 
     await db.transaction(async (tx) => {
-      await applyMovements(tx, storeId, [
-        {
-          itemId: input.itemId,
-          delta: baseQty,
-          kind: StockMovementKind.Purchase,
-          ...(input.totalCostCents !== undefined && {
-            unitCost: Math.round((input.totalCostCents * 1000) / baseQty)
-          }),
-          author: input.author
-        }
-      ]);
+      await applyMovements(tx, storeId, moves);
     });
   };
 
-  export const recordLoss = async (
+  /**
+   * One purchase line (seeds and tests).
+   */
+  export const recordEntry = async (db: DbClient, storeId: string, input: EntryLine & { author: string }) =>
+    recordEntries(db, storeId, { lines: [input], author: input.author });
+
+  /**
+   * Losses in one transaction, all with the same reason and note; a package line takes `qty × factor`.
+   */
+  export const recordLosses = async (
     db: DbClient,
     storeId: string,
-    input: { itemId: string; qty: number; reason: LossReason; note?: string; author: string }
+    input: { lines: LossLine[]; reason: LossReason; note?: string; author: string }
   ) => {
-    validateQty(input.qty);
+    validateLines(input.lines);
 
     if (![LossReason.Breakage, LossReason.Expired, LossReason.InternalUse, LossReason.Other].includes(input.reason)) {
       throw new StockError('reason', 'Unknown reason.');
@@ -593,19 +653,32 @@ export namespace StockRepository {
       throw new StockError('note', 'Describe the loss.');
     }
 
+    const moves: StockMove[] = [];
+
+    for (const line of input.lines) {
+      moves.push({
+        itemId: line.itemId,
+        delta: -line.qty * (await packageFactor(db, storeId, line)),
+        kind: StockMovementKind.Loss,
+        reason: input.reason,
+        ...(note && { note }),
+        author: input.author
+      });
+    }
+
     await db.transaction(async (tx) => {
-      await applyMovements(tx, storeId, [
-        {
-          itemId: input.itemId,
-          delta: -input.qty,
-          kind: StockMovementKind.Loss,
-          reason: input.reason,
-          ...(note && { note }),
-          author: input.author
-        }
-      ]);
+      await applyMovements(tx, storeId, moves);
     });
   };
+
+  /**
+   * One loss line (seeds and tests).
+   */
+  export const recordLoss = async (
+    db: DbClient,
+    storeId: string,
+    input: LossLine & { reason: LossReason; note?: string; author: string }
+  ) => recordLosses(db, storeId, { ...input, lines: [input] });
 
   /**
    * Counted balances. A `count` movement is written only where the count differs from the balance read under lock.
@@ -701,6 +774,79 @@ export namespace StockRepository {
       note: row.note ?? null,
       author: row.author,
       createdAt: row.created_at
+    }));
+
+    return {
+      movements,
+      next: found.length > limit && last ? `${last.created_at}_${last.id}` : null
+    };
+  };
+
+  /**
+   * Movements of every item of the store (or one kind), newest first, with each item's name and unit; same cursor
+   * as `listMovements`.
+   */
+  export const listStoreMovements = async (
+    db: DbClient,
+    storeId: string,
+    page: { kind?: StockMovementKind; before?: string; limit?: number }
+  ) => {
+    const limit = Math.min(Math.max(Math.trunc(page.limit ?? DEFAULT_MOVEMENTS_PAGE), 1), MAX_MOVEMENTS_PAGE);
+
+    const cursor = page.before === undefined ? undefined : parseCursor(page.before);
+
+    const { records: found } = await db.stock_movements.findMany({
+      select: {
+        id: true,
+        stock_item_id: true,
+        kind: true,
+        qty_delta: true,
+        balance_after: true,
+        unit_cost_millicents: true,
+        order_id: true,
+        reason: true,
+        note: true,
+        author: true,
+        created_at: true
+      },
+      where: {
+        store_id: storeId,
+        ...(page.kind && { kind: page.kind }),
+        ...(cursor && {
+          OR: [{ created_at: { lt: cursor.createdAt } }, { created_at: cursor.createdAt, id: { lt: cursor.id } }]
+        })
+      },
+      order: { created_at: Order.Desc, id: Order.Desc },
+      take: limit + 1
+    });
+
+    const records = found.slice(0, limit);
+    const last = records[records.length - 1];
+    const itemIds = [...new Set(records.map(({ stock_item_id }) => stock_item_id))];
+
+    const { records: items } = itemIds.length
+      ? await db.stock_items.findMany({
+          select: { id: true, name: true, unit: true },
+          where: { store_id: storeId, id: { isIn: itemIds } }
+        })
+      : { records: [] };
+
+    const itemsById = new Map(items.map((item) => [item.id, item]));
+
+    const movements: StoreStockMovementView[] = records.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      qtyDelta: row.qty_delta,
+      balanceAfter: row.balance_after,
+      unitCostMillicents: row.unit_cost_millicents ?? null,
+      orderId: row.order_id ?? null,
+      reason: row.reason ?? null,
+      note: row.note ?? null,
+      author: row.author,
+      createdAt: row.created_at,
+      itemId: row.stock_item_id,
+      itemName: itemsById.get(row.stock_item_id)?.name ?? '',
+      itemUnit: itemsById.get(row.stock_item_id)?.unit ?? StockUnit.Unit
     }));
 
     return {

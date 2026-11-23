@@ -68,12 +68,7 @@ export const maskPhoneInput = (typed: string) => {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, split)}-${digits.slice(split)}`;
 };
 
-export const PAYMENT_LABEL: Record<string, string> = {
-  pix: 'Pix',
-  card: 'Cartão',
-  cash: 'Dinheiro',
-  voucher: 'Vale-refeição/alimentação'
-};
+export { PAYMENT_LABEL } from './payment';
 
 export const STATUS_LABEL: Record<string, string> = {
   placed: 'Novo',
@@ -105,8 +100,14 @@ const HANDOFF_LABEL: Record<string, string> = {
   staff_replied_from_phone: 'Respondida pelo celular',
   staff_replied_from_panel: 'Respondida pelo painel',
   staff_took_over: 'Assumida pela loja',
-  delivery_schedule: 'Entrega fora do horário de entrega'
+  delivery_schedule: 'Entrega fora do horário de entrega',
+  bot_opt_in: 'Atendimento manual'
 };
+
+/**
+ * A conversation born with a person in a store that passes each one to the bot by hand: nobody has to act on it.
+ */
+export const BOT_OPT_IN_REASON = 'bot_opt_in';
 
 /**
  * Handoffs that only a person at the store causes: approvals become handoffs only when someone clicks "Assumir".
@@ -118,7 +119,8 @@ const STAFF_REASONS = new Set([
   'order_limit',
   'qty_limit',
   'new_customer_review',
-  'suspected_prank'
+  'suspected_prank',
+  BOT_OPT_IN_REASON
 ]);
 
 export const staffActed = (reason: string | null) => !!reason && STAFF_REASONS.has(reason);

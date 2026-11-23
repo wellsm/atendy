@@ -162,7 +162,9 @@ function ConversationRow({
                 Aprovar: {handoffLabel(conversation.approval_reason)}
               </span>
             ) : human ? (
-              <span className="text-xs font-medium text-accent-fg">{handoffLabel(conversation.handoff_reason)}</span>
+              <span className={`text-xs ${needsPerson(conversation) ? 'font-medium text-accent-fg' : 'text-faint'}`}>
+                {handoffLabel(conversation.handoff_reason)}
+              </span>
             ) : (
               <span className="text-xs text-faint">Bot atendendo</span>
             )}

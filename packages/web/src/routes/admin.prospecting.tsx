@@ -1,7 +1,6 @@
 import type { WhatsAppCopy } from '../components/whatsapp-connect';
 
-import { UserButton } from '@clerk/react';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 
 import { ProspectingImport } from '../components/prospecting-import';
 import { ProspectingLeads } from '../components/prospecting-leads';
@@ -44,19 +43,15 @@ function ProspectingPage() {
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-8">
       <header className="mb-6 flex items-center justify-between gap-3">
         <div>
-          <Link to="/admin" className="text-sm text-neutral-500">
-            ← Lojas
-          </Link>
           <h1 className="text-xl font-semibold">Prospecção</h1>
-          <p className="text-sm text-neutral-600">
+          <p className="text-sm text-fg-2">
             Primeira mensagem para os leads, enviada devagar pelo número conectado. A conversa continua no seu celular.
           </p>
         </div>
-        <UserButton />
       </header>
 
       {off ? (
-        <p className="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-700">
+        <p className="rounded-xl border border-line bg-surface p-4 text-sm text-fg-2">
           A prospecção está desligada neste ambiente (<code>PROSPECTING_ENABLED=false</code> na API). Nada é enviado e
           os leads ficam guardados como estão.
         </p>

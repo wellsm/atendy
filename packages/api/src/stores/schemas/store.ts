@@ -3,6 +3,7 @@ import type { Enum, Integer, String } from '@ez4/schema';
 import type {
   DeliveryMode,
   OrderCodeMode,
+  PaymentBrands,
   PaymentMethod,
   RouterType,
   StorePolicy,
@@ -24,7 +25,15 @@ export interface StoreSchema extends Database.Schema {
    * When the owner accepted the unofficial-WhatsApp risk notice during onboarding.
    */
   risk_accepted_at?: String.DateTime | null;
+  /**
+   * Legacy pause; see `storeOpenState`.
+   */
   accepting_orders: boolean;
+  /**
+   * Manual Aberto/Fechado over the hours; null = automatic.
+   */
+  open_override?: boolean | null;
+  open_override_until?: String.DateTime | null;
   router: RouterType;
   llm_model: string;
   whatsapp_provider: WhatsAppProviderType;
@@ -43,6 +52,10 @@ export interface StoreSchema extends Database.Schema {
   latitude?: number | null;
   longitude?: number | null;
   payment_methods: PaymentMethod[];
+  /**
+   * Accepted brands per card/voucher method; null or a missing key = every brand (`stores/payment.ts`).
+   */
+  payment_brands?: PaymentBrands | null;
   policy?: StorePolicy | null;
   /**
    * Price of an order the AI took all the way (100 %); null = `DEFAULT_ORDER_PRICE_CENTS`.

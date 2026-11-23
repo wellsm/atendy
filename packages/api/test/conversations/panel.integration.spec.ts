@@ -7,7 +7,8 @@ import { describe, it } from 'node:test';
 import { DatabaseTester } from '@ez4/local-database/test';
 
 import { ConversationRepository } from '../../src/conversations/repository';
-import { ConversationMode, MessageAuthor } from '../../src/conversations/types';
+import { BOT_OPT_IN_REASON, ConversationMode, MessageAuthor } from '../../src/conversations/types';
+import { ParsedEventKind } from '../../src/whatsapp/types';
 import { minutesAgo, seedConversation, seedMessage, seedStore } from '../support/fixtures';
 
 describe('ConversationRepository (panel)', () => {
@@ -64,6 +65,55 @@ describe('ConversationRepository (panel)', () => {
     const list = await ConversationRepository.listForPanel(db, storeId);
 
     equal(list[0]!.id, human.conversationId);
+  });
+
+  it('starts a new conversation with a person in a bot opt-in store, without asking for attention', async () => {
+    const { storeId } = await seedStore(db);
+    const urgent = await seedConversation(db, storeId);
+
+    await db.conversations.updateOne({
+      data: { last_message_at: minutesAgo(600) },
+      where: { id: urgent.conversationId }
+    });
+    await ConversationRepository.handOffToHuman(db, {
+      conversationId: urgent.conversationId,
+      reason: 'customer_asked'
+    });
+
+    const phone = `55119${Math.floor(Math.random() * 1e8)
+      .toString()
+      .padStart(8, '0')}`;
+
+    const { conversationId } = await ConversationRepository.ingestCustomerMessage(db, {
+      storeId,
+      botOptIn: true,
+      message: {
+        kind: ParsedEventKind.Message,
+        instance: 'test',
+        providerMessageId: randomUUID(),
+        fromMe: false,
+        jid: `${phone}@s.whatsapp.net`,
+        phone,
+        text: 'oi',
+        sentAt: new Date().toISOString()
+      }
+    });
+
+    const list = await ConversationRepository.listForPanel(db, storeId);
+
+    // The handed-off conversation stays first; the opt-in one sorts with the bot's.
+    deepEqual(
+      list.map(({ id, mode, handoff_reason }) => ({ id, mode, handoff_reason })),
+      [
+        { id: urgent.conversationId, mode: ConversationMode.Human, handoff_reason: 'customer_asked' },
+        { id: conversationId, mode: ConversationMode.Human, handoff_reason: BOT_OPT_IN_REASON }
+      ]
+    );
+
+    equal(
+      (await db.billing_records.findMany({ select: { id: true }, where: { store_id: storeId } })).records.length,
+      0
+    );
   });
 
   it('finds a conversation only inside its store and returns its messages oldest first', async () => {

@@ -17,11 +17,16 @@ export type AdminStore = {
   createdAt: string;
   router: RouterType;
   llmModel: string;
+  storeType: StoreType;
 };
 
 export type AdminStoreRow = AdminStore & {
   lastMessageAt: string | null;
   errorCount24h: number;
+  /**
+   * Orders placed in the last 30 days, any source, without canceled ones.
+   */
+  orders30d: number;
 };
 
 export type AdminStoreHealth = {
@@ -33,6 +38,7 @@ export type AdminStoreHealth = {
     at: string;
   }[];
   activeProducts: number;
+  orders30d: number;
   openNow: boolean;
   acceptingOrders: boolean;
 };
@@ -47,6 +53,10 @@ export type AdminStoreDetail = {
   welcomeText: string | null;
   redirect: StoreRedirect | null;
   redirectOnly: boolean;
+  /**
+   * New conversations start with a person; the store passes each one to the bot.
+   */
+  botOptIn: boolean;
   /**
    * Price of an order the AI took all the way; `null` = `defaultOrderPriceCents`.
    */
@@ -75,6 +85,7 @@ export const toAdminStore = (store: {
   created_at: string;
   router: RouterType;
   llm_model: string;
+  store_type: StoreType;
 }): AdminStore => ({
   id: store.id,
   name: store.name,
@@ -83,7 +94,8 @@ export const toAdminStore = (store: {
   acceptingOrders: store.accepting_orders,
   createdAt: store.created_at,
   router: store.router,
-  llmModel: store.llm_model
+  llmModel: store.llm_model,
+  storeType: store.store_type
 });
 
 export type AdminConversation = {
@@ -101,6 +113,14 @@ export type AdminConversationRow = AdminConversation & {
    * Last message, first 80 characters.
    */
   preview: string;
+  /**
+   * The last handoff was a bot or send failure (same rule as the `errors` filter).
+   */
+  error: boolean;
+  /**
+   * Came from an admin simulation run.
+   */
+  simulation: boolean;
 };
 
 export type AdminMessage = {

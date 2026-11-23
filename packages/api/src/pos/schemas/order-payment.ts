@@ -11,6 +11,10 @@ export interface OrderPaymentSchema extends Database.Schema {
   store_id: String.UUID;
   order_id: String.UUID;
   method: PaymentMethod;
+  /**
+   * Card or voucher brand (credit, debit, VR, VA); null for pix and cash.
+   */
+  brand?: string | null;
   amount_cents: Integer.Min<1>;
   received_cents?: Integer.Min<1> | null;
   change_cents?: Integer.Min<0> | null;

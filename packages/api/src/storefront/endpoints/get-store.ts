@@ -7,7 +7,8 @@ import { HttpNotFoundError } from '@ez4/gateway';
 
 import { withImageUrls } from '../../menu/images';
 import { MenuRepository } from '../../menu/repository';
-import { closesAt, isStoreOpen } from '../../stores/hours';
+import { closesAt } from '../../stores/hours';
+import { storeOpenState } from '../../stores/open';
 import { StoreRepository } from '../../stores/repository';
 import { deliveryFromCents } from '../delivery';
 
@@ -73,7 +74,7 @@ export async function getStorefrontHandler(
       store: {
         name: store.name,
         slug: store.slug,
-        open: store.accepting_orders && isStoreOpen(settings.hours, store.timezone, now),
+        open: storeOpenState(store, settings.hours, now).open,
         closesAt: closesAt(settings.hours, store.timezone, now),
         deliveryFromCents: deliveryFromCents(settings.delivery),
         minOrderCents: settings.policy.min_order_cents ?? null,

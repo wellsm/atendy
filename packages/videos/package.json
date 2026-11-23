@@ -1,0 +1,25 @@
+{
+  "name": "@atendy/videos",
+  "version": "0.0.0",
+  "license": "UNLICENSED",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "still": "remotion still src/index.ts",
+    "render": "for slug in pizzeria snack-bar japanese cosmetics tobacco-liquor; do remotion render src/index.ts conversation-$slug out/$slug.mp4 || exit 1; done",
+    "test": "node --test src/timeline.spec.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint --cache"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.542",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.542"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  }
+}

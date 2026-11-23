@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Logo } from '../logo';
 
-const STEPS = ['Cadastre a loja', 'Monte o cardápio', 'Conecte o WhatsApp'];
+const STEPS = ['Cadastre a loja', 'Monte o cardápio ou catálogo', 'Conecte o WhatsApp'];
 
 /**
  * Frame of the sign-in screens: orange side panel on desktop, orange header with a sheet over it on phones.
@@ -14,10 +14,10 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         <Logo mono className="h-6 self-start lg:h-7" />
         <div className="flex max-w-[440px] flex-col gap-4">
           <h2 className="text-balance text-[26px] font-bold leading-tight tracking-tight lg:text-[40px]">
-            Seu delivery atendido no WhatsApp<span className="hidden lg:inline">, 24 horas por dia</span>.
+            Sua loja atendida no WhatsApp<span className="hidden lg:inline">, 24 horas por dia</span>.
           </h2>
           <p className="hidden text-[17px] leading-normal lg:block">
-            O bot anota o pedido com o seu cardápio e as suas regras. Você aceita e despacha pelo painel.
+            O bot anota o pedido com os seus produtos e as suas regras. Você aceita e despacha pelo painel.
           </p>
         </div>
         <ol className="hidden gap-7 text-sm lg:flex">

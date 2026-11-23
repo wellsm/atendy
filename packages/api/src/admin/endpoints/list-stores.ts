@@ -28,9 +28,9 @@ export async function listStoresHandler(
 
   const rows = await Promise.all(
     stores.map(async (store) => {
-      const { lastMessageAt, errorCount24h } = await StoreRepository.getHealth(db, store.id);
+      const { lastMessageAt, errorCount24h, orders30d } = await StoreRepository.getHealth(db, store.id);
 
-      return { ...toAdminStore(store), lastMessageAt, errorCount24h };
+      return { ...toAdminStore(store), lastMessageAt, errorCount24h, orders30d };
     })
   );
 

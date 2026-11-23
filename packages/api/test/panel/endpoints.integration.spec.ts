@@ -40,7 +40,8 @@ describe('panel endpoints', () => {
     equal(response.status, 201);
     equal(response.body.store.name, 'Pizzaria Nova');
     equal(response.body.store.active, false);
-    equal(response.body.store.acceptingOrders, false);
+    equal(response.body.store.openNow, false);
+    equal(response.body.store.openOverride, false);
 
     const store = await db.stores.findOne({
       select: { clerk_org_id: true, risk_accepted_at: true },

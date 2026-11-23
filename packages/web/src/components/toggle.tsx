@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react';
+
 /**
- * Small on/off switch for menu items.
+ * Small on/off switch.
  */
 export function Toggle(props: {
   checked: boolean;
@@ -23,5 +25,29 @@ export function Toggle(props: {
         />
       </span>
     </button>
+  );
+}
+
+/**
+ * An on/off setting: a card with the switch in front of its title and optional explanation.
+ */
+export function SwitchCard(props: {
+  checked: boolean;
+  disabled?: boolean;
+  title: string;
+  description?: ReactNode;
+  className?: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-3 rounded-xl border-[1.5px] border-line-2 bg-surface p-3 text-sm ${props.className ?? ''}`}
+    >
+      <Toggle checked={props.checked} disabled={props.disabled} label={props.title} onChange={props.onChange} />
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="font-medium">{props.title}</span>
+        {props.description && <span className="text-xs text-muted">{props.description}</span>}
+      </span>
+    </label>
   );
 }

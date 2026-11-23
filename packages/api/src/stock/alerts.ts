@@ -143,7 +143,7 @@ export const runStockAlerts = async (
         continue;
       }
 
-      const url = `${env.WEB_BASE_URL}/panel/${store.slug}?sheet=stock&filter=low`;
+      const url = `${env.WEB_BASE_URL}/panel/${store.slug}/stock?screen=items&filter=low`;
 
       try {
         await provider.sendText({ to: store.stock_alert_phone, text: formatLowStockDigest(items, url) });

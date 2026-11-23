@@ -191,18 +191,22 @@ describe('agent tools', () => {
     equal(result.ok ? 'ok' : result.error, 'item_not_found');
   });
 
-  it('accepts voucher as a payment method only when the store enables it', async () => {
+  it('accepts a meal voucher only when the store enables vouchers, never the legacy value', async () => {
     const { ctx, menu } = await setup({ payment_methods: [PaymentMethod.Pix, PaymentMethod.Voucher] });
 
     await executeTool(ctx, ToolName.AddItem, { product_id: productByName(menu, 'Coca-Cola 2L').id, qty: 1 });
 
-    equal(cartOf(await executeTool(ctx, ToolName.SetPayment, { method: 'voucher' })).payment_method, 'voucher');
+    equal(
+      cartOf(await executeTool(ctx, ToolName.SetPayment, { method: 'meal_voucher' })).payment_method,
+      'meal_voucher'
+    );
+    equal((await executeTool(ctx, ToolName.SetPayment, { method: 'voucher' })).ok, false);
 
-    const other = await setup();
+    const other = await setup({ payment_methods: [PaymentMethod.Pix] });
 
     await executeTool(other.ctx, ToolName.AddItem, { product_id: productByName(other.menu, 'Coca-Cola 2L').id });
 
-    const refused = await executeTool(other.ctx, ToolName.SetPayment, { method: 'voucher' });
+    const refused = await executeTool(other.ctx, ToolName.SetPayment, { method: 'meal_voucher' });
 
     equal(refused.ok, false);
   });

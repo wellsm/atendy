@@ -292,7 +292,9 @@ export function OperatorProvider({ slug, children }: { slug: string; children: R
 
   const screen: Screen = pathname.endsWith('/pos')
     ? 'pos'
-    : (search.sheet ?? (search.view === 'orders' ? 'board' : 'conversations'));
+    : pathname.endsWith('/stock')
+      ? 'stock'
+      : (search.sheet ?? (search.view === 'orders' ? 'board' : 'conversations'));
 
   // Right after unlocking, a role that cannot open this screen lands on the board instead of "Sem permissão".
   useEffect(() => {

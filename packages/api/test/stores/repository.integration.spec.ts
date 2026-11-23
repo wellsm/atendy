@@ -183,7 +183,7 @@ describe('StoreRepository', () => {
       { weekday: 5, opens_at: '18:00', closes_at: '02:00' },
       { weekday: 0, opens_at: '11:00', closes_at: '15:00' }
     ]);
-    await StoreRepository.setPaymentMethods(db, id, [PaymentMethod.Pix]);
+    await StoreRepository.setPayment(db, id, { methods: [PaymentMethod.Pix], brands: {} });
     await StoreRepository.updatePolicy(db, id, { min_order_cents: 3000 });
 
     deepEqual(await StoreRepository.getSettings(db, id), {
@@ -194,6 +194,7 @@ describe('StoreRepository', () => {
       delivery: { mode: DeliveryMode.Flat, flatFeeCents: 0, zones: [], bands: [], hours: [], leadDays: null },
       storeLocation: null,
       paymentMethods: [PaymentMethod.Pix],
+      paymentBrands: {},
       policy: { min_order_cents: 3000 },
       stockAlertPhone: null,
       stockAlertHour: null,
@@ -202,15 +203,18 @@ describe('StoreRepository', () => {
     });
   });
 
-  it('updates the store name and the accepting-orders switch', async () => {
+  it('updates the store name and the manual open state, ending the legacy pause', async () => {
     const { id } = await StoreRepository.create(db, { name: 'N', slug: `n-${randomUUID()}`, llmModel: 'test/model' });
 
-    await StoreRepository.updateStore(db, id, { name: 'Nova', acceptingOrders: true });
-    await StoreRepository.updateStore(db, id, { acceptingOrders: false });
+    await StoreRepository.updateStore(db, id, { name: 'Nova' });
+    await StoreRepository.updateStore(db, id, { openOverride: { open: false, until: null } });
 
-    const store = await db.stores.findOne({ select: { name: true, accepting_orders: true }, where: { id } });
+    const store = await db.stores.findOne({
+      select: { name: true, accepting_orders: true, open_override: true, open_override_until: true },
+      where: { id }
+    });
 
-    deepEqual(store, { name: 'Nova', accepting_orders: false });
+    deepEqual(store, { name: 'Nova', accepting_orders: true, open_override: false, open_override_until: null });
   });
 
   it('reads the WhatsApp instance with its secret', async () => {
@@ -283,6 +287,8 @@ describe('StoreRepository', () => {
       slug,
       active: false,
       accepting_orders: false,
+      open_override: null,
+      open_override_until: null,
       timezone: 'America/Sao_Paulo',
       store_type: 'food'
     });

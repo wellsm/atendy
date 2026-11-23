@@ -24,7 +24,7 @@ const BUTTON = 'h-11 rounded-lg border border-line-2 px-3 text-sm text-fg-2 hove
 const PRIMARY =
   'h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50';
 
-const METHODS: PaymentMethod[] = ['pix', 'card', 'cash', 'voucher'];
+const METHODS: PaymentMethod[] = ['pix', 'cash', 'credit', 'debit', 'meal_voucher', 'food_voucher', 'card', 'voucher'];
 
 const ERROR_TEXT: Record<string, string> = {
   amount: 'Valor inválido.',

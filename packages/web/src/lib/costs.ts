@@ -8,7 +8,14 @@ export type CostReport = {
   ai: {
     total_usd: number;
     by_provider: { provider: string; calls: number; cost_usd: number }[];
-    by_path: { path: string; calls: number; cost_usd: number }[];
+    by_path: {
+      path: string;
+      calls: number;
+      input_tokens: number;
+      output_tokens: number;
+      cost_usd: number;
+      avg_latency_ms: number;
+    }[];
     by_model: {
       model: string;
       provider: string;
@@ -18,7 +25,14 @@ export type CostReport = {
       cost_usd: number;
       avg_latency_ms: number;
     }[];
-    by_prompt_version: { version: string | null; calls: number; cost_usd: number }[];
+    by_prompt_version: {
+      version: string | null;
+      calls: number;
+      input_tokens: number;
+      output_tokens: number;
+      cost_usd: number;
+      avg_latency_ms: number;
+    }[];
   };
   jev: { turns: number; direct: number } | null;
   /**

@@ -1,9 +1,16 @@
 import type { Http } from '@ez4/gateway';
 import type { AdminIdentity } from '../types';
 
-import { REPLY_SYSTEM_PROMPT, SYSTEM_PROMPT } from '../../agent/prompt';
+import {
+  redirectPromptFor,
+  REPLY_SYSTEM_PROMPT,
+  replyPromptFor,
+  SYSTEM_PROMPT,
+  systemPromptFor
+} from '../../agent/prompt';
 import { PROMPT_VERSION } from '../../agent/prompt-version';
 import { TOOL_DEFINITIONS } from '../../agent/tools';
+import { StoreType } from '../../stores/types';
 
 export declare class GetPromptRequest implements Http.Request {
   identity: AdminIdentity;
@@ -22,6 +29,14 @@ export declare class GetPromptResponse implements Http.Response {
      * Tool definitions sent to the model, as formatted JSON.
      */
     tools: string;
+    /**
+     * Product (catalog) voice of the same two prompts.
+     */
+    retail: { system: string; reply: string };
+    /**
+     * Prompt of a `redirect_only` store after its fixed welcome, per voice (SOP appended too).
+     */
+    redirect: { food: string; retail: string };
   };
 }
 
@@ -35,7 +50,9 @@ export function getPromptHandler(_request: Http.Incoming<GetPromptRequest>): Get
       version: PROMPT_VERSION,
       system: SYSTEM_PROMPT,
       reply: REPLY_SYSTEM_PROMPT,
-      tools: JSON.stringify(TOOL_DEFINITIONS, null, 2)
+      tools: JSON.stringify(TOOL_DEFINITIONS, null, 2),
+      retail: { system: systemPromptFor(StoreType.Retail), reply: replyPromptFor(StoreType.Retail) },
+      redirect: { food: redirectPromptFor(StoreType.Food), retail: redirectPromptFor(StoreType.Retail) }
     }
   };
 }

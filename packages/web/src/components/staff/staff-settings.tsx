@@ -14,6 +14,7 @@ import {
 } from '../../lib/queries';
 import { ROLE_LABEL } from '../../lib/staff';
 import { Loading } from '../loading';
+import { SwitchCard } from '../toggle';
 import { CourierSettlement } from './courier-settlement';
 
 const INPUT =
@@ -141,14 +142,11 @@ function EmployeeForm({ member, onDone }: { member?: StaffMember; onDone: () => 
       )}
 
       {pinRole && (
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={draft.delivers}
-            onChange={(event) => change({ delivers: event.target.checked })}
-          />
-          Faz entregas
-        </label>
+        <SwitchCard
+          checked={draft.delivers}
+          title="Faz entregas"
+          onChange={(checked) => change({ delivers: checked })}
+        />
       )}
 
       {delivers && (
@@ -454,6 +452,15 @@ function Defaults({ settings }: { settings: StaffSettings }) {
 export function StaffTab({ settings }: { settings: StaffSettings }) {
   const staff = useStaff();
   const [adding, setAdding] = useState(false);
+  const [role, setRole] = useState<StaffRole>();
+  const members = staff.data?.staff ?? [];
+  const visible = members
+    .filter((member) => !role || member.role === role)
+    .sort((a, b) => Number(b.active) - Number(a.active));
+  const filters: [StaffRole | undefined, string][] = [
+    [undefined, 'Todos'],
+    ...(Object.entries(ROLE_LABEL) as [StaffRole, string][])
+  ];
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
@@ -475,13 +482,31 @@ export function StaffTab({ settings }: { settings: StaffSettings }) {
         )}
       </div>
 
+      {members.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {filters.map(([value, label]) => (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={role === value}
+              onClick={() => setRole(value)}
+              className={`rounded-full px-3 py-1 text-[13px] font-medium ${
+                role === value ? 'bg-fg text-surface' : 'bg-surface-2 text-fg-2 hover:bg-line'
+              }`}
+            >
+              {label} · {members.filter((member) => !value || member.role === value).length}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="mt-3 flex flex-col gap-2.5">
         {adding && <EmployeeForm onDone={() => setAdding(false)} />}
         {staff.isPending && <Loading />}
         {staff.isError && <p className="text-sm text-danger-fg">Não foi possível carregar os funcionários.</p>}
         {staff.data?.staff.length === 0 && !adding && <p className="text-sm text-muted">Nenhum funcionário ainda.</p>}
         <ul className="flex flex-col gap-2.5">
-          {staff.data?.staff.map((member) => (
+          {visible.map((member) => (
             <EmployeeRow key={member.id} member={member} />
           ))}
         </ul>

@@ -5,7 +5,19 @@ import { PaymentMethod } from '../stores/types';
  * Cents per payment method. Spelled out instead of `Record<PaymentMethod, number>` so Ez4 can read it in response
  * bodies; `emptyTotals` keeps it in step with `PaymentMethod`.
  */
-export type MethodTotals = { pix: number; card: number; cash: number; voucher: number };
+export type MethodTotals = {
+  pix: number;
+  cash: number;
+  credit: number;
+  debit: number;
+  meal_voucher: number;
+  food_voucher: number;
+  /**
+   * Legacy methods: payments made before the split.
+   */
+  card: number;
+  voucher: number;
+};
 
 export type CashReport = {
   floatCents: number;
@@ -78,8 +90,12 @@ export type CashSummaryInput = {
 const emptyTotals = (): MethodTotals =>
   ({
     [PaymentMethod.Pix]: 0,
-    [PaymentMethod.Card]: 0,
     [PaymentMethod.Cash]: 0,
+    [PaymentMethod.Credit]: 0,
+    [PaymentMethod.Debit]: 0,
+    [PaymentMethod.MealVoucher]: 0,
+    [PaymentMethod.FoodVoucher]: 0,
+    [PaymentMethod.Card]: 0,
     [PaymentMethod.Voucher]: 0
   }) satisfies Record<PaymentMethod, number>;
 

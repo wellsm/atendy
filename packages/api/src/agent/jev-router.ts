@@ -70,9 +70,14 @@ const INTENT_CRITERIA: Record<Intent, string> = {
 
 const PAYMENT_CRITERIA: Record<PaymentMethod, string> = {
   [PaymentMethod.Pix]: 'Pays with Pix.',
-  [PaymentMethod.Card]: 'Pays with a credit or debit card.',
   [PaymentMethod.Cash]: 'Pays with cash (dinheiro).',
-  [PaymentMethod.Voucher]: 'Pays with a meal or food voucher (vale-refeição, vale-alimentação).'
+  [PaymentMethod.Credit]: 'Pays with a credit card (cartão de crédito).',
+  [PaymentMethod.Debit]: 'Pays with a debit card (cartão de débito).',
+  [PaymentMethod.MealVoucher]: 'Pays with a meal voucher (vale-refeição, VR).',
+  [PaymentMethod.FoodVoucher]: 'Pays with a food voucher (vale-alimentação, VA).',
+  // Legacy values, never in a store's normalized list.
+  [PaymentMethod.Card]: 'Pays with a card.',
+  [PaymentMethod.Voucher]: 'Pays with a voucher.'
 };
 
 export type JevPlan = {
@@ -398,9 +403,7 @@ export const decideJevAction = (
       const method = confidentChoice(answers, Q_PAYMENT);
 
       // Cash needs the change amount (free text): the LLM asks for it.
-      return method === PaymentMethod.Pix || method === PaymentMethod.Card
-        ? direct(ToolName.SetPayment, { method })
-        : fallback('payment');
+      return method && method !== PaymentMethod.Cash ? direct(ToolName.SetPayment, { method }) : fallback('payment');
     }
 
     case Intent.Confirm:

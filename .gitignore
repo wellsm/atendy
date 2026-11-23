@@ -12,3 +12,4 @@ tmp/
 .tanstack/
 .output/
 .env.local
+packages/videos/out/

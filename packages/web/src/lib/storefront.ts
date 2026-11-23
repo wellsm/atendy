@@ -1,3 +1,4 @@
+import type { PaymentMethod } from './payment';
 import type { MenuCategory, MenuGroup, MenuProduct } from './queries';
 import type { StoreType } from './store-type';
 
@@ -5,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { getPublic } from './api';
 
-export type PaymentMethod = 'pix' | 'card' | 'cash' | 'voucher';
+export type { PaymentMethod };
 
 export type StorefrontStore = {
   name: string;
@@ -43,12 +44,7 @@ export const useStorefront = (slug: string) =>
     retry: false
   });
 
-export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  pix: 'Pix',
-  card: 'Cartão',
-  cash: 'Dinheiro',
-  voucher: 'Vale-refeição/alimentação'
-};
+export { PAYMENT_LABEL as PAYMENT_LABELS } from './payment';
 
 const options = (count: number) => `${count} ${count === 1 ? 'opção' : 'opções'}`;
 

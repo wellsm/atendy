@@ -62,7 +62,10 @@ export function SaleReceipt({ storeName, sale }: { storeName: string; sale: PosS
       <div className="my-1.5 border-t border-dashed border-black" />
       {sale.payments.map((payment) => (
         <div key={payment.id}>
-          <PrintRow label={PAYMENT_LABEL[payment.method] ?? payment.method} value={formatMoney(payment.amount_cents)} />
+          <PrintRow
+            label={`${PAYMENT_LABEL[payment.method] ?? payment.method}${payment.brand ? ` ${payment.brand}` : ''}`}
+            value={formatMoney(payment.amount_cents)}
+          />
           {payment.received_cents !== null && (
             <>
               <PrintRow label="  Recebido" value={formatMoney(payment.received_cents)} />

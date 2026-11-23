@@ -21,7 +21,7 @@ type Place = { city: string; zone: string; neighborhood: string };
 
 type Places = NonNullable<ReturnType<typeof useProspectsOverview>['data']>['places'];
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
+const INPUT = 'rounded-md border border-line-2 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
 const HOME_CITY = 'São Paulo';
 
@@ -116,7 +116,7 @@ export function ProspectingLeads() {
   const base = useProspectsOverview({});
 
   if (base.isError) {
-    return <p className="text-sm text-red-700">Não foi possível carregar os leads.</p>;
+    return <p className="text-sm text-danger-fg">Não foi possível carregar os leads.</p>;
   }
 
   if (!base.data) {
@@ -238,7 +238,7 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {SITUATIONS.map((key) => (
           <li key={key}>
@@ -247,11 +247,11 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
               aria-pressed={situation === key}
               onClick={() => filter(setSituation)(situation === key ? '' : key)}
               className={`flex w-full flex-col items-start rounded-lg border px-3 py-2 text-left ${
-                situation === key ? 'border-accent bg-accent-soft' : 'border-neutral-200 hover:bg-neutral-50'
+                situation === key ? 'border-accent bg-accent-soft' : 'border-line hover:bg-hover'
               }`}
             >
               <span className="text-2xl font-semibold tabular-nums">{overview.data?.situations[key] ?? 0}</span>
-              <span className="text-xs text-neutral-600">{SITUATION_LABEL[key]}</span>
+              <span className="text-xs text-fg-2">{SITUATION_LABEL[key]}</span>
             </button>
           </li>
         ))}
@@ -259,7 +259,7 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
 
       <ul className="flex flex-wrap gap-2 text-xs">
         {FUNNEL.map((key) => (
-          <li key={key} className="rounded-full bg-neutral-100 px-3 py-1 text-neutral-700">
+          <li key={key} className="rounded-full bg-surface-2 px-3 py-1 text-fg-2">
             {STATUS_LABEL[key]} · {overview.data?.statuses[key] ?? 0}
           </li>
         ))}
@@ -359,14 +359,14 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-neutral-600">
+        <span className="text-fg-2">
           {leads.data?.pages[0]?.total ?? 0} de {total}
         </span>
         <button
           type="button"
           disabled={selecting}
           onClick={() => void onSelectAll()}
-          className="rounded-md border border-neutral-300 px-3 py-1.5 disabled:opacity-50"
+          className="rounded-md border border-line-2 px-3 py-1.5 disabled:opacity-50"
         >
           {selecting ? 'Selecionando…' : 'Selecionar todos do filtro'}
         </button>
@@ -378,14 +378,14 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
         >
           Enviar para os 20 melhores
         </button>
-        {result && <span className="text-neutral-700">{result}</span>}
-        {(bulk.isError || queueBest.isError) && <span className="text-red-700">Não foi possível atualizar.</span>}
+        {result && <span className="text-fg-2">{result}</span>}
+        {(bulk.isError || queueBest.isError) && <span className="text-danger-fg">Não foi possível atualizar.</span>}
       </div>
 
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-neutral-600">{selected.size} selecionados</span>
-          <button type="button" onClick={() => select(new Set())} className="text-neutral-500 underline">
+          <span className="text-fg-2">{selected.size} selecionados</span>
+          <button type="button" onClick={() => select(new Set())} className="text-muted underline">
             Limpar
           </button>
           {BULK_ACTIONS.map(([target, label]) => (
@@ -394,7 +394,7 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
               type="button"
               disabled={bulk.isPending}
               onClick={() => onBulk(target)}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 font-medium disabled:opacity-50"
+              className="rounded-md border border-line-2 px-3 py-1.5 font-medium disabled:opacity-50"
             >
               {label}
             </button>
@@ -405,9 +405,9 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
       {leads.isPending ? (
         <Loading />
       ) : rows.length === 0 ? (
-        <p className="text-sm text-neutral-500">Nenhum lead.</p>
+        <p className="text-sm text-muted">Nenhum lead.</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-neutral-100">
+        <ul className="flex flex-col divide-y divide-line">
           {rows.map((lead) => (
             <LeadRow key={lead.id} lead={lead} checked={selected.has(lead.id)} onToggle={() => toggle(lead.id)} />
           ))}
@@ -419,7 +419,7 @@ function LeadsPanel({ places, categories }: { places: Places; categories: string
           type="button"
           disabled={leads.isFetchingNextPage}
           onClick={() => void leads.fetchNextPage()}
-          className="self-start rounded-md border border-neutral-300 px-4 py-2 text-sm disabled:opacity-50"
+          className="self-start rounded-md border border-line-2 px-4 py-2 text-sm disabled:opacity-50"
         >
           {leads.isFetchingNextPage ? 'Carregando…' : 'Carregar mais'}
         </button>
@@ -441,13 +441,13 @@ function LeadRow({ lead, checked, onToggle }: { lead: ProspectLead; checked: boo
         <ScoreBadge score={lead.score} />
         <button type="button" onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 flex-col text-left">
           <span className="font-medium">{lead.name}</span>
-          {line && <span className="text-xs text-neutral-500">{line}</span>}
+          {line && <span className="text-xs text-muted">{line}</span>}
         </button>
-        <span className="hidden text-neutral-500 sm:inline">{formatPhone(lead.phone)}</span>
+        <span className="hidden text-muted sm:inline">{formatPhone(lead.phone)}</span>
         <span className="hidden flex-wrap gap-1 md:flex">
           <SystemChips lead={lead} />
         </span>
-        <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700">
+        <span className="rounded-full bg-surface-2 px-3 py-1 text-xs text-fg-2">
           {statusLabel(lead)}
           {date && ` · ${formatWhen(date)}`}
         </span>

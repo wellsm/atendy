@@ -13,7 +13,11 @@ const ERROR_REASONS = ['send_failed', 'technical_error'];
 export const enum ConversationFilter {
   All = 'all',
   NeedsHuman = 'needs_human',
-  Errors = 'errors'
+  Errors = 'errors',
+  /**
+   * Conversations an admin simulation run produced.
+   */
+  Simulations = 'simulations'
 }
 
 const CONVERSATION_FIELDS = {
@@ -59,6 +63,22 @@ const labels = async (db: DbClient, conversations: ConversationRow[]) => {
   };
 };
 
+/**
+ * Conversations that came from simulation runs: all of them, or those among `conversationIds`.
+ */
+const simulationConversationIds = async (db: DbClient, conversationIds?: string[]) => {
+  if (conversationIds && !conversationIds.length) {
+    return [];
+  }
+
+  const { records } = await db.simulations.findMany({
+    select: { conversation_id: true },
+    where: { conversation_id: conversationIds ? { isIn: conversationIds } : { isNull: false } }
+  });
+
+  return records.flatMap(({ conversation_id }) => (conversation_id ? [conversation_id] : []));
+};
+
 export namespace InspectorRepository {
   /**
    * Conversations of every store (or one), newest first, one page before `before`.
@@ -67,20 +87,34 @@ export namespace InspectorRepository {
     db: DbClient,
     input: { storeId?: string; filter: ConversationFilter; before?: string }
   ) => {
+    // shortcut: loads every simulated conversation id; page through simulations when runs reach the thousands.
+    const simulationIds =
+      input.filter === ConversationFilter.Simulations ? await simulationConversationIds(db) : undefined;
+
+    if (simulationIds && !simulationIds.length) {
+      return [];
+    }
+
     const { records } = await db.conversations.findMany({
       select: CONVERSATION_FIELDS,
       where: {
         ...(input.storeId && { store_id: input.storeId }),
         ...(input.filter === ConversationFilter.NeedsHuman && { mode: ConversationMode.Human }),
         ...(input.filter === ConversationFilter.Errors && { handoff_reason: { isIn: ERROR_REASONS } }),
+        ...(simulationIds && { id: { isIn: simulationIds } }),
         ...(input.before && { last_message_at: { lt: input.before } })
       },
       order: { last_message_at: Order.Desc },
       take: PAGE_SIZE
     });
 
-    const [{ stores, phones }, previews] = await Promise.all([
+    const [{ stores, phones }, simulated, previews] = await Promise.all([
       labels(db, records),
+      simulationIds ??
+        simulationConversationIds(
+          db,
+          records.map(({ id }) => id)
+        ),
       Promise.all(
         records.map(async ({ id }) => {
           const { records: last } = await db.messages.findMany({
@@ -103,7 +137,9 @@ export namespace InspectorRepository {
       mode: conversation.mode,
       handoffReason: conversation.handoff_reason ?? null,
       lastMessageAt: conversation.last_message_at,
-      preview: previews[index] ?? ''
+      preview: previews[index] ?? '',
+      error: ERROR_REASONS.includes(conversation.handoff_reason ?? ''),
+      simulation: simulated.includes(conversation.id)
     }));
   };
 

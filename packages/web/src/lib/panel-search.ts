@@ -4,11 +4,11 @@ import { getRouteApi, useNavigate } from '@tanstack/react-router';
 
 import { usePanelSlug } from './panel-slug';
 
-export type Sheet = 'menu' | 'whatsapp' | 'settings' | 'billing' | 'history' | 'dashboard' | 'stock';
+export type Sheet = 'menu' | 'whatsapp' | 'settings' | 'staff' | 'billing' | 'history' | 'dashboard' | 'stock';
 
 export type PanelView = 'orders';
 
-export type SettingsTab = 'store' | 'hours' | 'delivery' | 'payment' | 'policy' | 'stock' | 'pos' | 'staff';
+export type SettingsTab = 'store' | 'hours' | 'delivery' | 'payment' | 'policy' | 'stock' | 'pos';
 
 /**
  * The panel page state in the URL: the main view (conversations, or `view=orders` for the kitchen board), the open
@@ -29,18 +29,21 @@ export type PanelSearch = {
   filter?: StockFilter;
 };
 
-const SHEETS: Sheet[] = ['menu', 'whatsapp', 'settings', 'billing', 'history', 'dashboard', 'stock'];
+const SHEETS: Sheet[] = ['menu', 'whatsapp', 'settings', 'staff', 'billing', 'history', 'dashboard', 'stock'];
 
 const STOCK_FILTER_VALUES: StockFilter[] = ['low', 'sold_out', 'archived'];
 
-const TABS: SettingsTab[] = ['store', 'hours', 'delivery', 'payment', 'policy', 'stock', 'pos', 'staff'];
+const TABS: SettingsTab[] = ['store', 'hours', 'delivery', 'payment', 'policy', 'stock', 'pos'];
 
 const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
 
 export const validatePanelSearch = (search: Record<string, unknown>): PanelSearch => ({
   ...(search.view === 'orders' && { view: 'orders' as const }),
   ...(text(search.c) && { c: text(search.c) }),
-  ...(SHEETS.includes(search.sheet as Sheet) && { sheet: search.sheet as Sheet }),
+  ...(SHEETS.includes(search.sheet as Sheet) && {
+    // Staff left the settings tabs: old `?sheet=settings&tab=staff` links open its own sheet.
+    sheet: search.sheet === 'settings' && search.tab === 'staff' ? 'staff' : (search.sheet as Sheet)
+  }),
   ...(text(search.product) && { product: text(search.product) }),
   ...(text(search.category) && { category: text(search.category) }),
   ...(search.photo === 'failed' && { photo: 'failed' as const }),

@@ -17,7 +17,7 @@ import { PanelTrigger } from '../../realtime/types';
 import { SimulatorProvider } from '../../simulations/provider';
 import { isSimulatedJid, SimulationRepository } from '../../simulations/repository';
 import { storefrontUrl } from '../../storefront/url';
-import { isStoreOpen } from '../../stores/hours';
+import { storeOpenState } from '../../stores/open';
 import { orderMemorySince } from '../../stores/policy';
 import { EvolutionRequestError } from '../../whatsapp/evolution-client';
 import { parseLocationBody } from '../../whatsapp/location';
@@ -270,8 +270,10 @@ export async function handler(
   // A store that only sends customers to its link (`redirect_only`) always answers: the link works when it is closed.
   const redirect = store.policy?.redirect_only ? store.policy.redirect : null;
 
-  if (!redirect && (!store.accepting_orders || !isStoreOpen(hours, store.timezone, new Date()))) {
-    const text = buildClosedReply({ acceptingOrders: store.accepting_orders, hours });
+  const openState = storeOpenState(store, hours);
+
+  if (!redirect && !openState.open) {
+    const text = buildClosedReply({ acceptingOrders: openState.override === null, hours });
 
     const lastSentAt = await ConversationRepository.lastBotReplyAt(db, { conversationId: conversation.id, body: text });
 

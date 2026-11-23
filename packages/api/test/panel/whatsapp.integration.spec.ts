@@ -103,6 +103,25 @@ describe('panel WhatsApp endpoints', () => {
     await rejects(state(identity), (error: unknown) => error instanceof HttpError && error.status === 502);
   });
 
+  it('shows the linked number while connected, best effort', async () => {
+    const { identity } = await setup();
+    const open: Record<string, [number, unknown]> = {
+      '/instance/connectionState/': [200, { instance: { state: 'open' } }]
+    };
+
+    evolution({ ...open, '/instance/fetchInstances': [200, [{ ownerJid: '5511945671234@s.whatsapp.net' }]] });
+    deepEqual((await state(identity)).body, { state: WhatsAppState.Connected, phone: '5511945671234' });
+
+    mock.restoreAll();
+    evolution({ ...open, '/instance/fetchInstances': [500, {}] });
+    deepEqual((await state(identity)).body, { state: WhatsAppState.Connected, phone: null });
+
+    mock.restoreAll();
+    const calls = evolution({ '/instance/connectionState/': [200, { instance: { state: 'connecting' } }] });
+    deepEqual((await state(identity)).body, { state: WhatsAppState.Connecting, phone: null });
+    equal(calls.length, 1);
+  });
+
   it('creates the instance with the store webhook, then returns the QR', async () => {
     const { identity, storeId, secret } = await setup(false);
 

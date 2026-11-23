@@ -2,12 +2,13 @@ import type { DbClient } from '../db';
 import type { Coordinates, DeliveryBand } from './geo';
 import type { HourRange } from './hours';
 import type { DeliverySettings } from './settings';
-import type { OrderCodeMode, PosSettings, StaffSettings, StorePolicy } from './types';
+import type { OrderCodeMode, PaymentBrands, PosSettings, StaffSettings, StorePolicy } from './types';
 
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import { Order } from '@ez4/database';
 
+import { acceptedBrands, acceptedMethods } from './payment';
 import { DeliveryMode, PaymentMethod, RouterType, StoreType, WhatsAppProviderType } from './types';
 import { OrderStatus } from '../orders/types';
 
@@ -31,11 +32,17 @@ const PANEL_STORE_FIELDS = {
   slug: true,
   active: true,
   accepting_orders: true,
+  open_override: true,
+  open_override_until: true,
   timezone: true,
   store_type: true
 } as const;
 
 const HEALTH_WINDOW_MS = 24 * 60 * 60_000;
+
+const ORDERS_WINDOW_MS = 30 * 24 * 60 * 60_000;
+
+const COUNTED_ORDER_STATUSES = [OrderStatus.Placed, OrderStatus.Accepted, OrderStatus.Out, OrderStatus.Done];
 
 const RECENT_ERRORS = 5;
 
@@ -49,6 +56,10 @@ export type StoreHealth = {
   errorCount24h: number;
   recentErrors: { conversationId: string; reason: string; at: string }[];
   activeProducts: number;
+  /**
+   * Orders placed in the last 30 days from any source (bot, web, attendant, POS), canceled ones left out.
+   */
+  orders30d: number;
 };
 
 export namespace StoreRepository {
@@ -78,7 +89,7 @@ export namespace StoreRepository {
         whatsapp_webhook_secret: whatsappWebhookSecret,
         delivery_mode: DeliveryMode.Flat,
         flat_fee_cents: 0,
-        payment_methods: [PaymentMethod.Pix, PaymentMethod.Card, PaymentMethod.Cash],
+        payment_methods: [PaymentMethod.Pix, PaymentMethod.Cash, PaymentMethod.Credit, PaymentMethod.Debit],
         store_type: StoreType.Food,
         created_at: now,
         updated_at: now
@@ -211,7 +222,9 @@ export namespace StoreRepository {
   export const getHealth = async (db: DbClient, storeId: string, now = new Date()): Promise<StoreHealth> => {
     const since = new Date(now.getTime() - HEALTH_WINDOW_MS).toISOString();
 
-    const [{ records: latest }, { records: errors }, activeProducts] = await Promise.all([
+    const ordersSince = new Date(now.getTime() - ORDERS_WINDOW_MS).toISOString();
+
+    const [{ records: latest }, { records: errors }, activeProducts, orders30d] = await Promise.all([
       db.conversations.findMany({
         select: { last_message_at: true },
         where: { store_id: storeId },
@@ -223,7 +236,10 @@ export namespace StoreRepository {
         where: { store_id: storeId, handoff_reason: { isIn: ERROR_REASONS }, last_message_at: { gte: since } },
         order: { last_message_at: Order.Desc }
       }),
-      db.products.count({ where: { store_id: storeId, active: true } })
+      db.products.count({ where: { store_id: storeId, active: true } }),
+      db.orders.count({
+        where: { store_id: storeId, status: { isIn: COUNTED_ORDER_STATUSES }, placed_at: { gte: ordersSince } }
+      })
     ]);
 
     return {
@@ -234,7 +250,8 @@ export namespace StoreRepository {
         reason: error.handoff_reason ?? '',
         at: error.last_message_at
       })),
-      activeProducts
+      activeProducts,
+      orders30d
     };
   };
 
@@ -390,9 +407,13 @@ export namespace StoreRepository {
     return { latitude: Number(store.latitude), longitude: Number(store.longitude) };
   };
 
-  export const setPaymentMethods = async (db: DbClient, storeId: string, methods: PaymentMethod[]) => {
+  export const setPayment = async (
+    db: DbClient,
+    storeId: string,
+    input: { methods: PaymentMethod[]; brands: PaymentBrands }
+  ) => {
     await db.stores.updateOne({
-      data: { payment_methods: methods, updated_at: new Date().toISOString() },
+      data: { payment_methods: input.methods, payment_brands: input.brands, updated_at: new Date().toISOString() },
       where: { id: storeId }
     });
   };
@@ -400,12 +421,17 @@ export namespace StoreRepository {
   export const updateStore = async (
     db: DbClient,
     storeId: string,
-    input: { name?: string; acceptingOrders?: boolean }
+    input: { name?: string; openOverride?: { open: boolean | null; until: string | null } }
   ) => {
     await db.stores.updateOne({
       data: {
         ...(input.name !== undefined && { name: input.name }),
-        ...(input.acceptingOrders !== undefined && { accepting_orders: input.acceptingOrders }),
+        // Any choice in the Aberto/Fechado control ends the legacy pause.
+        ...(input.openOverride && {
+          accepting_orders: true,
+          open_override: input.openOverride.open,
+          open_override_until: input.openOverride.until
+        }),
         updated_at: new Date().toISOString()
       },
       where: { id: storeId }
@@ -423,6 +449,7 @@ export namespace StoreRepository {
           flat_fee_cents: true,
           delivery_lead_days: true,
           payment_methods: true,
+          payment_brands: true,
           policy: true,
           address: true,
           latitude: true,
@@ -472,7 +499,8 @@ export namespace StoreRepository {
         store.address && store.latitude != null && store.longitude != null
           ? { address: store.address, latitude: Number(store.latitude), longitude: Number(store.longitude) }
           : null,
-      paymentMethods: store.payment_methods,
+      paymentMethods: acceptedMethods(store.payment_methods),
+      paymentBrands: acceptedBrands(store.payment_methods, store.payment_brands),
       policy: store.policy ?? {},
       stockAlertPhone: store.stock_alert_phone ?? null,
       stockAlertHour: store.stock_alert_hour ?? null,

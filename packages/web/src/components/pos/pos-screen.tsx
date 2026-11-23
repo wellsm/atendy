@@ -602,6 +602,7 @@ export function PosScreen({ store }: { store: PanelStore }) {
         <PaymentStep
           sale={paying}
           methods={settings.data?.payment_methods ?? []}
+          brands={settings.data?.payment_brands ?? {}}
           storeName={store.name}
           receiptWidth={settings.data?.pos.receipt_width ?? 80}
           onDetach={() => {

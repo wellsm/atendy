@@ -1,3 +1,5 @@
+import type { PaymentMethod } from '../../lib/payment';
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -13,7 +15,7 @@ type CourierOrder = {
   address: string | null;
   neighborhood: string | null;
   total_cents: number;
-  payment_method: string | null;
+  payment_method: PaymentMethod | null;
   change_for_cents: number | null;
   fee_cents: number | null;
   notes: string | null;

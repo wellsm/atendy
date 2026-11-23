@@ -13,8 +13,12 @@ export const formatCents = (cents: number) => BRL.format(cents / 100);
 
 export const PAYMENT_TEXT: Record<string, string> = {
   pix: 'Pix',
-  card: 'Cartão',
   cash: 'Dinheiro',
+  credit: 'Cartão de crédito',
+  debit: 'Cartão de débito',
+  meal_voucher: 'Vale-refeição',
+  food_voucher: 'Vale-alimentação',
+  card: 'Cartão',
   voucher: 'Vale-refeição/alimentação'
 };
 

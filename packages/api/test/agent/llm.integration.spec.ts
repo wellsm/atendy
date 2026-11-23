@@ -253,7 +253,12 @@ describe('LlmAgent', () => {
     ) as Record<string, unknown>;
 
     deepEqual(state, {
-      store: { name: 'Pizzaria Teste', payment_methods: ['pix'], delivery: { mode: 'flat', fee_cents: 800 } },
+      store: {
+        name: 'Pizzaria Teste',
+        payment_methods: ['pix'],
+        payment_brands: {},
+        delivery: { mode: 'flat', fee_cents: 800 }
+      },
       cart: null,
       last_order: null,
       closing_soon: false,

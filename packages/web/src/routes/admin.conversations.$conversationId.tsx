@@ -1,6 +1,5 @@
 import type { AdminAiCall, AdminConversationDetail, AdminMessage, ConversationSimulation } from '../lib/queries';
 
-import { UserButton } from '@clerk/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
@@ -28,10 +27,10 @@ export const Route = createFileRoute('/admin/conversations/$conversationId')({
 });
 
 const STATUS_CLASS: Record<ConversationSimulation['status'], string> = {
-  running: 'bg-neutral-100 text-neutral-700',
-  passed: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-  error: 'bg-amber-100 text-amber-800'
+  running: 'bg-surface-2 text-fg-2',
+  passed: 'bg-ok-bg text-ok-fg',
+  failed: 'bg-danger-soft text-danger-fg',
+  error: 'bg-accepted-bg text-warn-fg'
 };
 
 /**
@@ -52,11 +51,12 @@ function ConversationPage() {
   const { conversationId } = Route.useParams();
   const detail = useAdminConversation(conversationId);
   const notFound = detail.error instanceof ApiError && detail.error.status === 404;
+  const [onlyMessages, setOnlyMessages] = useState(false);
 
   const timeline: TimelineEntry[] = detail.data
     ? [
         ...detail.data.messages.map((message) => ({ kind: 'message' as const, at: message.at, message })),
-        ...detail.data.ai_calls.map((call) => ({ kind: 'call' as const, at: call.at, call }))
+        ...(onlyMessages ? [] : detail.data.ai_calls.map((call) => ({ kind: 'call' as const, at: call.at, call })))
       ].sort((a, b) => a.at.localeCompare(b.at))
     : [];
 
@@ -64,7 +64,7 @@ function ConversationPage() {
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
       <header className="mb-6 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <Link to="/admin/conversations" className="text-sm text-neutral-500">
+          <Link to="/admin/conversations" search={true} className="text-sm text-muted md:hidden">
             ← Conversas
           </Link>
           {detail.data && (
@@ -73,20 +73,36 @@ function ConversationPage() {
             </h1>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {detail.data && <CopyReport detail={detail.data} />}
-          <UserButton />
-        </div>
+        <div className="flex shrink-0 items-center gap-3">{detail.data && <CopyReport detail={detail.data} />}</div>
       </header>
 
       {detail.isPending && <Loading />}
-      {notFound && <p className="text-sm text-neutral-600">Conversa não encontrada.</p>}
-      {detail.isError && !notFound && <p className="text-sm text-red-700">Não foi possível carregar a conversa.</p>}
+      {notFound && <p className="text-sm text-fg-2">Conversa não encontrada.</p>}
+      {detail.isError && !notFound && <p className="text-sm text-danger-fg">Não foi possível carregar a conversa.</p>}
 
       {detail.data && (
         <>
           {detail.data.simulation && <SimulationCard simulation={detail.data.simulation} />}
           <Stats detail={detail.data} />
+
+          <div className="mb-3 inline-flex rounded-lg bg-surface-2 p-0.5 text-[13px] font-medium">
+            {(
+              [
+                [false, 'Tudo'],
+                [true, 'Só mensagens']
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={onlyMessages === value}
+                onClick={() => setOnlyMessages(value)}
+                className={`rounded-md px-3 py-1 ${onlyMessages === value ? 'bg-surface text-fg shadow-sm' : 'text-muted'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
           <ol className="flex flex-col gap-2">
             {timeline.map((entry) =>
@@ -122,7 +138,7 @@ function CopyReport({ detail }: { detail: AdminConversationDetail }) {
       type="button"
       onClick={() => void onCopy()}
       title="Copia título, checks, totais e a conversa inteira em texto"
-      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+      className="rounded-md border border-line-2 px-3 py-1.5 text-sm hover:bg-hover"
     >
       {state === 'copied' ? 'Copiado ✓' : state === 'failed' ? 'Não copiou' : 'Copiar para depurar'}
     </button>
@@ -134,11 +150,11 @@ function SimulationCard({ simulation }: { simulation: ConversationSimulation }) 
   const passed = simulation.checks.filter(({ pass }) => pass);
 
   return (
-    <section className="mb-4 rounded-xl border border-neutral-200 bg-white p-4 text-sm">
+    <section className="mb-4 rounded-xl border border-line bg-surface p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <span className="font-medium">{simulation.title}</span>{' '}
-          <code className="font-mono text-xs text-neutral-500">
+          <code className="font-mono text-xs text-muted">
             {simulation.scenario_id}
             {simulation.repeat_index > 0 && ` #${simulation.repeat_index + 1}`}
           </code>
@@ -148,7 +164,7 @@ function SimulationCard({ simulation }: { simulation: ConversationSimulation }) 
         </span>
       </div>
 
-      <p className="mt-1 text-xs text-neutral-600">
+      <p className="mt-1 text-xs text-fg-2">
         <Link
           to="/admin/simulations/$runId"
           params={{ runId: simulation.run_id }}
@@ -161,27 +177,27 @@ function SimulationCard({ simulation }: { simulation: ConversationSimulation }) 
       </p>
 
       {(simulation.persona || simulation.goal) && (
-        <p className="mt-2 text-xs text-neutral-700">
+        <p className="mt-2 text-xs text-fg-2">
           {simulation.persona && <span className="block">Persona: {simulation.persona}</span>}
           {simulation.goal && <span className="block">Objetivo: {simulation.goal}</span>}
         </p>
       )}
-      <p className="mt-1 break-all font-mono text-[11px] text-neutral-500">Fatos: {simulation.facts}</p>
+      <p className="mt-1 break-all font-mono text-[11px] text-muted">Fatos: {simulation.facts}</p>
 
-      {simulation.error && <p className="mt-2 text-amber-800">Erro: {simulation.error}</p>}
+      {simulation.error && <p className="mt-2 text-warn-fg">Erro: {simulation.error}</p>}
 
       {simulation.checks.length > 0 && (
         <ul className="mt-3 flex flex-col gap-1">
           {[...failed, ...passed].map((check) => (
             <li key={check.name} className="flex gap-2">
-              <span className={check.pass ? 'text-green-700' : 'text-red-700'}>{check.pass ? '✓' : '✗'}</span>
+              <span className={check.pass ? 'text-ok-fg' : 'text-danger-fg'}>{check.pass ? '✓' : '✗'}</span>
               <span className="min-w-0 break-words">
                 <span className="font-medium">{check.name}</span>{' '}
                 {check.pass ? (
-                  <span className="text-neutral-600">{check.actual}</span>
+                  <span className="text-fg-2">{check.actual}</span>
                 ) : (
-                  <span className="text-neutral-600">
-                    esperado {check.expected} → <span className="text-red-700">{check.actual}</span>
+                  <span className="text-fg-2">
+                    esperado {check.expected} → <span className="text-danger-fg">{check.actual}</span>
                   </span>
                 )}
               </span>
@@ -221,10 +237,10 @@ function Stats({ detail }: { detail: AdminConversationDetail }) {
   ];
 
   return (
-    <dl className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-neutral-200 bg-white p-4 text-sm sm:grid-cols-2">
+    <dl className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface p-4 text-sm sm:grid-cols-2">
       {items.map(([label, value]) => (
         <div key={label} className="min-w-0">
-          <dt className="text-xs text-neutral-500">{label}</dt>
+          <dt className="text-xs text-muted">{label}</dt>
           <dd className="break-words font-medium">{value}</dd>
         </div>
       ))}
@@ -237,10 +253,10 @@ function MessageEntry({ message }: { message: AdminMessage }) {
     <li className={`flex ${message.incoming ? 'justify-start' : 'justify-end'}`}>
       <div
         className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-          message.incoming ? 'bg-white ring-1 ring-neutral-200' : 'bg-green-50 ring-1 ring-green-200'
+          message.incoming ? 'bg-bubble-in ring-1 ring-line' : 'bg-bubble-out'
         }`}
       >
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-muted">
           {AUTHOR_LABEL[message.author]} · {formatWhen(message.at)}
         </p>
         <MessageBody body={message.body} />
@@ -251,25 +267,25 @@ function MessageEntry({ message }: { message: AdminMessage }) {
 
 function CallEntry({ call }: { call: AdminAiCall }) {
   return (
-    <li className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2 text-xs text-neutral-700">
+    <li className="rounded-lg border border-dashed border-line-2 bg-hover px-3 py-2 text-xs text-fg-2">
       <p>
         <span className="font-medium">{call.provider === 'jev' ? 'Jev' : call.model}</span> ·{' '}
         {PATH_LABEL[call.path] ?? call.path}
         {call.intent && ` · intenção ${call.intent}`}
         {call.confidence !== null && ` (${Math.round(call.confidence * 100)}%)`}
       </p>
-      <p className="text-neutral-500">
+      <p className="text-muted">
         {usd.format(call.cost_usd)} · {call.latency_ms} ms · {call.input_tokens}/{call.output_tokens} tokens · prompt{' '}
         {call.prompt_version ?? 'sem versão'} · {formatWhen(call.at)}
       </p>
       {call.tools?.map((tool, index) => (
         <div key={index} className="mt-1">
-          <span className={tool.ok ? 'text-green-700' : 'text-red-700'}>
+          <span className={tool.ok ? 'text-ok-fg' : 'text-danger-fg'}>
             {tool.ok ? '✓' : '✕'} {tool.name}
             {tool.error && ` (${tool.error})`}
           </span>
           {tool.args && (
-            <pre className="mt-0.5 overflow-x-auto whitespace-pre-wrap break-all rounded bg-white p-2 text-[11px]">
+            <pre className="mt-0.5 overflow-x-auto whitespace-pre-wrap break-all rounded bg-surface p-2 text-[11px]">
               {prettyJson(tool.args)}
             </pre>
           )}

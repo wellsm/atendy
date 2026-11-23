@@ -21,7 +21,7 @@ export const requireDemoStore = async (db: DbClient, identity: PanelIdentity, sl
   }
 
   const store = await db.stores.findOne({
-    select: { id: true, active: true, billing_blocked: true, clerk_org_id: true },
+    select: { id: true, active: true, billing_blocked: true, clerk_org_id: true, policy: true },
     where: { slug }
   });
 

@@ -9,6 +9,10 @@ import type { PaymentMethod } from '../stores/types';
 export type PosPayment = {
   id: string;
   method: PaymentMethod;
+  /**
+   * Card or voucher brand; null for pix and cash.
+   */
+  brand: string | null;
   amountCents: number;
   /**
    * Cash only: what the customer handed over and the change given.
@@ -22,6 +26,10 @@ export type PosPayment = {
  */
 export type PosPaymentInput = {
   method: PaymentMethod;
+  /**
+   * Required for credit, debit, VR and VA: one of the store's accepted brands.
+   */
+  brand?: string | null;
   amountCents: number;
   receivedCents?: number | null;
 };

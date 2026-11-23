@@ -12,6 +12,7 @@ import { AiCallRepository } from './repository';
 import { executeTool, ToolName } from './tools';
 import { AiPath, AiProvider } from './types';
 import { searchMenu } from '../menu/search';
+import { acceptedMethods } from '../stores/payment';
 import { RouterType } from '../stores/types';
 import { isReactionForModel } from '../whatsapp/reaction';
 
@@ -69,7 +70,7 @@ const tryJev = async (input: RouterInput) => {
     history: input.history,
     cart: input.cart,
     candidates: (matches.length ? matches : ctx.menu).slice(0, MAX_PRODUCT_CANDIDATES),
-    paymentMethods: input.store.payment_methods,
+    paymentMethods: acceptedMethods(input.store.payment_methods),
     lastOrder: input.lastOrder
   });
 

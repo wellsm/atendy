@@ -5,7 +5,7 @@ import { Link } from '@tanstack/react-router';
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../lib/api';
-import { formatMoney, formatPhone, handoffLabel, staffActed, STATUS_LABEL } from '../../lib/format';
+import { BOT_OPT_IN_REASON, formatMoney, formatPhone, handoffLabel, staffActed, STATUS_LABEL } from '../../lib/format';
 import { usePanelSlug } from '../../lib/panel-slug';
 import {
   useApproveConversation,
@@ -198,7 +198,8 @@ export function Thread({ conversationId }: { conversationId: string }) {
           >
             {human ? (
               <>
-                Devolver<span className="hidden md:inline"> ao bot</span>
+                {conversation.handoff_reason === BOT_OPT_IN_REASON ? 'Passar' : 'Devolver'}
+                <span className="hidden md:inline"> ao bot</span>
               </>
             ) : (
               <>

@@ -8,6 +8,7 @@ import { HttpBadRequestError } from '@ez4/gateway';
 
 import { authorize } from '../../staff/authorize';
 import { Permission } from '../../staff/permissions';
+import { openOverrideUntil } from '../../stores/open';
 import { StoreRepository } from '../../stores/repository';
 import { validateStoreName } from '../../stores/settings';
 import { loadPanelStore, requireStore, withSettingsErrors } from '../store';
@@ -17,7 +18,10 @@ export declare class UpdateStoreRequest implements Http.Request {
   headers: OperatorHeaders;
   body: {
     name?: string;
-    acceptingOrders?: boolean;
+    /**
+     * Manual Aberto (`true`) / Fechado (`false`) until the hours next change; `null` goes back to the hours.
+     */
+    open?: boolean | null;
   };
 }
 
@@ -29,16 +33,16 @@ export declare class UpdateStoreResponse implements Http.Response {
 }
 
 /**
- * Store name and the "Aceitando pedidos" switch.
+ * Store name and the Aberto/Fechado control.
  */
 export async function updateStoreHandler(
   request: Http.Incoming<UpdateStoreRequest>,
   { db }: Service.Context<PanelStaffProvider>
 ): Promise<UpdateStoreResponse> {
   const store = await requireStore(db, request.identity);
-  const { name, acceptingOrders } = request.body;
+  const { name, open } = request.body;
 
-  // Pausing orders alone is a board action; the name stays a setting.
+  // Opening or closing alone is a board action; the name stays a setting.
   await authorize(
     db,
     store,
@@ -47,24 +51,34 @@ export async function updateStoreHandler(
     name === undefined ? Permission.OrdersBoard : Permission.Settings
   );
 
-  if (name === undefined && acceptingOrders === undefined) {
+  if (name === undefined && open === undefined) {
     throw new HttpBadRequestError('Nothing to update.');
   }
 
-  const input = await withSettingsErrors(() => ({
-    name: name === undefined ? undefined : validateStoreName(name),
-    acceptingOrders
-  }));
+  const validName = await withSettingsErrors(() => (name === undefined ? undefined : validateStoreName(name)));
 
-  await StoreRepository.updateStore(db, store.id, input);
+  const openOverride =
+    open === undefined
+      ? undefined
+      : {
+          open,
+          until:
+            open === null ? null : openOverrideUntil(open, await StoreRepository.getHours(db, store.id), store.timezone)
+        };
+
+  await StoreRepository.updateStore(db, store.id, { name: validName, openOverride });
 
   return {
     status: 200,
     body: {
       store: await loadPanelStore(db, {
         ...store,
-        ...(input.name !== undefined && { name: input.name }),
-        ...(acceptingOrders !== undefined && { accepting_orders: acceptingOrders })
+        ...(validName !== undefined && { name: validName }),
+        ...(openOverride && {
+          accepting_orders: true,
+          open_override: openOverride.open,
+          open_override_until: openOverride.until
+        })
       })
     }
   };

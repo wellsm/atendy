@@ -8,7 +8,7 @@ import { useImportProspects } from '../lib/queries';
 
 const ERRORS_SHOWN = 20;
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
+const INPUT = 'rounded-md border border-line-2 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
 /**
  * Text above this size never goes into the textarea: a controlled textarea with megabytes of JSON freezes the page.
@@ -41,11 +41,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   };
 
   return (
-    <button
-      type="button"
-      onClick={() => void onCopy()}
-      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
-    >
+    <button type="button" onClick={() => void onCopy()} className="rounded-md border border-line-2 px-3 py-1.5 text-sm">
       {copied ? 'Copiado' : label}
     </button>
   );
@@ -106,8 +102,8 @@ export function ProspectingImport() {
   const result = importLeads.data;
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4">
-      <div className="flex flex-col gap-2 text-sm text-neutral-700">
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+      <div className="flex flex-col gap-2 text-sm text-fg-2">
         <p>
           Cole ou envie um arquivo <code>.json</code> com <code>{'{ "leads": [...] }'}</code>. Cada lead tem{' '}
           <code>name</code>, <code>phone</code> (com DDD), <code>messages</code> (2 a 4 variações, até 500 caracteres,
@@ -117,7 +113,7 @@ export function ProspectingImport() {
           de 2.000, uma de cada vez. Telefones repetidos (com ou sem o 9) são ignorados. Cada lead recebe uma das
           variações, sorteada.
         </p>
-        <pre className="overflow-x-auto rounded-md bg-neutral-50 p-3 text-xs">{PROSPECTING_EXAMPLE}</pre>
+        <pre className="overflow-x-auto rounded-md bg-hover p-3 text-xs">{PROSPECTING_EXAMPLE}</pre>
         <div className="flex flex-wrap gap-2">
           <CopyButton text={PROSPECTING_EXAMPLE} label="Copiar formato" />
           <CopyButton text={PROSPECTING_AI_PROMPT} label="Copiar prompt pra IA" />
@@ -125,7 +121,7 @@ export function ProspectingImport() {
       </div>
 
       {loaded ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-md bg-neutral-50 p-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-md bg-hover p-3 text-sm">
           <span>
             {loaded.name} · {formatSize(loaded.size)}
             {loaded.leads !== null && ` · ${loaded.leads.toLocaleString('pt-BR')} leads`}
@@ -134,7 +130,7 @@ export function ProspectingImport() {
             type="button"
             disabled={importLeads.isPending}
             onClick={() => setLoaded(null)}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 disabled:opacity-50"
+            className="rounded-md border border-line-2 px-3 py-1.5 disabled:opacity-50"
           >
             Remover
           </button>
@@ -166,9 +162,9 @@ export function ProspectingImport() {
         >
           {importLeads.isPending ? (part ? `Importando parte ${part[0]} de ${part[1]}…` : 'Importando…') : 'Importar'}
         </button>
-        {parseError && <span className="text-sm text-red-700">{parseError}</span>}
+        {parseError && <span className="text-sm text-danger-fg">{parseError}</span>}
         {importLeads.isError && (
-          <span className="text-sm text-red-700">
+          <span className="text-sm text-danger-fg">
             {importLeads.error instanceof ApiError && importLeads.error.status === 400
               ? (importLeads.error.detail ?? 'Arquivo inválido.')
               : 'Não foi possível importar.'}
@@ -180,13 +176,13 @@ export function ProspectingImport() {
       </div>
 
       {result && (
-        <div className="flex flex-col gap-2 rounded-md bg-neutral-50 p-3 text-sm">
+        <div className="flex flex-col gap-2 rounded-md bg-hover p-3 text-sm">
           <p>
             {result.added} adicionados · {result.skipped_duplicate} duplicados · {result.skipped_invalid} inválidos (de{' '}
             {result.total}).
           </p>
           {result.errors.length > 0 && (
-            <ul className="flex flex-col gap-1 text-red-800">
+            <ul className="flex flex-col gap-1 text-danger-fg">
               {result.errors.slice(0, ERRORS_SHOWN).map((error) => (
                 <li key={`${error.row}-${error.reason}`}>
                   Linha {error.row}: {error.reason}

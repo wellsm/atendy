@@ -1,5 +1,6 @@
 import type { ComponentProps, FormEvent, ReactNode } from 'react';
 import type { SettingsTab } from '../../lib/panel-search';
+import type { BrandMethod, PaymentBrands } from '../../lib/payment';
 import type {
   DeliveryMode,
   DeliverySettings,
@@ -12,6 +13,7 @@ import type {
   PosSettings,
   PreviousAddress,
   Settings,
+  StockItem,
   StoreLocation
 } from '../../lib/queries';
 
@@ -22,11 +24,13 @@ import { Sheet } from './sheet';
 import { ApiError } from '../../lib/api';
 import { centsToInput, parseMoney, PAYMENT_LABEL, statusLabel } from '../../lib/format';
 import { usePanelNavigate, usePanelSearch } from '../../lib/panel-search';
+import { isBrandMethod, OFFERED_METHODS, PAYMENT_BRANDS } from '../../lib/payment';
 import {
   useLocateStore,
   useMe,
   useMenu,
   useSettings,
+  useStockItems,
   useUpdateDelivery,
   useUpdateHours,
   useUpdatePayment,
@@ -37,8 +41,7 @@ import {
 } from '../../lib/queries';
 import { usePanelMenuWord } from '../../lib/store-type';
 import { Loading } from '../loading';
-import { StaffTab } from '../staff/staff-settings';
-import { Toggle } from '../toggle';
+import { SwitchCard, Toggle } from '../toggle';
 
 const INPUT =
   'rounded-lg border border-line-2 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:bg-hover';
@@ -73,15 +76,14 @@ const errorText = (error: unknown) => {
   return 'Não foi possível salvar. Tente novamente.';
 };
 
-const SECTIONS: [SettingsTab, string][] = [
-  ['store', 'Loja'],
-  ['hours', 'Horários'],
-  ['delivery', 'Entrega'],
-  ['payment', 'Pagamento'],
-  ['policy', 'Regras'],
-  ['stock', 'Estoque'],
-  ['pos', 'PDV'],
-  ['staff', 'Funcionários']
+const SECTIONS: [SettingsTab, string, string][] = [
+  ['store', 'Loja', 'Nome e link'],
+  ['hours', 'Horários', 'Quando o bot atende'],
+  ['delivery', 'Entrega', 'Taxa e área'],
+  ['payment', 'Pagamento', 'Formas, cartões e vales'],
+  ['policy', 'Regras', 'Limites e instruções'],
+  ['stock', 'Estoque', 'Alerta no WhatsApp'],
+  ['pos', 'PDV', 'Caixa e comprovante']
 ];
 
 /**
@@ -93,8 +95,8 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const navigate = usePanelNavigate();
 
   return (
-    <Sheet width="md" label="Configurações" onClose={onClose}>
-      <div className="flex shrink-0 flex-col gap-3.5 border-b border-line px-4 pt-4 md:px-6">
+    <Sheet width="lg" label="Configurações" onClose={onClose}>
+      <div className="flex shrink-0 flex-col gap-3.5 border-b border-line px-4 pt-4 md:px-6 md:pb-4">
         <div className="flex items-center gap-3">
           <h2 className="flex-1 text-lg font-bold">Configurações</h2>
           <button
@@ -106,7 +108,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
-        <nav className="-mx-4 flex gap-5 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
+        <nav className="-mx-4 flex gap-5 overflow-x-auto px-4 [scrollbar-width:none] md:hidden">
           {SECTIONS.map(([id, label]) => (
             <button
               key={id}
@@ -121,9 +123,33 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
         </nav>
       </div>
 
-      {settings.isPending && <Loading />}
-      {settings.isError && <p className="p-6 text-sm text-danger-fg">Não foi possível carregar as configurações.</p>}
-      {settings.data && <ActiveSection tab={tab} settings={settings.data} />}
+      <div className="flex min-h-0 flex-1">
+        <nav className="hidden w-52 shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-hover p-2.5 md:flex">
+          {SECTIONS.map(([id, label, sub]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => void navigate({ sheet: 'settings', tab: id }, { replace: true })}
+              aria-current={tab === id ? 'page' : undefined}
+              className={`flex flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left ${
+                tab === id ? 'bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.12)]' : 'hover:bg-surface-2'
+              }`}
+            >
+              <span className={`text-sm ${tab === id ? 'font-semibold text-accent-fg' : 'font-medium text-fg'}`}>
+                {label}
+              </span>
+              <span className="text-xs text-muted">{sub}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {settings.isPending && <Loading />}
+          {settings.isError && (
+            <p className="p-6 text-sm text-danger-fg">Não foi possível carregar as configurações.</p>
+          )}
+          {settings.data && <ActiveSection tab={tab} settings={settings.data} />}
+        </div>
+      </div>
     </Sheet>
   );
 }
@@ -137,15 +163,13 @@ function ActiveSection({ tab, settings }: { tab: SettingsTab; settings: Settings
     case 'delivery':
       return <DeliverySection delivery={settings.delivery} location={settings.store_location} />;
     case 'payment':
-      return <PaymentSection methods={settings.payment_methods} />;
+      return <PaymentSection methods={settings.payment_methods} brands={settings.payment_brands} />;
     case 'policy':
       return <PolicySection policy={settings.policy} />;
     case 'stock':
       return <StockAlertSection phone={settings.stock_alert_phone} hour={settings.stock_alert_hour} />;
     case 'pos':
       return <PosSection pos={settings.pos} />;
-    case 'staff':
-      return <StaffTab settings={settings.staff} />;
   }
 }
 
@@ -273,7 +297,76 @@ function StoreSection() {
         }}
         className={`mt-1.5 w-full ${INPUT}`}
       />
+
+      {me.data?.store && <PublicLink slug={me.data.store.slug} />}
     </Section>
+  );
+}
+
+function PublicLink({ slug }: { slug: string }) {
+  const { word } = usePanelMenuWord();
+  const [copied, setCopied] = useState(false);
+  const url = `${window.location.origin}/${slug}`;
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="mt-5">
+      <span className="block text-sm font-medium">Link do {word} público</span>
+      <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-line-2 bg-hover px-3 py-2">
+        <span className="min-w-0 flex-1 truncate text-sm text-fg-2">{url}</span>
+        <button type="button" onClick={() => void copy()} className="shrink-0 text-sm font-medium text-accent-fg">
+          {copied ? 'Copiado' : 'Copiar'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The digest as WhatsApp gets it today, from the store's low items. Mirrors `formatLowStockDigest`
+ * (`api/src/stock/alerts.ts`): change both together.
+ */
+function DigestPreview({ phone }: { phone: string }) {
+  const low = useStockItems('low');
+  const amount = (qty: number, unit: StockItem['unit'], withUnit: boolean) => {
+    const text = (value: number) => String(Math.round(value * 10) / 10).replace('.', ',');
+
+    if (unit !== 'un') {
+      const big = unit === 'g' ? 'kg' : 'L';
+
+      return Math.abs(qty) >= 1000 ? `${text(qty / 1000)} ${big}` : `${text(qty)} ${unit}`;
+    }
+
+    return withUnit ? `${text(qty)} un` : text(qty);
+  };
+  const items = low.data?.items ?? [];
+  const lines = items
+    .slice(0, 20)
+    .map(
+      (item) =>
+        `• ${item.name}: ${amount(item.balance, item.unit, true)}${item.min_qty == null ? '' : ` (mín. ${amount(item.min_qty, item.unit, false)})`}`
+    );
+
+  return (
+    <div className="mt-5 flex flex-col gap-2">
+      <span className="text-xs font-semibold tracking-wide text-muted uppercase">Prévia do resumo diário</span>
+      <div className="rounded-xl bg-chat p-3 text-sm">
+        <span className="block max-w-[90%] rounded-lg bg-bubble-in px-3 py-2 whitespace-pre-wrap">
+          {!phone.trim()
+            ? 'Sem número: nenhum resumo será enviado.'
+            : low.isPending
+              ? 'Carregando…'
+              : items.length
+                ? `📦 *Estoque baixo*\n\n${lines.join('\n')}${items.length > 20 ? `\n… e mais ${items.length - 20} itens` : ''}\n\nVer no painel: ${window.location.origin}/…/stock?screen=items&filter=low`
+                : 'Nenhum item baixo agora: hoje o resumo não seria enviado.'}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -328,6 +421,8 @@ function StockAlertSection({ phone, hour }: { phone: string | null; hour: number
           update.reset();
         }}
       />
+
+      <DigestPreview phone={phoneText} />
     </Section>
   );
 }
@@ -362,24 +457,20 @@ function PosSection({ pos }: { pos: PosSettings }) {
         <option value="search">Busca (produtos)</option>
       </select>
 
-      <label className="mt-4 flex items-center gap-2 text-sm font-medium">
-        <input
-          type="checkbox"
-          checked={value.cash_control}
-          onChange={(event) => change({ cash_control: event.target.checked })}
-        />
-        Controlar caixa
-      </label>
+      <SwitchCard
+        className="mt-4"
+        checked={value.cash_control}
+        title="Controlar caixa"
+        onChange={(checked) => change({ cash_control: checked })}
+      />
 
-      <label className="mt-4 flex items-center gap-2 text-sm font-medium">
-        <input
-          type="checkbox"
-          checked={value.blind_close}
-          onChange={(event) => change({ blind_close: event.target.checked })}
-        />
-        Fechamento cego
-      </label>
-      <p className="mt-1 text-xs text-muted">O operador não vê o valor esperado antes de contar</p>
+      <SwitchCard
+        className="mt-3"
+        checked={value.blind_close}
+        title="Fechamento cego"
+        description="O operador não vê o valor esperado antes de contar"
+        onChange={(checked) => change({ blind_close: checked })}
+      />
 
       <label className="mt-4 block text-sm font-medium" htmlFor="pos-receipt-width">
         Largura do comprovante
@@ -838,21 +929,15 @@ function DeliverySection({ delivery, location }: { delivery: DeliverySettings; l
       )}
 
       <div className="mt-6 border-t border-line pt-5">
-        <label className="flex w-fit items-center gap-2.5 text-sm font-medium">
-          <Toggle
-            checked={schedule}
-            label="Horário de entrega diferente do atendimento"
-            onChange={(checked) => {
-              setSchedule(checked);
-              touch();
-            }}
-          />
-          Horário de entrega diferente do atendimento
-        </label>
-        <p className="mt-1 text-xs text-muted">
-          Desligado, a loja entrega sempre que está aberta. Ligado, o bot informa os dias, os horários e o prazo de
-          entrega, e passa para um atendente quem pedir outro dia ou horário.
-        </p>
+        <SwitchCard
+          checked={schedule}
+          title="Horário de entrega diferente do atendimento"
+          description="Desligado, a loja entrega sempre que está aberta. Ligado, o bot informa os dias, os horários e o prazo de entrega, e passa para um atendente quem pedir outro dia ou horário."
+          onChange={(checked) => {
+            setSchedule(checked);
+            touch();
+          }}
+        />
 
         {schedule && (
           <>
@@ -946,58 +1031,214 @@ function StoreLocationField({ location }: { location: StoreLocation | null }) {
   );
 }
 
-const PAYMENT_METHODS: PaymentMethod[] = ['pix', 'card', 'cash', 'voucher'];
+const PAYMENT_ABBR: Partial<Record<PaymentMethod, string>> = {
+  pix: 'PIX',
+  cash: 'R$',
+  credit: 'CRÉ',
+  debit: 'DÉB',
+  meal_voucher: 'VR',
+  food_voucher: 'VA'
+};
 
-function PaymentSection({ methods }: { methods: PaymentMethod[] }) {
+const PAYMENT_HINT: Partial<Record<PaymentMethod, string>> = {
+  pix: 'Chave da loja, conferido no recebimento',
+  cash: 'Troco até o limite em Regras'
+};
+
+const BRAND_SHORT: Record<BrandMethod, string> = {
+  credit: 'crédito',
+  debit: 'débito',
+  meal_voucher: 'vale-refeição',
+  food_voucher: 'vale-alimentação'
+};
+
+/**
+ * What the bot would say to "Vocês aceitam Sodexo?" with these choices (it gets the same lists).
+ */
+const botPreview = (selected: PaymentMethod[], brands: PaymentBrands) => {
+  const parts = OFFERED_METHODS.filter((method) => selected.includes(method)).flatMap((method) =>
+    isBrandMethod(method)
+      ? brands[method]?.length
+        ? [`${BRAND_SHORT[method]} (${brands[method].join(', ')})`]
+        : []
+      : [PAYMENT_LABEL[method].toLowerCase()]
+  );
+  const sodexo = (['meal_voucher', 'food_voucher'] as const).some(
+    (method) => selected.includes(method) && brands[method]?.includes('Pluxee (Sodexo)')
+  );
+
+  return `${sodexo ? 'Aceitamos sim!' : 'Infelizmente não aceitamos Sodexo/Pluxee.'} Aqui você pode pagar com ${parts.join(', ') || '—'}. O pagamento é na entrega ou na retirada.`;
+};
+
+function PaymentSection({ methods, brands }: { methods: PaymentMethod[]; brands: PaymentBrands }) {
   const update = useUpdatePayment();
   const [selected, setSelected] = useState<PaymentMethod[]>(methods);
+  const [chosen, setChosen] = useState<PaymentBrands>(() =>
+    Object.fromEntries(
+      (Object.keys(PAYMENT_BRANDS) as BrandMethod[]).map((method) => [method, brands[method] ?? PAYMENT_BRANDS[method]])
+    )
+  );
+  const [expanded, setExpanded] = useState<BrandMethod>();
+  const emptyBrand = OFFERED_METHODS.find(
+    (method) => selected.includes(method) && isBrandMethod(method) && !chosen[method]?.length
+  );
 
   const toggle = (method: PaymentMethod) => {
+    const on = selected.includes(method);
+
     setSelected(
-      selected.includes(method)
+      on
         ? selected.filter((item) => item !== method)
-        : PAYMENT_METHODS.filter((item) => item === method || selected.includes(item))
+        : OFFERED_METHODS.filter((item) => item === method || selected.includes(item))
     );
+
+    if (!on && isBrandMethod(method)) {
+      setExpanded(method);
+    }
+
+    update.reset();
+  };
+
+  const setBrands = (method: BrandMethod, list: string[]) => {
+    setChosen({ ...chosen, [method]: PAYMENT_BRANDS[method].filter((brand) => list.includes(brand)) });
     update.reset();
   };
 
   return (
     <Section
       title="Pagamento"
-      description="O bot só oferece as formas marcadas. Pagamento na entrega ou na retirada."
-      onSubmit={() => update.mutate({ payment_methods: selected })}
+      description="O bot só oferece o que estiver ligado. Em cartões e vales, escolha as bandeiras: as não aceitas ficam bloqueadas no PDV e o bot avisa o cliente."
+      onSubmit={() =>
+        update.mutate({
+          payment_methods: selected,
+          payment_brands: Object.fromEntries(
+            selected.filter(isBrandMethod).map((method) => [method, chosen[method] ?? []])
+          )
+        })
+      }
       saving={update.isPending}
       saved={update.isSuccess}
       error={update.error}
-      invalid={selected.length ? undefined : 'Escolha pelo menos uma forma.'}
+      invalid={
+        !selected.length
+          ? 'Ligue pelo menos uma forma.'
+          : emptyBrand
+            ? `${PAYMENT_LABEL[emptyBrand]}: marque ao menos uma bandeira ou desligue.`
+            : undefined
+      }
     >
-      <div className="grid gap-2 sm:grid-cols-3">
-        {PAYMENT_METHODS.map((method) => {
+      <div className="flex flex-col gap-2">
+        {OFFERED_METHODS.map((method) => {
           const on = selected.includes(method);
+          const brandMethod = isBrandMethod(method) ? method : undefined;
+          const list = brandMethod ? (chosen[brandMethod] ?? []) : [];
+          const open = !!brandMethod && on && expanded === brandMethod;
+          const summary = !on
+            ? 'Não aceito'
+            : brandMethod
+              ? list.length
+                ? `${list.length} de ${PAYMENT_BRANDS[brandMethod].length} bandeiras · ${list.slice(0, 3).join(', ')}${list.length > 3 ? '…' : ''}`
+                : 'Nenhuma bandeira marcada'
+              : PAYMENT_HINT[method];
 
           return (
-            <button
+            <div
               key={method}
-              type="button"
-              role="checkbox"
-              aria-checked={on}
-              onClick={() => toggle(method)}
-              className={`flex items-center gap-2.5 rounded-xl border-[1.5px] p-3.5 text-left text-sm font-medium ${
-                on ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:border-line-2'
-              }`}
+              className={`rounded-xl border-[1.5px] bg-surface ${on ? 'border-line-2' : 'border-line'}`}
             >
-              <span
-                aria-hidden
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-xs ${
-                  on ? 'bg-accent text-white' : 'border border-line-2 bg-surface'
-                }`}
-              >
-                {on && '✓'}
-              </span>
-              {PAYMENT_LABEL[method]}
-            </button>
+              <div className="flex items-center gap-3 p-3">
+                <Toggle checked={on} label={`Aceitar ${PAYMENT_LABEL[method]}`} onChange={() => toggle(method)} />
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold ${
+                    on ? 'bg-accent-soft text-accent-fg' : 'bg-surface-2 text-faint'
+                  }`}
+                >
+                  {PAYMENT_ABBR[method]}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-sm font-medium">{PAYMENT_LABEL[method]}</span>
+                  <span className="truncate text-xs text-muted">{summary}</span>
+                </span>
+                {brandMethod && on && (
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(open ? undefined : brandMethod)}
+                    className="h-8 shrink-0 rounded-lg border border-line-2 px-2.5 text-xs text-fg-2 hover:bg-hover"
+                  >
+                    {open ? 'Fechar' : 'Bandeiras'}
+                  </button>
+                )}
+              </div>
+              {open && brandMethod && (
+                <div className="flex flex-col gap-2 border-t border-line p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                    <span className="flex-1">
+                      Bandeiras aceitas · as desmarcadas aparecem riscadas no PDV e o bot avisa o cliente
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setBrands(brandMethod, PAYMENT_BRANDS[brandMethod])}
+                      className="font-medium text-accent-fg"
+                    >
+                      Todas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBrands(brandMethod, [])}
+                      className="font-medium text-accent-fg"
+                    >
+                      Nenhuma
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PAYMENT_BRANDS[brandMethod].map((brand) => {
+                      const accepted = list.includes(brand);
+
+                      return (
+                        <button
+                          key={brand}
+                          type="button"
+                          role="checkbox"
+                          aria-checked={accepted}
+                          onClick={() =>
+                            setBrands(brandMethod, accepted ? list.filter((item) => item !== brand) : [...list, brand])
+                          }
+                          className={`flex h-8 items-center gap-1.5 rounded-lg border-[1.5px] px-2.5 text-[13px] ${
+                            accepted ? 'border-accent bg-surface text-fg' : 'border-line-2 text-faint line-through'
+                          }`}
+                        >
+                          <span
+                            aria-hidden
+                            className={`flex h-4 w-4 items-center justify-center rounded text-[10px] ${
+                              accepted ? 'bg-accent text-white' : 'border border-line-2'
+                            }`}
+                          >
+                            {accepted && '✓'}
+                          </span>
+                          {brand}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           );
         })}
+      </div>
+
+      <div className="mt-5 flex flex-col gap-2">
+        <span className="text-xs font-semibold tracking-wide text-muted uppercase">Como o bot responde</span>
+        <div className="flex flex-col gap-1.5 rounded-xl bg-chat p-3 text-sm">
+          <span className="self-end rounded-lg bg-bubble-out px-2.5 py-1.5">Vocês aceitam Sodexo?</span>
+          <span className="max-w-[85%] self-start rounded-lg bg-bubble-in px-2.5 py-1.5">
+            <b className="block text-xs text-accent-fg">Bot</b>
+            {botPreview(selected, chosen)}
+          </span>
+        </div>
+        <span className="text-xs text-muted">
+          Exemplo: o bot escreve com as próprias palavras, a partir destas listas.
+        </span>
       </div>
     </Section>
   );
@@ -1013,6 +1254,7 @@ type LimitKey = Exclude<
   | 'new_order_after_status'
   | 'add_on_category_ids'
   | 'add_on_extra_minutes'
+  | 'bot_opt_in'
 >;
 
 type DeliveryTimeMode = 'approx' | 'range';
@@ -1148,6 +1390,7 @@ function PolicySection({ policy }: { policy: PolicySettings }) {
   );
   const [timeTo, setTimeTo] = useState(limitToInput(policy.delivery_max_minutes, false));
   const [previousAddress, setPreviousAddress] = useState<PreviousAddress>(policy.previous_address ?? 'ask');
+  const [botOptIn, setBotOptIn] = useState(policy.bot_opt_in);
   const [repeatStatuses, setRepeatStatuses] = useState<OrderStatus[]>(policy.repeat_order_statuses ?? []);
   const repeat = repeatStatuses.length > 0;
   const [newOrderAfter, setNewOrderAfter] = useState<NewOrderAfterStatus>(policy.new_order_after_status ?? 'done');
@@ -1187,7 +1430,8 @@ function PolicySection({ policy }: { policy: PolicySettings }) {
       repeat_order_statuses: repeatStatuses,
       new_order_after_status: newOrderAfter,
       add_on_category_ids: addOnIds,
-      add_on_extra_minutes: extra ?? null
+      add_on_extra_minutes: extra ?? null,
+      bot_opt_in: botOptIn
     });
 
   return (
@@ -1281,6 +1525,19 @@ function PolicySection({ policy }: { policy: PolicySettings }) {
         </span>
       </fieldset>
 
+      <SwitchCard
+        className="mt-6"
+        checked={botOptIn}
+        title="Bot só atende as conversas que eu passar para ele"
+        description={
+          'Conversas novas começam com você. Em cada uma, o botão "Passar ao bot" faz o bot assumir a partir das mensagens ainda sem resposta. Conversas que já estão com o bot continuam com ele.'
+        }
+        onChange={(checked) => {
+          setBotOptIn(checked);
+          update.reset();
+        }}
+      />
+
       <fieldset className="mt-6">
         <legend className="text-sm font-medium">Endereço da última entrega</legend>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -1309,20 +1566,14 @@ function PolicySection({ policy }: { policy: PolicySettings }) {
       </fieldset>
 
       <div className="mt-6">
-        <div className="flex items-start justify-between gap-3">
-          <span className="flex flex-col gap-1">
-            <span className="text-sm font-medium">Oferecer repetir o último pedido</span>
-            <span className="text-xs text-muted">
-              No início de um novo pedido, o bot pergunta: &quot;Quer repetir o da última vez: 1 Pizza Grande Calabresa
-              e 1 Coca-Cola 2L?&quot; Os preços são os de hoje.
-            </span>
-          </span>
-          <Toggle
-            checked={repeat}
-            label="Oferecer repetir o último pedido"
-            onChange={(checked) => changeRepeat(checked ? ['done'] : [])}
-          />
-        </div>
+        <SwitchCard
+          checked={repeat}
+          title="Oferecer repetir o último pedido"
+          description={
+            'No início de um novo pedido, o bot pergunta: "Quer repetir o da última vez: 1 Pizza Grande Calabresa e 1 Coca-Cola 2L?" Os preços são os de hoje.'
+          }
+          onChange={(checked) => changeRepeat(checked ? ['done'] : [])}
+        />
 
         {repeat && (
           <fieldset className="mt-3">

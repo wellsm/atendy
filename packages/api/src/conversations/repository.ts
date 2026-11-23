@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { Order } from '@ez4/database';
 import { DuplicateUniqueKeyError } from '@ez4/pgclient';
 
-import { ConversationMode, MessageAuthor, MessageDirection } from './types';
+import { BOT_OPT_IN_REASON, ConversationMode, initialMode, MessageAuthor, MessageDirection } from './types';
 import { BillingRepository } from '../billing/repository';
 import { OrderStatus } from '../orders/types';
 import { deliverySchedule } from '../stores/hours';
@@ -28,7 +28,10 @@ export namespace ConversationRepository {
    * Upsert customer + conversation and store the inbound message. A redelivered provider message id is not
    * stored again; `processed` tells whether it still needs a turn (its first enqueue may have failed).
    */
-  export const ingestCustomerMessage = async (db: DbClient, input: { storeId: string; message: ParsedMessage }) => {
+  export const ingestCustomerMessage = async (
+    db: DbClient,
+    input: { storeId: string; message: ParsedMessage; botOptIn?: boolean | null }
+  ) => {
     const { storeId, message } = input;
     const now = new Date().toISOString();
 
@@ -56,7 +59,7 @@ export namespace ConversationRepository {
         id: randomUUID(),
         store_id: storeId,
         customer_id: customer.id,
-        mode: ConversationMode.Bot,
+        ...initialMode(input.botOptIn),
         last_message_at: now,
         created_at: now
       },
@@ -158,9 +161,12 @@ export namespace ConversationRepository {
           slug: true,
           timezone: true,
           accepting_orders: true,
+          open_override: true,
+          open_override_until: true,
           router: true,
           llm_model: true,
           payment_methods: true,
+          payment_brands: true,
           delivery_mode: true,
           flat_fee_cents: true,
           policy: true,
@@ -493,12 +499,24 @@ export namespace ConversationRepository {
     const [{ records: human }, { records: bot }] = await Promise.all([
       db.conversations.findMany({
         select,
-        where: { store_id: storeId, OR: [{ mode: ConversationMode.Human }, { approval_reason: { isNull: false } }] },
+        where: {
+          store_id: storeId,
+          OR: [
+            { mode: ConversationMode.Human, handoff_reason: { isNull: true } },
+            { mode: ConversationMode.Human, handoff_reason: { not: BOT_OPT_IN_REASON } },
+            { approval_reason: { isNull: false } }
+          ]
+        },
         order: { last_message_at: Order.Desc }
       }),
       db.conversations.findMany({
         select,
-        where: { store_id: storeId, mode: ConversationMode.Bot, approval_reason: null },
+        // Conversations waiting to be passed to the bot (`bot_opt_in`) are as many as the bot's: limited with them.
+        where: {
+          store_id: storeId,
+          approval_reason: null,
+          OR: [{ mode: ConversationMode.Bot }, { handoff_reason: BOT_OPT_IN_REASON }]
+        },
         order: { last_message_at: Order.Desc },
         take: PANEL_CONVERSATION_LIMIT
       })

@@ -1,6 +1,6 @@
 import type { PanelConversation } from '../../lib/queries';
 
-import { formatPhone } from '../../lib/format';
+import { BOT_OPT_IN_REASON, formatPhone } from '../../lib/format';
 
 export const customerName = (conversation: PanelConversation) =>
   conversation.customer.name ?? formatPhone(conversation.customer.phone);
@@ -18,7 +18,9 @@ export const customerInitials = (conversation: PanelConversation) =>
     .toUpperCase() || '#';
 
 /**
- * Someone at the store must act: a person is handling it, or the bot waits for an approval.
+ * Someone at the store must act: a person is handling it, or the bot waits for an approval. Not the conversations
+ * that only wait to be passed to the bot.
  */
 export const needsPerson = (conversation: PanelConversation) =>
-  conversation.mode === 'human' || !!conversation.approval_reason;
+  (conversation.mode === 'human' && conversation.handoff_reason !== BOT_OPT_IN_REASON) ||
+  !!conversation.approval_reason;

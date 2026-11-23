@@ -1,6 +1,6 @@
 import type { Service } from '@ez4/common';
 import type { Http } from '@ez4/gateway';
-import type { PaymentMethod, PosSettings, StaffSettings } from '../../stores/types';
+import type { PaymentBrands, PaymentMethod, PosSettings, StaffSettings } from '../../stores/types';
 import type { PanelProvider } from '../provider';
 import type { PanelDelivery, PanelHourRange, PanelIdentity, PanelPolicy, PanelStoreLocation } from '../types';
 
@@ -20,6 +20,10 @@ export declare class GetSettingsResponse implements Http.Response {
     hours: PanelHourRange[];
     delivery: PanelDelivery;
     paymentMethods: PaymentMethod[];
+    /**
+     * Accepted brands of every accepted card/voucher method.
+     */
+    paymentBrands: PaymentBrands;
     policy: PanelPolicy;
     /**
      * Null until the store located its address (needed for distance delivery).
@@ -52,6 +56,7 @@ export async function getSettingsHandler(
       hours: toPanelHours(settings.hours),
       delivery: { ...settings.delivery, hours: toPanelHours(settings.delivery.hours) },
       paymentMethods: settings.paymentMethods,
+      paymentBrands: settings.paymentBrands,
       policy: toPanelPolicy(settings.policy),
       storeLocation: settings.storeLocation,
       stockAlertPhone: settings.stockAlertPhone,

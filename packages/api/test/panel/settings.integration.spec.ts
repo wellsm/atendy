@@ -41,25 +41,29 @@ describe('panel settings endpoints', () => {
   const conflictField = (field: string) => (error: unknown) =>
     error instanceof HttpConflictError && error.context?.field === field;
 
-  it('renames the store and flips accepting orders for the token org only', async () => {
+  it('renames the store and closes it by hand for the token org only', async () => {
     const { identity, storeId } = await setup();
     const other = await setup();
 
-    const response = await updateStoreHandler(
-      { identity, body: { name: '  Pizzaria Boa  ', acceptingOrders: false } } as never,
-      { db }
-    );
+    const response = await updateStoreHandler({ identity, body: { name: '  Pizzaria Boa  ', open: false } } as never, {
+      db
+    });
 
     equal(response.body.store.name, 'Pizzaria Boa');
-    equal(response.body.store.acceptingOrders, false);
+    equal(response.body.store.openNow, false);
+    equal(response.body.store.openOverride, false);
 
     const [store, untouched] = await Promise.all([
-      db.stores.findOne({ select: { name: true, accepting_orders: true }, where: { id: storeId } }),
-      db.stores.findOne({ select: { name: true, accepting_orders: true }, where: { id: other.storeId } })
+      db.stores.findOne({ select: { name: true, open_override: true }, where: { id: storeId } }),
+      db.stores.findOne({ select: { name: true, open_override: true }, where: { id: other.storeId } })
     ]);
 
-    deepEqual(store, { name: 'Pizzaria Boa', accepting_orders: false });
-    deepEqual(untouched, { name: 'Pizzaria Teste', accepting_orders: true });
+    deepEqual(store, { name: 'Pizzaria Boa', open_override: false });
+    deepEqual(untouched, { name: 'Pizzaria Teste', open_override: null });
+
+    const automatic = await updateStoreHandler({ identity, body: { open: null } } as never, { db });
+
+    equal(automatic.body.store.openOverride, null);
   });
 
   it('refuses an empty store update or a blank name', async () => {
@@ -210,6 +214,7 @@ describe('panel settings endpoints', () => {
       hours: [{ weekday: 5, opensAt: '18:00', closesAt: '02:00' }],
       delivery: { mode: DeliveryMode.Flat, flatFeeCents: 600, zones: [], bands: [], hours: [], leadDays: null },
       paymentMethods: [PaymentMethod.Pix, PaymentMethod.Cash],
+      paymentBrands: {},
       policy: {
         minOrderCents: 3000,
         maxOrderCents: null,
@@ -224,7 +229,8 @@ describe('panel settings endpoints', () => {
         repeatOrderStatuses: null,
         newOrderAfterStatus: null,
         addOnCategoryIds: null,
-        addOnExtraMinutes: null
+        addOnExtraMinutes: null,
+        botOptIn: false
       },
       storeLocation: null,
       stockAlertPhone: null,
@@ -370,27 +376,59 @@ describe('panel settings endpoints', () => {
       badField('payment_methods')
     );
 
+    await rejects(
+      updatePaymentHandler({ identity, body: { paymentMethods: [PaymentMethod.Card] } } as never, { db }),
+      badField('payment_methods')
+    );
+
     const response = await updatePaymentHandler(
-      { identity, body: { paymentMethods: [PaymentMethod.Card, PaymentMethod.Cash] } } as never,
+      { identity, body: { paymentMethods: [PaymentMethod.Credit, PaymentMethod.Cash] } } as never,
       { db }
     );
 
-    deepEqual(response.body.paymentMethods, [PaymentMethod.Card, PaymentMethod.Cash]);
+    deepEqual(response.body.paymentMethods, [PaymentMethod.Cash, PaymentMethod.Credit]);
     deepEqual((await StoreRepository.getSettings(db, storeId))?.paymentMethods, [
-      PaymentMethod.Card,
-      PaymentMethod.Cash
+      PaymentMethod.Cash,
+      PaymentMethod.Credit
     ]);
   });
 
-  it('saves voucher as a payment method', async () => {
+  it('saves meal vouchers with their brands, and reads a legacy voucher store as VR and VA', async () => {
     const { identity, storeId } = await setup();
 
     await updatePaymentHandler(
-      { identity, body: { paymentMethods: [PaymentMethod.Pix, PaymentMethod.Voucher] } } as never,
+      {
+        identity,
+        body: {
+          paymentMethods: [PaymentMethod.Pix, PaymentMethod.MealVoucher],
+          paymentBrands: { meal_voucher: ['Ticket', 'Alelo'] }
+        }
+      } as never,
       { db }
     );
 
-    deepEqual((await StoreRepository.getSettings(db, storeId))?.paymentMethods, ['pix', 'voucher']);
+    const settings = await StoreRepository.getSettings(db, storeId);
+
+    deepEqual(settings?.paymentMethods, ['pix', 'meal_voucher']);
+    deepEqual(settings?.paymentBrands, { meal_voucher: ['Alelo', 'Ticket'] });
+
+    await rejects(
+      updatePaymentHandler(
+        {
+          identity,
+          body: { paymentMethods: [PaymentMethod.Credit], paymentBrands: { credit: ['Sorocred'] } }
+        } as never,
+        { db }
+      ),
+      badField('payment_brands')
+    );
+
+    const legacy = await setup({ payment_methods: [PaymentMethod.Voucher] });
+
+    deepEqual((await StoreRepository.getSettings(db, legacy.storeId))?.paymentMethods, [
+      'meal_voucher',
+      'food_voucher'
+    ]);
   });
 
   it('merges the policy, clears a limit with null and keeps admin-only keys', async () => {

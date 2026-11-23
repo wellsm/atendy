@@ -1,11 +1,12 @@
 import type { DbClient } from '../db';
 import type { PanelIdentity, PanelStore } from './types';
+import type { StoreOpenFields } from '../stores/open';
 
 import { HttpBadRequestError, HttpNotFoundError } from '@ez4/gateway';
 
 import { toPanelStore } from './types';
 import { MenuError } from '../menu/validation';
-import { isStoreOpen } from '../stores/hours';
+import { storeOpenState } from '../stores/open';
 import { StoreRepository } from '../stores/repository';
 import { SettingsError } from '../stores/settings';
 
@@ -23,15 +24,15 @@ export const requireStore = async (db: DbClient, identity: PanelIdentity) => {
 };
 
 /**
- * The store as the panel shows it, with `openNow` from its hours.
+ * The store as the panel shows it, with its Aberto/Fechado state.
  */
 export const loadPanelStore = async (
   db: DbClient,
-  store: Parameters<typeof toPanelStore>[0] & { timezone: string }
+  store: Parameters<typeof toPanelStore>[0] & StoreOpenFields
 ): Promise<PanelStore> => {
   const hours = await StoreRepository.getHours(db, store.id);
 
-  return toPanelStore(store, isStoreOpen(hours, store.timezone, new Date()));
+  return toPanelStore(store, storeOpenState(store, hours));
 };
 
 /**

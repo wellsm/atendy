@@ -18,10 +18,36 @@ export const enum DeliveryMode {
 
 export const enum PaymentMethod {
   Pix = 'pix',
-  Card = 'card',
   Cash = 'cash',
+  Credit = 'credit',
+  Debit = 'debit',
+  /**
+   * Vale-refeição (VR).
+   */
+  MealVoucher = 'meal_voucher',
+  /**
+   * Vale-alimentação (VA).
+   */
+  FoodVoucher = 'food_voucher',
+  /**
+   * Legacy (before credit/debit): old orders, payments and store lists only; never offered or accepted again.
+   */
+  Card = 'card',
+  /**
+   * Legacy (before VR/VA): old orders, payments and store lists only; never offered or accepted again.
+   */
   Voucher = 'voucher'
 }
+
+/**
+ * Brands a store accepts per brand method; a missing key (or null) = every brand of `PAYMENT_BRANDS`.
+ */
+export type PaymentBrands = {
+  credit?: string[] | null;
+  debit?: string[] | null;
+  meal_voucher?: string[] | null;
+  food_voucher?: string[] | null;
+};
 
 /**
  * Store guardrails. Missing or `null` means no limit (`order_memory_hours`: the default). Numbers are enforced in
@@ -42,6 +68,11 @@ export const enum PreviousAddress {
 }
 
 export type StorePolicy = {
+  /**
+   * Rollout mode: new conversations start with a person (`BOT_OPT_IN_REASON`) and the bot answers only the ones the
+   * store passes to it in the panel.
+   */
+  bot_opt_in?: boolean | null;
   /**
    * Per cart line.
    */

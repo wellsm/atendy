@@ -62,7 +62,7 @@ describe('runStockAlerts', () => {
     equal(body.number, '5511999990000');
     equal(body.text.includes('Mussarela: 1,2 kg (mín. 5 kg)'), true);
     equal(body.text.includes('/panel/t-'), true);
-    equal(body.text.includes('?sheet=stock&filter=low'), true);
+    equal(body.text.includes('/stock?screen=items&filter=low'), true);
     equal(await sentOn(storeId), '2026-03-10');
   });
 

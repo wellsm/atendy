@@ -1,12 +1,10 @@
 import type { FormEvent } from 'react';
 import type { AdminStoreRow } from '../lib/queries';
 
-import { UserButton } from '@clerk/react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { Loading } from '../components/loading';
-import { Logo } from '../components/logo';
 import { SignedIn } from '../components/signed-in';
 import { ApiError } from '../lib/api';
 import { useAdminStores, useCreateAdminStore, useSetStoreActive } from '../lib/queries';
@@ -29,6 +27,16 @@ const TAB_FILTERS: Record<Tab, (store: AdminStoreRow) => boolean> = {
   all: () => true
 };
 
+/**
+ * Lower case without accents, so "acai" finds "Açaí".
+ */
+const searchKey = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+
 // Desktop table columns: store, link, created at, status, action.
 const COLUMNS = 'md:grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_160px_110px_120px] md:gap-3';
 
@@ -37,8 +45,37 @@ function Admin() {
   const [tab, setTab] = useState<Tab>('pending');
   const forbidden = stores.error instanceof ApiError && stores.error.status === 403;
 
+  const [query, setQuery] = useState('');
   const all = stores.data?.stores ?? [];
-  const visible = all.filter(TAB_FILTERS[tab]);
+  const needle = searchKey(query);
+  const visible = all
+    .filter(TAB_FILTERS[tab])
+    .filter((store) => !needle || searchKey(store.name).includes(needle) || store.slug.includes(needle));
+  const withErrors = all.filter(({ error_count24h }) => error_count24h > 0);
+  const summary: { label: string; value: number; hint: string; tone?: string }[] = [
+    {
+      label: 'Lojas ativas',
+      value: all.filter(TAB_FILTERS.active).length,
+      hint: `${all.filter((store) => store.active && store.accepting_orders).length} aceitando pedidos agora`
+    },
+    {
+      label: 'Pendentes',
+      value: all.filter(TAB_FILTERS.pending).length,
+      hint: 'Aguardando ativação',
+      tone: 'text-warn-fg'
+    },
+    {
+      label: 'Com erro em 24h',
+      value: withErrors.length,
+      hint: `${withErrors.reduce((sum, { error_count24h }) => sum + error_count24h, 0)} erros no total`,
+      tone: 'text-danger-fg'
+    },
+    {
+      label: 'Pedidos 30 dias',
+      value: all.reduce((sum, { orders30d }) => sum + orders30d, 0),
+      hint: 'Bot, site, atendente e PDV'
+    }
+  ];
   const tabs: [Tab, string][] = [
     ['pending', `Pendentes · ${all.filter(TAB_FILTERS.pending).length}`],
     ['active', 'Ativas'],
@@ -46,78 +83,75 @@ function Admin() {
   ];
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div>
       <div className="mx-auto flex max-w-5xl flex-col gap-4 px-3 py-4 md:gap-5 md:p-8">
-        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 md:px-0">
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <Logo className="mb-1 hidden h-4 self-start text-neutral-900 md:block" />
-            <h1 className="text-xl font-bold md:text-2xl">Admin · Lojas</h1>
-          </div>
-          <nav className="order-last flex w-full gap-4 text-sm font-medium md:order-none md:w-auto">
-            <Link to="/admin/conversations" className="text-accent-fg hover:text-accent-hover">
-              Conversas
-            </Link>
-            <Link to="/admin/costs" className="text-accent-fg hover:text-accent-hover">
-              Custos
-            </Link>
-            <Link to="/admin/prompt" className="text-accent-fg hover:text-accent-hover">
-              Prompt
-            </Link>
-            <Link to="/admin/simulations" className="text-accent-fg hover:text-accent-hover">
-              Simulações
-            </Link>
-            <Link to="/admin/prospecting" className="text-accent-fg hover:text-accent-hover">
-              Prospecção
-            </Link>
-            <Link to="/admin/users" className="text-accent-fg hover:text-accent-hover">
-              Usuários
-            </Link>
-          </nav>
-          <UserButton />
+        <header className="flex flex-col gap-0.5 px-1 md:px-0">
+          <h1 className="text-xl font-bold md:text-2xl">Lojas</h1>
+          <p className="text-sm text-muted">Ative lojas novas, acompanhe a saúde e entre em cada uma.</p>
         </header>
+
+        {stores.isSuccess && (
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
+            {summary.map(({ label, value, hint, tone }) => (
+              <div key={label} className="flex flex-col gap-0.5 rounded-xl border border-line bg-surface p-3 md:p-4">
+                <span className="text-xs text-muted">{label}</span>
+                <span className={`text-xl font-bold md:text-2xl ${value && tone ? tone : 'text-fg'}`}>
+                  {value.toLocaleString('pt-BR')}
+                </span>
+                <span className="hidden text-xs text-muted md:block">{hint}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <NewStore />
 
-        <div className="grid grid-cols-3 rounded-lg border border-neutral-200 bg-white p-0.5 md:flex md:self-start">
-          {tabs.map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={tab === id}
-              onClick={() => setTab(id)}
-              className={`h-9.5 rounded-md px-3.5 text-[13px] font-medium md:h-auto md:py-1.5 md:text-sm ${
-                tab === id ? 'bg-accent text-white' : 'text-neutral-700 hover:bg-neutral-100'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+          <div className="grid grid-cols-3 rounded-lg border border-line bg-surface p-0.5 md:flex">
+            {tabs.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={tab === id}
+                onClick={() => setTab(id)}
+                className={`h-9.5 rounded-md px-3.5 text-[13px] font-medium md:h-auto md:py-1.5 md:text-sm ${
+                  tab === id ? 'bg-accent text-white' : 'text-fg-2 hover:bg-surface-2'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar loja ou endereço"
+            aria-label="Buscar loja"
+            className="h-10 rounded-lg border border-line-2 bg-surface px-3 text-sm focus:border-accent focus:outline-none md:ml-auto md:w-72"
+          />
         </div>
 
         {stores.isPending && <Loading />}
 
-        {forbidden && <p className="text-sm text-neutral-600">Sem acesso.</p>}
+        {forbidden && <p className="text-sm text-fg-2">Sem acesso.</p>}
 
-        {stores.isError && !forbidden && <p className="text-sm text-red-700">Não foi possível carregar as lojas.</p>}
+        {stores.isError && !forbidden && <p className="text-sm text-danger-fg">Não foi possível carregar as lojas.</p>}
 
         {stores.isSuccess && visible.length === 0 && (
-          <p className="text-sm text-neutral-600">
-            {all.length ? 'Nenhuma loja nesta aba.' : 'Nenhuma loja cadastrada.'}
-          </p>
+          <p className="text-sm text-fg-2">{all.length ? 'Nenhuma loja nesta aba.' : 'Nenhuma loja cadastrada.'}</p>
         )}
 
         {!!visible.length && (
-          <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white md:rounded-xl">
-            <div
-              className={`hidden border-b border-neutral-100 bg-neutral-50 px-4.5 py-2.5 text-xs text-neutral-500 ${COLUMNS}`}
-            >
+          <div className="overflow-hidden rounded-2xl border border-line bg-surface md:rounded-xl">
+            <div className={`hidden border-b border-line bg-hover px-4.5 py-2.5 text-xs text-muted ${COLUMNS}`}>
               <span>Loja</span>
               <span>Link</span>
               <span>Criada em</span>
               <span>Status</span>
               <span />
             </div>
-            <ul className="divide-y divide-neutral-100">
+            <ul className="divide-y divide-line">
               {visible.map((store) => (
                 <StoreRow key={store.id} store={store} />
               ))}
@@ -132,7 +166,7 @@ function Admin() {
 function StatusChip({ active, className }: { active: boolean; className: string }) {
   return (
     <span
-      className={`shrink-0 rounded-full font-medium ${active ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'} ${className}`}
+      className={`shrink-0 rounded-full font-medium ${active ? 'bg-ok-bg text-ok-fg' : 'bg-accepted-bg text-warn-fg'} ${className}`}
     >
       {active ? 'Ativa' : 'Pendente'}
     </span>
@@ -150,23 +184,25 @@ function StoreRow({ store }: { store: AdminStoreRow }) {
           <Link
             to="/admin/$storeId"
             params={{ storeId: store.id }}
-            className="truncate text-[15px] font-semibold text-neutral-900 hover:text-accent-fg hover:underline md:text-sm md:font-medium"
+            className="truncate text-[15px] font-semibold text-fg hover:text-accent-fg hover:underline md:text-sm md:font-medium"
           >
             {store.name}
           </Link>
           <StatusChip active={store.active} className="px-1.75 py-px text-[11px] md:hidden" />
         </span>
-        <span className="truncate text-xs text-neutral-500 md:hidden">
+        <span className="truncate text-xs text-muted md:hidden">
           {store.slug} · {createdAt}
         </span>
-        <span className="flex flex-wrap gap-x-3 text-xs text-neutral-500">
+        <span className="flex flex-wrap gap-x-3 text-xs text-muted">
+          <span>{store.store_type === 'retail' ? 'Catálogo' : 'Cardápio'}</span>
           <span>{store.accepting_orders ? 'Aceitando pedidos' : 'Pedidos pausados'}</span>
           <span>
             Última msg: {store.last_message_at ? dateFormat.format(new Date(store.last_message_at)) : 'nenhuma'}
           </span>
-          <span className={store.error_count_24h ? 'font-medium text-red-700' : undefined}>
-            Erros 24h: {store.error_count_24h}
+          <span className={store.error_count24h ? 'font-medium text-danger-fg' : undefined}>
+            Erros 24h: {store.error_count24h}
           </span>
+          <span>Pedidos 30d: {store.orders30d.toLocaleString('pt-BR')}</span>
           <span>
             {store.router} · {store.llm_model}
           </span>
@@ -175,11 +211,11 @@ function StoreRow({ store }: { store: AdminStoreRow }) {
       <Link
         to="/$slug"
         params={{ slug: store.slug }}
-        className="hidden truncate text-[13px] text-neutral-500 hover:text-accent-fg md:block"
+        className="hidden truncate text-[13px] text-muted hover:text-accent-fg md:block"
       >
         /{store.slug}
       </Link>
-      <span className="hidden text-[13px] text-neutral-600 md:block">{createdAt}</span>
+      <span className="hidden text-[13px] text-fg-2 md:block">{createdAt}</span>
       <StatusChip active={store.active} className="hidden justify-self-start px-2 py-0.5 text-xs md:block" />
       <button
         type="button"
@@ -187,7 +223,7 @@ function StoreRow({ store }: { store: AdminStoreRow }) {
         onClick={() => setActive.mutate({ storeId: store.id, active: !store.active })}
         className={`h-10 shrink-0 justify-self-end rounded-lg border px-3 text-[13px] font-medium disabled:opacity-50 md:h-8 ${
           store.active
-            ? 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50'
+            ? 'border-line-2 bg-surface text-fg-2 hover:bg-hover'
             : 'border-accent bg-accent text-white hover:bg-accent-hover'
         }`}
       >
@@ -239,7 +275,7 @@ function NewStore() {
   return (
     <form
       onSubmit={submit}
-      className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4 text-sm md:flex-row md:items-end"
+      className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 text-sm md:flex-row md:items-end"
     >
       <label className="flex flex-1 flex-col gap-1.5 font-semibold">
         Nome
@@ -248,7 +284,7 @@ function NewStore() {
           maxLength={80}
           value={name}
           onChange={(event) => setName(event.target.value)}
-          className="h-11 rounded-lg border border-neutral-300 px-3 font-normal"
+          className="h-11 rounded-lg border border-line-2 px-3 font-normal"
         />
       </label>
       <label className="flex flex-1 flex-col gap-1.5 font-semibold">
@@ -257,11 +293,11 @@ function NewStore() {
           value={slug}
           onChange={(event) => setSlug(event.target.value)}
           placeholder="pizzaria-demo"
-          className="h-11 rounded-lg border border-neutral-300 px-3 font-normal"
+          className="h-11 rounded-lg border border-line-2 px-3 font-normal"
         />
       </label>
       <div className="flex gap-2">
-        <button type="button" onClick={() => setOpen(false)} className="h-11 rounded-lg border border-neutral-300 px-4">
+        <button type="button" onClick={() => setOpen(false)} className="h-11 rounded-lg border border-line-2 px-4">
           Cancelar
         </button>
         <button
@@ -272,7 +308,7 @@ function NewStore() {
           Criar loja
         </button>
       </div>
-      {error && <p className="text-red-700 md:basis-full">{error}</p>}
+      {error && <p className="text-danger-fg md:basis-full">{error}</p>}
     </form>
   );
 }

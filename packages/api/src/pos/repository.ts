@@ -101,8 +101,12 @@ const lockDraft = async (tx: DbClient, storeId: string, saleId: string) => {
  * drawer cannot close between reading its open session and writing to it. Cash control off: never a session.
  */
 const lockDrawer = async (tx: DbClient, storeId: string) => {
-  const store = await tx.stores.findOne({ select: { payment_methods: true }, where: { id: storeId }, lock: true });
-  const accepted = store?.payment_methods ?? [];
+  const store = await tx.stores.findOne({
+    select: { payment_methods: true, payment_brands: true },
+    where: { id: storeId },
+    lock: true
+  });
+  const accepted = { payment_methods: store?.payment_methods ?? [], payment_brands: store?.payment_brands ?? null };
 
   if (!(await StoreRepository.getPosSettings(tx, storeId)).cashControl) {
     return { accepted, sessionId: null };
@@ -229,7 +233,7 @@ export namespace PosRepository {
         ? db.customers.findOne({ select: { name: true, phone: true }, where: { id: order.customer_id } })
         : undefined,
       db.order_payments.findMany({
-        select: { id: true, method: true, amount_cents: true, received_cents: true, change_cents: true },
+        select: { id: true, method: true, brand: true, amount_cents: true, received_cents: true, change_cents: true },
         where: { order_id: saleId },
         order: { created_at: Order.Asc }
       })
@@ -288,6 +292,7 @@ export namespace PosRepository {
       payments: payments.map((payment) => ({
         id: payment.id,
         method: payment.method,
+        brand: payment.brand ?? null,
         amountCents: payment.amount_cents,
         receivedCents: payment.received_cents ?? null,
         changeCents: payment.change_cents ?? null
@@ -544,6 +549,7 @@ export namespace PosRepository {
             store_id: storeId,
             order_id: saleId,
             method: payment.method,
+            brand: payment.brand,
             amount_cents: payment.amountCents,
             received_cents: payment.receivedCents,
             change_cents: payment.changeCents,

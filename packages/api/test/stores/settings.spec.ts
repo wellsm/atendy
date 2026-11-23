@@ -5,7 +5,7 @@ import {
   SettingsError,
   validateDelivery,
   validateHours,
-  validatePaymentMethods,
+  validatePayment,
   validateStoreName
 } from '../../src/stores/settings';
 import { DeliveryMode, PaymentMethod } from '../../src/stores/types';
@@ -171,11 +171,30 @@ describe('settings validators', () => {
   });
 
   it('requires one payment method and drops repeats', () => {
-    throws(() => validatePaymentMethods([]), failsOn('payment_methods'));
-    deepEqual(validatePaymentMethods([PaymentMethod.Pix, PaymentMethod.Pix, PaymentMethod.Cash]), [
-      PaymentMethod.Pix,
-      PaymentMethod.Cash
-    ]);
+    throws(() => validatePayment({ methods: [] }), failsOn('payment_methods'));
+    throws(() => validatePayment({ methods: [PaymentMethod.Card] }), failsOn('payment_methods'));
+    deepEqual(validatePayment({ methods: [PaymentMethod.Cash, PaymentMethod.Pix, PaymentMethod.Pix] }), {
+      methods: [PaymentMethod.Pix, PaymentMethod.Cash],
+      brands: {}
+    });
+  });
+
+  it('keeps known brands of accepted card and voucher methods, in catalog order', () => {
+    deepEqual(
+      validatePayment({
+        methods: [PaymentMethod.Credit, PaymentMethod.MealVoucher],
+        brands: { credit: ['Elo', 'Visa'], debit: ['Visa'], meal_voucher: null }
+      }),
+      { methods: [PaymentMethod.Credit, PaymentMethod.MealVoucher], brands: { credit: ['Visa', 'Elo'] } }
+    );
+    throws(
+      () => validatePayment({ methods: [PaymentMethod.Credit], brands: { credit: [] } }),
+      failsOn('payment_brands')
+    );
+    throws(
+      () => validatePayment({ methods: [PaymentMethod.Debit], brands: { debit: ['Hipercard'] } }),
+      failsOn('payment_brands')
+    );
   });
 
   it('trims the store name and limits it to 80 characters', () => {

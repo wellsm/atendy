@@ -9,6 +9,10 @@ export const enum PosErrorCode {
   Label = 'label',
   Payments = 'payments',
   Method = 'method',
+  /**
+   * A card/voucher payment without a brand, or with one the store does not accept.
+   */
+  Brand = 'brand',
   CashClosed = 'cash_closed',
   NoLines = 'no_lines',
   Reason = 'reason'

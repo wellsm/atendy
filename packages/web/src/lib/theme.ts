@@ -13,8 +13,8 @@ const readTheme = (): Theme => {
 };
 
 /**
- * The panel's light/dark choice, remembered per browser. It sits on `<html>` only while the panel is mounted, so
- * Clerk popovers follow it and the public menu, auth and admin stay light.
+ * The panel's light/dark choice, remembered per browser (the admin shares it). It sits on `<html>` only while the
+ * panel or the admin is mounted, so Clerk popovers follow it and the public menu and auth stay light.
  */
 export const usePanelTheme = () => {
   const [theme, setTheme] = useState<Theme>(readTheme);

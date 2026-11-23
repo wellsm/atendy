@@ -241,6 +241,21 @@ export namespace EvolutionClient {
   };
 
   /**
+   * Digits of the linked WhatsApp account (`ownerJid` of `fetchInstances`, Evolution v2); undefined when none.
+   */
+  export const ownerPhone = async (input: { baseUrl: string; apiKey: string; instance: string }) => {
+    const body: unknown = await request(
+      `${input.baseUrl}/instance/fetchInstances?instanceName=${encodeURIComponent(input.instance)}`,
+      { method: 'GET', headers: { apikey: input.apiKey } }
+    );
+
+    const owner = Array.isArray(body) ? (body[0] as { ownerJid?: unknown } | undefined)?.ownerJid : undefined;
+    const digits = typeof owner === 'string' ? owner.split('@')[0]?.replace(/\D/g, '') : undefined;
+
+    return digits || undefined;
+  };
+
+  /**
    * Unlinks the phone. The instance and its token stay, so a new QR is enough to reconnect.
    */
   export const logout = async (input: { baseUrl: string; apiKey: string; instance: string }) => {

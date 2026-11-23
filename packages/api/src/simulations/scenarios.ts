@@ -1,10 +1,11 @@
 import type { Scenario, ScenarioExpect, ScenarioFacts, ScenarioItem } from './types';
+import type { PaymentMethod } from '../stores/types';
 
 import { load, YAMLException } from 'js-yaml';
 
 import { SimulationOutcome } from './types';
 import { Fulfillment } from '../orders/types';
-import { PaymentMethod } from '../stores/types';
+import { OFFERED_METHODS } from '../stores/payment';
 
 export const DEFAULT_MAX_TURNS = 14;
 
@@ -23,7 +24,7 @@ const OUTCOMES: string[] = [SimulationOutcome.Placed, SimulationOutcome.Handoff,
 
 const FULFILLMENTS: string[] = [Fulfillment.Delivery, Fulfillment.Pickup];
 
-const PAYMENTS: string[] = [PaymentMethod.Pix, PaymentMethod.Card, PaymentMethod.Cash];
+const PAYMENTS: string[] = [...OFFERED_METHODS];
 
 export type ScenarioError = {
   path: string;

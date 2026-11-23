@@ -7,14 +7,14 @@ import type { PaymentMethod } from '../stores/types';
 import { randomUUID } from 'node:crypto';
 
 import { BillingRepository } from '../billing/repository';
-import { ConversationMode, MessageAuthor, MessageDirection } from '../conversations/types';
+import { initialMode, MessageAuthor, MessageDirection } from '../conversations/types';
 import { MenuRepository } from '../menu/repository';
 import { priceItem } from '../orders/pricing';
 import { OrderError, OrderErrorCode, OrderRepository } from '../orders/repository';
 import { Fulfillment, OrderSource, OrderStatus } from '../orders/types';
 import { resolveDeliveryFee } from '../stores/delivery';
 import { distanceMeters, pickBandFee } from '../stores/geo';
-import { isStoreOpen } from '../stores/hours';
+import { storeOpenState } from '../stores/open';
 import { StoreRepository } from '../stores/repository';
 import { DeliveryMode } from '../stores/types';
 
@@ -105,7 +105,7 @@ export const requireOrderingStore = async (db: DbClient, slug: string) => {
 
   const hours = await StoreRepository.getHours(db, store.id);
 
-  if (!store.accepting_orders || !isStoreOpen(hours, store.timezone, new Date())) {
+  if (!storeOpenState(store, hours).open) {
     throw new WebOrderError(WebOrderErrorCode.StoreClosed, 'The store is not taking orders now');
   }
 
@@ -233,7 +233,7 @@ export const customerConversation = async (db: DbClient, storeId: string, phone:
       id: randomUUID(),
       store_id: storeId,
       customer_id: customerId,
-      mode: ConversationMode.Bot,
+      ...initialMode((await StoreRepository.getPolicy(db, storeId)).bot_opt_in),
       last_message_at: now,
       created_at: now
     },

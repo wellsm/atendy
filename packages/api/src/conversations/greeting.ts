@@ -74,7 +74,8 @@ export const isGreetingOnly = (bodies: string[]) => {
 };
 
 /**
- * First messages of each visit to a `redirect_only` store: the hello and the store's welcome (default: the link).
+ * First messages of each visit to a `redirect_only` store: the hello and the store's welcome (default: the link). The admin
+ * store page previews this and `buildGreeting` (`WelcomePreview`, web `routes/admin.$storeId.tsx`): change both together.
  */
 export const buildRedirectWelcome = (input: {
   period: string;

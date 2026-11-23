@@ -28,7 +28,7 @@ const PAUSE_REASON: Record<ProspectPauseReason, string> = {
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-const INPUT = 'rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-accent focus:outline-none';
+const INPUT = 'rounded-md border border-line-2 px-3 py-2 text-sm focus:border-accent focus:outline-none';
 
 export function ProspectingSender() {
   const summary = useProspecting();
@@ -43,15 +43,15 @@ export function ProspectingSender() {
   const idle = counts.queued === 0 && counts.sending === 0;
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-4">
+    <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
       <div className="flex flex-wrap items-center gap-3">
         <span
-          className={`rounded-full px-3 py-1 text-xs font-medium ${sender.paused || !sender.connected ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}
+          className={`rounded-full px-3 py-1 text-xs font-medium ${sender.paused || !sender.connected ? 'bg-accepted-bg text-warn-fg' : 'bg-ok-bg text-ok-fg'}`}
         >
           {sender.paused ? 'Pausado' : !sender.connected ? 'Número desconectado' : idle ? 'Fila vazia' : 'Enviando'}
         </span>
         {sender.paused && sender.pause_reason && (
-          <span className="text-sm text-neutral-600">{PAUSE_REASON[sender.pause_reason]}</span>
+          <span className="text-sm text-fg-2">{PAUSE_REASON[sender.pause_reason]}</span>
         )}
         <button
           type="button"
@@ -62,9 +62,9 @@ export function ProspectingSender() {
           {sender.paused ? 'Retomar envios' : 'Pausar'}
         </button>
       </div>
-      {update.isError && <p className="text-sm text-red-700">Não foi possível salvar.</p>}
+      {update.isError && <p className="text-sm text-danger-fg">Não foi possível salvar.</p>}
 
-      <p className="text-sm text-neutral-700">
+      <p className="text-sm text-fg-2">
         Hoje: {sent_today} de {cap_today} enviadas.{' '}
         {!sender.connected
           ? 'Número desconectado: nenhum envio até conectar de novo.'
@@ -81,7 +81,7 @@ export function ProspectingSender() {
 
       <ul className="flex flex-wrap gap-2 text-xs">
         {(Object.keys(STATUS_LABEL) as ProspectStatus[]).map((status) => (
-          <li key={status} className="rounded-full bg-neutral-100 px-3 py-1 text-neutral-700">
+          <li key={status} className="rounded-full bg-surface-2 px-3 py-1 text-fg-2">
             {STATUS_LABEL[status]} · {counts[status]}
           </li>
         ))}
@@ -118,7 +118,7 @@ function SendLimits({ sender }: { sender: NonNullable<ReturnType<typeof useProsp
     });
 
   return (
-    <div className="flex flex-col gap-3 border-t border-neutral-100 pt-4">
+    <div className="flex flex-col gap-3 border-t border-line pt-4">
       <div className="flex flex-wrap items-end gap-3 text-sm">
         <label className="flex flex-col gap-1">
           Máximo por dia
@@ -162,7 +162,7 @@ function SendLimits({ sender }: { sender: NonNullable<ReturnType<typeof useProsp
           </label>
         ))}
       </div>
-      <p className="text-xs text-neutral-500">
+      <p className="text-xs text-muted">
         Horário de Brasília; o fim da janela não inclui a hora (18 = último envio antes das 18h). O limite diário começa
         em 20 e sobe 10 por semana até o máximo.
       </p>
@@ -171,12 +171,12 @@ function SendLimits({ sender }: { sender: NonNullable<ReturnType<typeof useProsp
           type="button"
           disabled={!valid || update.isPending}
           onClick={onSave}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm disabled:opacity-50"
+          className="rounded-md border border-line-2 px-4 py-2 text-sm disabled:opacity-50"
         >
           {update.isPending ? 'Salvando…' : 'Salvar limites'}
         </button>
-        {update.isSuccess && <span className="text-sm text-green-700">Salvo.</span>}
-        {update.isError && <span className="text-sm text-red-700">Não foi possível salvar.</span>}
+        {update.isSuccess && <span className="text-sm text-ok-fg">Salvo.</span>}
+        {update.isError && <span className="text-sm text-danger-fg">Não foi possível salvar.</span>}
       </div>
     </div>
   );

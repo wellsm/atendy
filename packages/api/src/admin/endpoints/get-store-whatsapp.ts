@@ -19,6 +19,10 @@ export declare class GetStoreWhatsAppResponse implements Http.Response {
   status: 200;
   body: {
     state: WhatsAppState;
+    /**
+     * Linked number (digits) while connected; null when unknown.
+     */
+    phone: string | null;
   };
 }
 
@@ -30,7 +34,7 @@ export async function getStoreWhatsAppHandler(
 
   await requireAdminStore(db, storeId);
 
-  const state = await withEvolutionErrors(() => StoreWhatsApp.state(db, storeId, process.env));
+  const body = await withEvolutionErrors(() => StoreWhatsApp.status(db, storeId, process.env));
 
-  return { status: 200, body: { state } };
+  return { status: 200, body };
 }

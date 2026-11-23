@@ -63,6 +63,10 @@ export const closesAt = (hours: HourRange[], timeZone: string, now: Date) => {
 const findOpenRange = (hours: HourRange[], timeZone: string, now: Date) => {
   const { weekday, minutes } = getLocalTime(timeZone, now);
 
+  return rangeAt(hours, weekday, minutes);
+};
+
+const rangeAt = (hours: HourRange[], weekday: number, minutes: number) => {
   const previousWeekday = (weekday + 6) % 7;
 
   return hours.find((range) => {
@@ -75,6 +79,46 @@ const findOpenRange = (hours: HourRange[], timeZone: string, now: Date) => {
 
     return (range.weekday === weekday && minutes >= opens) || (range.weekday === previousWeekday && minutes < closes);
   });
+};
+
+const DAY_MINUTES = 24 * 60;
+const WEEK_MINUTES = 7 * DAY_MINUTES;
+
+/**
+ * When the hours next turn open (`toOpen`) or closed, as an ISO time. Null when they never do (no hours, or open
+ * around the clock).
+ */
+export const nextScheduleChange = (hours: HourRange[], timeZone: string, now: Date, toOpen: boolean) => {
+  const { weekday, minutes } = getLocalTime(timeZone, now);
+  const current = weekday * DAY_MINUTES + minutes;
+
+  const openAt = (weekMinute: number) => {
+    const minute = ((weekMinute % WEEK_MINUTES) + WEEK_MINUTES) % WEEK_MINUTES;
+
+    return !!rangeAt(hours, Math.floor(minute / DAY_MINUTES), minute % DAY_MINUTES);
+  };
+
+  const delta = hours
+    .flatMap((range) => {
+      const opens = toMinutes(range.opens_at);
+      const closes = toMinutes(range.closes_at);
+
+      return [
+        range.weekday * DAY_MINUTES + opens,
+        (closes > opens ? range.weekday : range.weekday + 1) * DAY_MINUTES + closes
+      ];
+    })
+    .map((boundary) => (((boundary - current) % WEEK_MINUTES) + WEEK_MINUTES) % WEEK_MINUTES || WEEK_MINUTES)
+    .sort((a, b) => a - b)
+    .find((minutesAhead) => openAt(current + minutesAhead) === toOpen && openAt(current + minutesAhead - 1) !== toOpen);
+
+  if (delta === undefined) {
+    return null;
+  }
+
+  // shortcut: adds wall-clock minutes as elapsed time, off by the offset across a DST change; fine for Brazil (no
+  // DST), compute in the store timezone when a store elsewhere needs it.
+  return new Date(Math.floor(now.getTime() / 60_000) * 60_000 + delta * 60_000).toISOString();
 };
 
 /**

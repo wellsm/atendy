@@ -4,6 +4,7 @@ import type { PriceMode } from '../menu/types';
 import type { Cart, OrderRepository } from '../orders/repository';
 import type { Fulfillment, OrderSource, OrderStatus } from '../orders/types';
 import type { HourRange } from '../stores/hours';
+import type { StoreOpenState } from '../stores/open';
 import type {
   DeliveryMode,
   NewOrderAfterStatus,
@@ -32,11 +33,18 @@ export type PanelStore = {
   name: string;
   slug: string;
   active: boolean;
-  acceptingOrders: boolean;
   /**
-   * The hours say open right now (store timezone). Independent of `acceptingOrders`.
+   * Taking orders right now: the manual Aberto/Fechado while it lasts, else the hours (`storeOpenState`).
    */
   openNow: boolean;
+  /**
+   * The manual choice in force; null = following the hours.
+   */
+  openOverride: boolean | null;
+  /**
+   * When the manual choice ends; null = no expiry.
+   */
+  openOverrideUntil: string | null;
   /**
    * Menu or catalog wording; a store without a type is food.
    */
@@ -49,17 +57,17 @@ export const toPanelStore = (
     name: string;
     slug: string;
     active: boolean;
-    accepting_orders: boolean;
     store_type: StoreType;
   },
-  openNow: boolean
+  state: StoreOpenState
 ): PanelStore => ({
   id: store.id,
   name: store.name,
   slug: store.slug,
   active: store.active,
-  acceptingOrders: store.accepting_orders,
-  openNow,
+  openNow: state.open,
+  openOverride: state.override,
+  openOverrideUntil: state.until,
   storeType: store.store_type
 });
 
@@ -130,6 +138,10 @@ export type PanelPolicy = {
   newOrderAfterStatus: NewOrderAfterStatus | null;
   addOnCategoryIds: string[] | null;
   addOnExtraMinutes: number | null;
+  /**
+   * New conversations start with a person; the store passes each one to the bot.
+   */
+  botOptIn: boolean;
 };
 
 export const toPanelHours = (hours: HourRange[]): PanelHourRange[] =>
@@ -152,7 +164,8 @@ export const toPanelPolicy = (policy: StorePolicy): PanelPolicy => ({
   repeatOrderStatuses: policy.repeat_order_statuses ?? null,
   newOrderAfterStatus: policy.new_order_after_status ?? null,
   addOnCategoryIds: policy.add_on_category_ids ?? null,
-  addOnExtraMinutes: policy.add_on_extra_minutes ?? null
+  addOnExtraMinutes: policy.add_on_extra_minutes ?? null,
+  botOptIn: !!policy.bot_opt_in
 });
 
 /**

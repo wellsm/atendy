@@ -95,6 +95,32 @@ export namespace StoreWhatsApp {
   };
 
   /**
+   * The linked number, for display only: null when unknown or Evolution fails (the state is what matters).
+   */
+  export const linkedPhone = async (db: DbClient, storeId: string, env: WhatsAppEnv) => {
+    const { instance } = await requireInstance(db, storeId);
+
+    if (!instance) {
+      return null;
+    }
+
+    try {
+      return (await EvolutionClient.ownerPhone({ ...evolutionAdmin(env), instance })) ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * State plus the linked number when connected.
+   */
+  export const status = async (db: DbClient, storeId: string, env: WhatsAppEnv) => {
+    const state = await StoreWhatsApp.state(db, storeId, env);
+
+    return { state, phone: state === WhatsAppState.Connected ? await linkedPhone(db, storeId, env) : null };
+  };
+
+  /**
    * Creates the instance when Evolution does not have it (new per-instance token, webhook with the store secret),
    * then asks for a QR code. A linked number is refused.
    */

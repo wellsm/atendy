@@ -63,6 +63,7 @@ export async function sendDemoMessageHandler(
 
   const ingested = await ConversationRepository.ingestCustomerMessage(db, {
     storeId: store.id,
+    botOptIn: store.policy?.bot_opt_in,
     message: {
       kind: ParsedEventKind.Message,
       instance: 'demo',

@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 import { ConversationList } from '../../components/conversations/conversation-list';
 import { Thread } from '../../components/conversations/thread';
@@ -9,13 +9,28 @@ import { DashboardSheet } from '../../components/sheets/dashboard-sheet';
 import { HistorySheet } from '../../components/sheets/history-sheet';
 import { MenuSheet } from '../../components/sheets/menu-sheet';
 import { SettingsSheet } from '../../components/sheets/settings-sheet';
-import { StockSheet } from '../../components/sheets/stock-sheet';
+import { StaffSheet } from '../../components/sheets/staff-sheet';
 import { WhatsAppSheet } from '../../components/sheets/whatsapp-sheet';
 import { usePanelNavigate, validatePanelSearch } from '../../lib/panel-search';
 import { useConversations, useOrders } from '../../lib/queries';
 
 export const Route = createFileRoute('/panel/$slug/')({
   validateSearch: validatePanelSearch,
+  // Stock moved to its own page; old links (the WhatsApp low-stock digest) still say `?sheet=stock`.
+  beforeLoad: ({ params, search }) => {
+    if (search.sheet === 'stock') {
+      throw redirect({
+        to: '/panel/$slug/stock',
+        params,
+        search: {
+          screen: 'items',
+          ...(search.filter && { filter: search.filter }),
+          ...(search.item && { item: search.item })
+        },
+        replace: true
+      });
+    }
+  },
   component: PanelPage
 });
 
@@ -73,9 +88,9 @@ function PanelPage() {
       {sheet === 'menu' && <MenuSheet onClose={close} />}
       {sheet === 'whatsapp' && <WhatsAppSheet onClose={close} />}
       {sheet === 'settings' && <SettingsSheet onClose={close} />}
+      {sheet === 'staff' && <StaffSheet onClose={close} />}
       {sheet === 'billing' && <BillingSheet onClose={close} />}
       {sheet === 'history' && <HistorySheet onClose={close} />}
-      {sheet === 'stock' && <StockSheet onClose={close} />}
       {sheet === 'dashboard' && <DashboardSheet onClose={close} />}
     </>
   );

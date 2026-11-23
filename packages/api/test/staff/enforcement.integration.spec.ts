@@ -197,15 +197,15 @@ describe('panel write enforcement', () => {
     await rejects(move(OrderStatus.Canceled), refused('forbidden'));
   });
 
-  it('lets the kitchen pause orders but not rename the store', async () => {
+  it('lets the kitchen close the store but not rename it', async () => {
     const { storeId, identity, as, people } = await setup(true);
 
-    const update = (body: { name?: string; acceptingOrders?: boolean }) =>
+    const update = (body: { name?: string; open?: boolean | null }) =>
       updateStoreHandler({ identity, headers: as(people!.kitchen), body } as never, { db });
 
-    equal((await update({ acceptingOrders: false })).body.store.acceptingOrders, false);
+    equal((await update({ open: false })).body.store.openOverride, false);
 
-    await rejects(update({ name: 'Outra', acceptingOrders: true }), refused('forbidden'));
+    await rejects(update({ name: 'Outra', open: true }), refused('forbidden'));
     await rejects(update({ name: 'Outra' }), refused('forbidden'));
 
     const store = await db.stores.findOne({ select: { name: true }, where: { id: storeId } });
@@ -224,9 +224,12 @@ describe('panel write enforcement', () => {
     });
 
     await rejects(
-      createStockEntryHandler({ identity, headers: as(people!.kitchen), body: { itemId: item.id, qty: 1 } } as never, {
-        db
-      }),
+      createStockEntryHandler(
+        { identity, headers: as(people!.kitchen), body: { lines: [{ itemId: item.id, qty: 1 }] } } as never,
+        {
+          db
+        }
+      ),
       refused('forbidden')
     );
   });
@@ -366,7 +369,7 @@ describe('panel write enforcement', () => {
       minQty: null
     });
 
-    await createStockEntryHandler({ identity, body: { itemId: item.id, qty: 1 } } as never, { db });
+    await createStockEntryHandler({ identity, body: { lines: [{ itemId: item.id, qty: 1 }] } } as never, { db });
 
     const entry = await db.stock_movements.findMany({ select: { author: true }, where: { store_id: storeId } });
 

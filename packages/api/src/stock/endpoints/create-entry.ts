@@ -15,10 +15,17 @@ export declare class CreateStockEntryRequest implements Http.Request {
   identity: PanelIdentity;
   headers: OperatorHeaders;
   body: {
-    itemId: String.UUID;
-    packageId?: String.UUID;
-    qty: number;
-    totalCostCents?: number;
+    /**
+     * `qty` counts packages when `packageId` is sent; `totalCostCents` is what the line cost in all.
+     */
+    lines: {
+      itemId: String.UUID;
+      packageId?: String.UUID;
+      qty: number;
+      totalCostCents?: number;
+    }[];
+    supplier?: string;
+    invoice?: string;
   };
 }
 
@@ -30,7 +37,8 @@ export declare class CreateStockEntryResponse implements Http.Response {
 }
 
 /**
- * Purchase entry; `qty` counts packages when `packageId` is sent. The author is the signed-in Clerk user.
+ * A batch of purchase entries in one transaction (a bad line writes nothing); supplier and invoice go into the
+ * movements. The author is who authorized the write (employee or Clerk user).
  */
 export async function createStockEntryHandler(
   request: Http.Incoming<CreateStockEntryRequest>,
@@ -39,7 +47,7 @@ export async function createStockEntryHandler(
   const store = await requireStore(db, request.identity);
   const { author } = await authorize(db, store, request.identity, request.headers, Permission.StockMove);
 
-  await withStockErrors(() => StockRepository.recordEntry(db, store.id, { ...request.body, author }));
+  await withStockErrors(() => StockRepository.recordEntries(db, store.id, { ...request.body, author }));
 
   return { status: 201, body: { recorded: true } };
 }

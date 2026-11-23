@@ -55,9 +55,9 @@ describe('cost report helpers', () => {
       { provider: AiProvider.OpenRouter, calls: 2, costUsd: 0.0042 }
     ]);
     deepEqual(report.ai.byPath, [
-      { path: AiPath.JevDirect, calls: 1, costUsd: 0.0002 },
-      { path: AiPath.LlmFallback, calls: 2, costUsd: 0.0033 },
-      { path: AiPath.LlmReply, calls: 1, costUsd: 0.0011 }
+      { path: AiPath.JevDirect, calls: 1, inputTokens: 100, outputTokens: 10, costUsd: 0.0002, avgLatencyMs: 300 },
+      { path: AiPath.LlmFallback, calls: 2, inputTokens: 500, outputTokens: 60, costUsd: 0.0033, avgLatencyMs: 1250 },
+      { path: AiPath.LlmReply, calls: 1, inputTokens: 100, outputTokens: 10, costUsd: 0.0011, avgLatencyMs: 900 }
     ]);
     deepEqual(report.ai.byModel, [
       {
@@ -116,9 +116,9 @@ describe('cost report helpers', () => {
         row({ prompt_version: 'v1', cost_usd: 0.001 })
       ]).ai.byPromptVersion,
       [
-        { version: null, calls: 1, costUsd: 0.004 },
-        { version: 'v1', calls: 2, costUsd: 0.002 },
-        { version: 'v2', calls: 1, costUsd: 0.002 }
+        { version: null, calls: 1, inputTokens: 100, outputTokens: 10, costUsd: 0.004, avgLatencyMs: 1000 },
+        { version: 'v1', calls: 2, inputTokens: 200, outputTokens: 20, costUsd: 0.002, avgLatencyMs: 1000 },
+        { version: 'v2', calls: 1, inputTokens: 100, outputTokens: 10, costUsd: 0.002, avgLatencyMs: 1000 }
       ]
     );
   });

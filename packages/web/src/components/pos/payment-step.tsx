@@ -1,10 +1,12 @@
+import type { PaymentBrands } from '../../lib/payment';
 import type { PaymentMethod, PosSale } from '../../lib/queries';
 
 import { useEffect, useRef, useState } from 'react';
 
 import { PrintSheet, SaleReceipt } from './receipt-print';
 import { ApiError } from '../../lib/api';
-import { centsToInput, formatMoney, parseMoney, PAYMENT_LABEL } from '../../lib/format';
+import { centsToInput, formatMoney, parseMoney } from '../../lib/format';
+import { isBrandMethod, OFFERED_METHODS, PAYMENT_BRANDS, PAYMENT_LABEL, PAYMENT_SHORT } from '../../lib/payment';
 import { useFinalizePosSale, useSendPosReceipt } from '../../lib/queries';
 
 const INPUT =
@@ -17,12 +19,22 @@ const QUICK_CASH = [2000, 5000, 10000];
 const ERROR_TEXT: Record<string, string> = {
   payments: 'Os pagamentos precisam somar o total.',
   method: 'A loja não aceita essa forma de pagamento.',
+  brand: 'Escolha uma bandeira aceita pela loja.',
   no_lines: 'A venda não tem itens.',
   cash_closed: 'Abra o caixa antes de cobrar.',
   store_blocked: 'PDV indisponível: a loja está bloqueada.'
 };
 
-type Row = { method: PaymentMethod; amount: string; received: string };
+type Row = { method: PaymentMethod; brand: string; amount: string; received: string };
+
+/**
+ * F5–F10 pick a method for the last payment row, in `OFFERED_METHODS` order.
+ */
+const METHOD_KEYS: Record<string, PaymentMethod> = Object.fromEntries(
+  OFFERED_METHODS.map((method, index) => [`F${index + 5}`, method])
+);
+
+const keyOf = (method: PaymentMethod) => Object.entries(METHOD_KEYS).find(([, value]) => value === method)?.[0];
 
 /**
  * "Cobrar": the store's methods, split rows, what is left, cash received and change; then the code ("Senha" when the
@@ -32,6 +44,7 @@ type Row = { method: PaymentMethod; amount: string; received: string };
 export function PaymentStep({
   sale,
   methods,
+  brands,
   storeName,
   receiptWidth,
   onDetach,
@@ -40,6 +53,10 @@ export function PaymentStep({
 }: {
   sale: PosSale;
   methods: PaymentMethod[];
+  /**
+   * Accepted brands per card/voucher method; the others show struck out and blocked.
+   */
+  brands: PaymentBrands;
   storeName: string;
   receiptWidth: 58 | 80;
   onDetach: () => void;
@@ -57,15 +74,20 @@ export function PaymentStep({
     const amount = parseMoney(row.amount) ?? 0;
     const received = row.method === 'cash' && row.received.trim() ? (parseMoney(row.received) ?? -1) : null;
 
-    return { method: row.method, amount, received };
+    return { method: row.method, brand: isBrandMethod(row.method) ? row.brand : null, amount, received };
   });
   const paid = parsed.reduce((sum, { amount }) => sum + amount, 0);
   const remaining = total - paid;
   const ready =
-    remaining === 0 && parsed.every(({ amount, received }) => amount > 0 && (received === null || received >= amount));
+    remaining === 0 &&
+    parsed.every(
+      ({ method, brand, amount, received }) =>
+        amount > 0 && (received === null || received >= amount) && (!isBrandMethod(method) || !!brand)
+    );
 
   // Esc: back to the sale (not while finalizing), or "Nova venda" once paid.
   const escape = useRef<() => void>(() => undefined);
+  const pickKey = useRef<(method: PaymentMethod) => void>(() => undefined);
 
   escape.current = () => {
     if (result) {
@@ -79,6 +101,9 @@ export function PaymentStep({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         escape.current();
+      } else if (METHOD_KEYS[event.key]) {
+        event.preventDefault();
+        pickKey.current(METHOD_KEYS[event.key]!);
       }
     };
 
@@ -93,7 +118,7 @@ export function PaymentStep({
   useEffect(() => {
     if (total > 0 && firstMethod) {
       setRows((current) =>
-        current.length ? current : [{ method: firstMethod, amount: centsToInput(total), received: '' }]
+        current.length ? current : [{ method: firstMethod, brand: '', amount: centsToInput(total), received: '' }]
       );
     }
   }, [firstMethod, total]);
@@ -101,10 +126,23 @@ export function PaymentStep({
   const setRow = (index: number, patch: Partial<Row>) =>
     setRows(rows.map((row, at) => (at === index ? { ...row, ...patch } : row)));
 
+  const pickMethod = (index: number, method: PaymentMethod) =>
+    setRow(index, {
+      method,
+      brand: method === rows[index]?.method ? rows[index].brand : '',
+      received: method === 'cash' ? (rows[index]?.received ?? '') : ''
+    });
+
+  pickKey.current = (method) => {
+    if (!result && rows.length && methods.includes(method)) {
+      pickMethod(rows.length - 1, method);
+    }
+  };
+
   const addRow = () => {
     const method = methods.find((value) => !rows.some((row) => row.method === value)) ?? methods[0]!;
 
-    setRows([...rows, { method, amount: centsToInput(remaining), received: '' }]);
+    setRows([...rows, { method, brand: '', amount: centsToInput(remaining), received: '' }]);
   };
 
   const submit = () => {
@@ -117,8 +155,9 @@ export function PaymentStep({
     finalize.mutate(
       {
         sale_id: sale.id,
-        payments: parsed.map(({ method, amount, received }) => ({
+        payments: parsed.map(({ method, brand, amount, received }) => ({
           method,
+          ...(brand && { brand }),
           amount_cents: amount,
           ...(received !== null && { received_cents: received })
         }))
@@ -183,18 +222,52 @@ export function PaymentStep({
 
                 return (
                   <div key={index} className="flex flex-col gap-2 rounded-xl border border-line p-3">
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-3 gap-1.5">
                       {methods.map((method) => (
                         <button
                           key={method}
                           type="button"
-                          onClick={() => setRow(index, { method, received: method === 'cash' ? row.received : '' })}
-                          className={`h-10 rounded-lg border text-sm ${row.method === method ? 'border-fg bg-fg font-semibold text-surface' : 'border-line-2 text-fg-2 hover:bg-hover'}`}
+                          title={PAYMENT_LABEL[method]}
+                          onClick={() => pickMethod(index, method)}
+                          className={`flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm ${row.method === method ? 'border-fg bg-fg font-semibold text-surface' : 'border-line-2 text-fg-2 hover:bg-hover'}`}
                         >
-                          {PAYMENT_LABEL[method]}
+                          {PAYMENT_SHORT[method]}
+                          {index === rows.length - 1 && keyOf(method) && (
+                            <span className="hidden text-[10px] opacity-60 md:inline">{keyOf(method)}</span>
+                          )}
                         </button>
                       ))}
                     </div>
+                    {isBrandMethod(row.method) && (
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-semibold">
+                          Bandeira{' '}
+                          <span className="font-normal text-muted">· {PAYMENT_LABEL[row.method].toLowerCase()}</span>
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {PAYMENT_BRANDS[row.method].map((brand) => {
+                            const accepted = brands[row.method as keyof PaymentBrands]?.includes(brand) ?? false;
+
+                            return (
+                              <button
+                                key={brand}
+                                type="button"
+                                disabled={!accepted}
+                                title={accepted ? undefined : 'Não aceito pela loja'}
+                                onClick={() => setRow(index, { brand })}
+                                className={`h-9 rounded-lg border-[1.5px] px-2.5 text-[13px] disabled:cursor-not-allowed disabled:text-faint disabled:line-through ${
+                                  row.brand === brand
+                                    ? 'border-accent bg-accent-soft font-semibold text-accent-fg'
+                                    : 'border-line-2 text-fg-2'
+                                }`}
+                              >
+                                {brand}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted">
                         Valor

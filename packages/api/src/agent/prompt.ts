@@ -2,10 +2,18 @@ import type { MessageAuthor } from '../conversations/types';
 import type { Cart, CartItem } from '../orders/repository';
 import type { OrderStatus } from '../orders/types';
 import type { DeliverySchedule } from '../stores/hours';
-import type { PaymentMethod, PreviousAddress, RouterType, StorePolicy, StoreRedirect } from '../stores/types';
+import type {
+  PaymentBrands,
+  PaymentMethod,
+  PreviousAddress,
+  RouterType,
+  StorePolicy,
+  StoreRedirect
+} from '../stores/types';
 
 import { LIMIT_REASONS } from '../conversations/types';
 import { SUMMARY_TOKEN } from '../orders/summary';
+import { acceptedBrands, acceptedMethods } from '../stores/payment';
 import { SOP_MAX_LENGTH } from '../stores/policy';
 import { DeliveryMode, StoreType } from '../stores/types';
 
@@ -18,6 +26,7 @@ export type AgentStore = {
   router: RouterType;
   llm_model: string;
   payment_methods: PaymentMethod[];
+  payment_brands?: PaymentBrands | null;
   delivery_mode: DeliveryMode;
   flat_fee_cents: number;
   policy?: StorePolicy | null;
@@ -134,7 +143,7 @@ const fullPrompt = (voice: Voice) =>
     `- Para adicionar um item, use \`search_menu\` para obter os ids e depois \`add_item\`. Se faltar uma opção obrigatória (por exemplo, ${voice.requiredOption}), pergunte antes de adicionar.`,
     ...voice.rules,
     '- Grupo opcional sem escolha já significa "sem" aquela opção: se o cliente pedir "sem borda" (ou sem outro opcional) e o item não tem essa opção, só confirme que já está assim, sem ferramentas. Para trocar opções de um item, adicione o item novo antes de remover o antigo.',
-    '- Antes de fechar, garanta: entrega ou retirada, endereço com bairro (se for entrega) e forma de pagamento. Formas de pagamento: Pix, cartão, dinheiro ou vale-refeição/alimentação, só as de `store.payment_methods`. Se for dinheiro, pergunte se precisa de troco e para quanto.',
+    '- Antes de fechar, garanta: entrega ou retirada, endereço com bairro (se for entrega) e forma de pagamento. Formas de pagamento: só as de `store.payment_methods` (pix, cash = dinheiro, credit = cartão de crédito, debit = cartão de débito, meal_voucher = vale-refeição, food_voucher = vale-alimentação). Cartão e vale só nas bandeiras de `store.payment_brands`: se o cliente perguntar por uma bandeira fora da lista, diga que essa a loja não aceita e cite as aceitas. Se o cliente disser só "cartão" ou só "vale", pergunte se é crédito ou débito (ou refeição ou alimentação). Se for dinheiro, pergunte se precisa de troco e para quanto.',
     `- Antes de \`place_order\`, mostre o resumo e peça confirmação: uma frase curta (ex.: "Confere o resumo do seu pedido 👇"), uma linha \`---\`, uma linha só com \`${SUMMARY_TOKEN}\` (o sistema troca pelo resumo completo: itens, entrega, endereço, pagamento, previsão e total), outra linha \`---\` e a pergunta (ex.: "Posso confirmar? Responda *sim* ou me diga o que quer mudar ✏️"). Não escreva itens nem valores do resumo você mesmo. Só chame \`place_order\` depois que o cliente confirmar.`,
     `- Ao confirmar o pedido fechado por \`place_order\`, informe o número do pedido como \`#\` seguido de \`cart.code\`, em negrito (ex.: "✅ *Pedido #K7Q2MX confirmado!* ${voice.placed}"), e agradeça em outra mensagem.`,
     '- Se `greeted` for true, a saudação da loja (com a apresentação do atendente virtual) vai logo antes da sua resposta: não cumprimente nem se apresente de novo, responda direto ao que o cliente escreveu.',
@@ -285,7 +294,8 @@ export const buildTurnState = (input: {
   return JSON.stringify({
     store: {
       name: store.name,
-      payment_methods: store.payment_methods,
+      payment_methods: acceptedMethods(store.payment_methods),
+      payment_brands: acceptedBrands(store.payment_methods, store.payment_brands),
       delivery:
         store.delivery_mode === DeliveryMode.Flat
           ? { mode: DeliveryMode.Flat, fee_cents: store.flat_fee_cents }

@@ -11,6 +11,7 @@ import type { getProductStockLinksHandler } from './endpoints/get-product-links'
 import type { getStockSummaryHandler } from './endpoints/get-summary';
 import type { listStockItemsHandler } from './endpoints/list-items';
 import type { listStockMovementsHandler } from './endpoints/list-movements';
+import type { listStoreStockMovementsHandler } from './endpoints/list-store-movements';
 import type { setOptionStockLinksHandler } from './endpoints/set-option-links';
 import type { setProductStockLinksHandler } from './endpoints/set-product-links';
 import type { updateStockItemHandler } from './endpoints/update-item';
@@ -50,6 +51,11 @@ export type StockRoutes = [
     path: 'GET /panel/stock/items/{itemId}/movements';
     authorizer: typeof panelAuthorizer;
     handler: typeof listStockMovementsHandler;
+  }>,
+  Http.UseRoute<{
+    path: 'GET /panel/stock/movements';
+    authorizer: typeof panelAuthorizer;
+    handler: typeof listStoreStockMovementsHandler;
   }>,
   Http.UseRoute<{
     path: 'GET /panel/stock/barcode/{code}';

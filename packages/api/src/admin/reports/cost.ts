@@ -33,7 +33,14 @@ export type CostRow = {
 export type AiCost = {
   totalUsd: number;
   byProvider: { provider: AiProvider; calls: number; costUsd: number }[];
-  byPath: { path: AiPath; calls: number; costUsd: number }[];
+  byPath: {
+    path: AiPath;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+    avgLatencyMs: number;
+  }[];
   byModel: {
     model: string;
     provider: AiProvider;
@@ -46,8 +53,20 @@ export type AiCost = {
   /**
    * `version: null` = calls logged before prompt versions existed.
    */
-  byPromptVersion: { version: string | null; calls: number; costUsd: number }[];
+  byPromptVersion: {
+    version: string | null;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+    avgLatencyMs: number;
+  }[];
 };
+
+/**
+ * Calls, tokens, cost and mean latency of a group of AI calls.
+ */
+type CallStats = { calls: number; inputTokens: number; outputTokens: number; costUsd: number; avgLatencyMs: number };
 
 const startOfDay = (date: string) => {
   if (!DATE_PATTERN.test(date)) {
@@ -114,6 +133,14 @@ const sumNanos = (rows: CostRow[]) => rows.reduce((total, row) => total + toNano
 const sum = (rows: CostRow[], value: (row: CostRow) => number) =>
   rows.reduce((total, row) => total + Number(value(row)), 0);
 
+const callStats = (group: CostRow[]): CallStats => ({
+  calls: group.length,
+  inputTokens: sum(group, ({ input_tokens }) => input_tokens),
+  outputTokens: sum(group, ({ output_tokens }) => output_tokens),
+  costUsd: toUsd(sumNanos(group)),
+  avgLatencyMs: Math.round(sum(group, ({ latency_ms }) => latency_ms) / group.length)
+});
+
 /**
  * Facts of the cost report from the AI calls of the period. The Jev share counts one Jev row per turn that tried Jev
  * (`jev_direct` = Jev decided alone).
@@ -128,25 +155,16 @@ export const aggregateCost = (rows: CostRow[]) => {
       calls: group.length,
       costUsd: toUsd(sumNanos(group))
     })),
-    byPath: groupBy(rows, ({ path }) => path).map(([path, group]) => ({
-      path,
-      calls: group.length,
-      costUsd: toUsd(sumNanos(group))
-    })),
+    byPath: groupBy(rows, ({ path }) => path).map(([path, group]) => ({ path, ...callStats(group) })),
     byModel: groupBy(rows, ({ model }) => model).map(([model, group]) => ({
       model,
       provider: group[0]!.provider,
-      calls: group.length,
-      inputTokens: sum(group, ({ input_tokens }) => input_tokens),
-      outputTokens: sum(group, ({ output_tokens }) => output_tokens),
-      costUsd: toUsd(sumNanos(group)),
-      avgLatencyMs: Math.round(sum(group, ({ latency_ms }) => latency_ms) / group.length)
+      ...callStats(group)
     })),
     // Empty key sorts first: rows without a version.
     byPromptVersion: groupBy(rows, ({ prompt_version }) => prompt_version ?? '').map(([version, group]) => ({
       version: version || null,
-      calls: group.length,
-      costUsd: toUsd(sumNanos(group))
+      ...callStats(group)
     }))
   };
 

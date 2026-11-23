@@ -1,4 +1,5 @@
 import type { CostReport } from './costs';
+import type { PaymentBrands, PaymentMethod } from './payment';
 import type { LossReason, StockFilter, StockUnit } from './stock';
 import type { StoreType } from './store-type';
 
@@ -14,11 +15,18 @@ export type PanelStore = {
   name: string;
   slug: string;
   active: boolean;
-  accepting_orders: boolean;
   /**
-   * The hours say open right now. Independent of `accepting_orders`.
+   * Taking orders right now: the manual Aberto/Fechado while it lasts, else the hours.
    */
   open_now: boolean;
+  /**
+   * The manual choice in force; null = following the hours.
+   */
+  open_override: boolean | null;
+  /**
+   * When the manual choice ends; null = no expiry.
+   */
+  open_override_until: string | null;
   /**
    * Menu (food) or catalog (retail) wording.
    */
@@ -58,11 +66,16 @@ export type AdminStore = {
   created_at: string;
   router: RouterType;
   llm_model: string;
+  store_type: StoreType;
 };
 
 export type AdminStoreRow = AdminStore & {
   last_message_at: string | null;
-  error_count_24h: number;
+  error_count24h: number;
+  /**
+   * Orders placed in the last 30 days, any source, without canceled ones.
+   */
+  orders30d: number;
 };
 
 export type StoreRedirect = { label: string; url: string };
@@ -71,9 +84,10 @@ export type AdminStoreDetail = {
   store: AdminStore;
   health: {
     last_message_at: string | null;
-    error_count_24h: number;
+    error_count24h: number;
     recent_errors: { conversation_id: string; reason: string; at: string }[];
     active_products: number;
+    orders30d: number;
     open_now: boolean;
     accepting_orders: boolean;
   };
@@ -87,6 +101,7 @@ export type AdminStoreDetail = {
    */
   redirect: StoreRedirect | null;
   redirect_only: boolean;
+  bot_opt_in: boolean;
   /**
    * Price of an order the AI took all the way; null = `default_order_price_cents`.
    */
@@ -220,7 +235,7 @@ export type PanelOrder = {
   fulfillment: 'delivery' | 'pickup' | null;
   address: string | null;
   neighborhood: string | null;
-  payment_method: 'pix' | 'card' | 'cash' | 'voucher' | null;
+  payment_method: PaymentMethod | null;
   change_for_cents: number | null;
   subtotal_cents: number;
   fee_cents: number;
@@ -532,13 +547,13 @@ export const useUpdateStore = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { name?: string; accepting_orders?: boolean }) =>
+    mutationFn: (input: { name?: string; open?: boolean | null }) =>
       api<{ store: PanelStore }>('PATCH', '/panel/store', input),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['me'] })
   });
 };
 
-export type PaymentMethod = 'pix' | 'card' | 'cash' | 'voucher';
+export type { PaymentMethod };
 
 export type DeliveryMode = 'flat' | 'by_zone' | 'by_distance';
 
@@ -605,6 +620,10 @@ export type PolicySettings = {
    */
   add_on_category_ids: string[] | null;
   add_on_extra_minutes: number | null;
+  /**
+   * New conversations start with a person; the store passes each one to the bot.
+   */
+  bot_opt_in: boolean;
 };
 
 export type NewOrderAfterStatus = 'accepted' | 'out' | 'done';
@@ -615,6 +634,10 @@ export type Settings = {
   hours: HourRange[];
   delivery: DeliverySettings;
   payment_methods: PaymentMethod[];
+  /**
+   * Accepted brands of every accepted card/voucher method.
+   */
+  payment_brands: PaymentBrands;
   policy: PolicySettings;
   store_location: StoreLocation | null;
   /**
@@ -672,10 +695,10 @@ export const useLocateStore = () =>
   useSettingsMutation<{ address: string }, { store_location: StoreLocation }>('POST', '/panel/settings/store-location');
 
 export const useUpdatePayment = () =>
-  useSettingsMutation<{ payment_methods: PaymentMethod[] }, { payment_methods: PaymentMethod[] }>(
-    'PUT',
-    '/panel/settings/payment'
-  );
+  useSettingsMutation<
+    { payment_methods: PaymentMethod[]; payment_brands: PaymentBrands },
+    { payment_methods: PaymentMethod[]; payment_brands: PaymentBrands }
+  >('PUT', '/panel/settings/payment');
 
 export const useUpdateStockAlert = () =>
   useSettingsMutation<
@@ -756,7 +779,7 @@ export const useWhatsAppState = (poll: boolean) => {
 
   return useQuery({
     queryKey: ['whatsapp'],
-    queryFn: () => api<{ state: WhatsAppState }>('GET', '/panel/whatsapp'),
+    queryFn: () => api<{ state: WhatsAppState; phone: string | null }>('GET', '/panel/whatsapp'),
     refetchInterval: poll ? 3_000 : false
   });
 };
@@ -1042,6 +1065,7 @@ export const useUpdateAdminStore = (storeId: string) => {
       welcome_text?: string | null;
       redirect?: StoreRedirect | null;
       redirect_only?: boolean;
+      bot_opt_in?: boolean;
     }) => api<AdminStoreDetail>('PATCH', `/admin/stores/${storeId}`, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'stores'] })
   });
@@ -1111,7 +1135,7 @@ export const adminWhatsAppHooks = (storeId: string) => ({
 
     return useQuery({
       queryKey: ['admin', 'stores', storeId, 'whatsapp'],
-      queryFn: () => api<{ state: WhatsAppState }>('GET', `/admin/stores/${storeId}/whatsapp`),
+      queryFn: () => api<{ state: WhatsAppState; phone: string | null }>('GET', `/admin/stores/${storeId}/whatsapp`),
       refetchInterval: poll ? 3_000 : false
     });
   },
@@ -1151,7 +1175,7 @@ export const useCostReport = (input: { storeId?: string; from: string; to: strin
   });
 };
 
-export type ConversationFilter = 'all' | 'needs_human' | 'errors';
+export type ConversationFilter = 'all' | 'needs_human' | 'errors' | 'simulations';
 
 /**
  * Same as the API `PAGE_SIZE` (`src/admin/conversations/repository.ts`): a full page means there may be more.
@@ -1168,7 +1192,10 @@ export type AdminConversation = {
   last_message_at: string;
 };
 
-export type AdminConversationRow = AdminConversation & { preview: string };
+/**
+ * `error`: the last handoff was a bot or send failure; `simulation`: came from an admin simulation run.
+ */
+export type AdminConversationRow = AdminConversation & { preview: string; error: boolean; simulation: boolean };
 
 /**
  * `args`: the JSON the model sent, as text (keys exactly as sent).
@@ -1355,12 +1382,24 @@ export const useStartSimulation = () => {
   });
 };
 
+/**
+ * The fixed prompts: food voice at the top level, `retail` its catalog voice, `redirect` the redirect store's per voice.
+ */
+export type AdminPrompt = {
+  version: string;
+  system: string;
+  reply: string;
+  tools: string;
+  retail: { system: string; reply: string };
+  redirect: { food: string; retail: string };
+};
+
 export const useAdminPrompt = () => {
   const api = useApi();
 
   return useQuery({
     queryKey: ['admin', 'prompt'],
-    queryFn: () => api<{ version: string; system: string; reply: string; tools: string }>('GET', '/admin/prompt')
+    queryFn: () => api<AdminPrompt>('GET', '/admin/prompt')
   });
 };
 
@@ -1881,20 +1920,65 @@ export const useUpdateStockItem = () =>
 export const useArchiveStockItem = () =>
   useStockMutation((api, id: string) => api<{ archived: true }>('POST', `/panel/stock/items/${id}/archive`));
 
-export const useRecordStockEntry = () =>
-  useStockMutation((api, input: { item_id: string; package_id?: string; qty: number; total_cost_cents?: number }) =>
-    api<{ recorded: true }>('POST', '/panel/stock/entries', input)
+/**
+ * A batch of purchases in one transaction; `qty` counts packages when `package_id` is sent.
+ */
+export const useRecordStockEntries = () =>
+  useStockMutation(
+    (
+      api,
+      input: {
+        lines: { item_id: string; package_id?: string; qty: number; total_cost_cents?: number }[];
+        supplier?: string;
+        invoice?: string;
+      }
+    ) => api<{ recorded: true }>('POST', '/panel/stock/entries', input)
   );
 
-export const useRecordStockLoss = () =>
-  useStockMutation((api, input: { item_id: string; qty: number; reason: LossReason; note?: string }) =>
-    api<{ recorded: true }>('POST', '/panel/stock/losses', input)
+/**
+ * A batch of losses with one reason, in one transaction.
+ */
+export const useRecordStockLosses = () =>
+  useStockMutation(
+    (
+      api,
+      input: { lines: { item_id: string; package_id?: string; qty: number }[]; reason: LossReason; note?: string }
+    ) => api<{ recorded: true }>('POST', '/panel/stock/losses', input)
   );
 
-export const useRecordStockCount = () =>
-  useStockMutation((api, input: { item_id: string; counted: number }) =>
-    api<{ recorded: true }>('POST', '/panel/stock/counts', { counts: [input] })
+/**
+ * Counted balances: each item's balance becomes exactly `counted`.
+ */
+export const useRecordStockCounts = () =>
+  useStockMutation((api, counts: { item_id: string; counted: number }[]) =>
+    api<{ recorded: true }>('POST', '/panel/stock/counts', { counts })
   );
+
+export type StoreStockMovement = StockMovement & { item_id: string; item_name: string; item_unit: StockUnit };
+
+/**
+ * The store's stock history across items, newest first; `kind` narrows it (absent = all).
+ */
+export const useStoreStockMovements = (kind: string | undefined) => {
+  const api = useApi();
+
+  return useInfiniteQuery({
+    queryKey: ['stock', 'movements', kind ?? null],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => {
+      const search = new URLSearchParams({
+        ...(kind && { kind }),
+        ...(pageParam && { before: pageParam })
+      });
+
+      return api<{ movements: StoreStockMovement[]; next: string | null }>(
+        'GET',
+        `/panel/stock/movements?${search.toString()}`
+      );
+    },
+    getNextPageParam: (page) => page.next ?? undefined
+  });
+};
 
 /**
  * One stock item a product or option consumes, `qty` in the item's base unit.
@@ -1988,6 +2072,10 @@ export type PosSaleItem = {
 export type PosPayment = {
   id: string;
   method: PaymentMethod;
+  /**
+   * Card or voucher brand; null for pix and cash.
+   */
+  brand: string | null;
   amount_cents: number;
   received_cents: number | null;
   change_cents: number | null;
@@ -2164,7 +2252,12 @@ export const useDiscardPosSale = () => {
 
 const PAID_KEYS = [['cash'], ['pos', 'menu'], ['orders']];
 
-export type PosPaymentInput = { method: PaymentMethod; amount_cents: number; received_cents?: number | null };
+export type PosPaymentInput = {
+  method: PaymentMethod;
+  brand?: string | null;
+  amount_cents: number;
+  received_cents?: number | null;
+};
 
 /**
  * Idempotent: a retry of a sale already paid (or canceled meanwhile) answers that sale as it is.

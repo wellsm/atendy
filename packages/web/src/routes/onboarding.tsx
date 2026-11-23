@@ -28,7 +28,7 @@ export const Route = createFileRoute('/onboarding')({
   )
 });
 
-const STEPS = ['Cadastre a loja', 'Monte o cardápio', 'Conecte o WhatsApp'];
+const STEPS = ['Cadastre a loja', 'Monte o cardápio ou catálogo', 'Conecte o WhatsApp'];
 
 function Hero() {
   return (
@@ -36,10 +36,10 @@ function Hero() {
       <Logo mono className="h-6 self-start md:h-7" />
       <div className="flex max-w-md flex-col gap-4">
         <h2 className="text-2xl font-bold leading-tight tracking-tight text-balance md:text-4xl">
-          Seu delivery atendido no WhatsApp<span className="hidden md:inline">, 24 horas por dia</span>.
+          Sua loja atendida no WhatsApp<span className="hidden md:inline">, 24 horas por dia</span>.
         </h2>
         <p className="hidden text-base leading-normal md:block">
-          O bot anota o pedido com o seu cardápio e as suas regras. Você aceita e despacha pelo painel.
+          O bot anota o pedido com os seus produtos e as suas regras. Você aceita e despacha pelo painel.
         </p>
       </div>
       <ol className="hidden gap-7 text-sm md:flex">

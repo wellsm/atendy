@@ -8,6 +8,7 @@ import { HttpBadRequestError, HttpConflictError } from '@ez4/gateway';
 
 import { notifyAdmin } from '../../admin/telegram';
 import { BillingAccounts } from '../../payments/accounts';
+import { storeOpenState } from '../../stores/open';
 import { DEFAULT_LLM_MODEL, StoreRepository } from '../../stores/repository';
 import { slugify } from '../slug';
 import { toPanelStore } from '../types';
@@ -88,5 +89,5 @@ export async function createStoreHandler(
   await notifyAdmin(`Nova loja aguardando ativação: ${store.name} (${store.slug}) ${store.id}`);
 
   // A new store has no hours yet: closed until the owner sets them.
-  return { status: 201, body: { store: toPanelStore(store, false) } };
+  return { status: 201, body: { store: toPanelStore(store, storeOpenState(store, [])) } };
 }

@@ -123,6 +123,15 @@ export const parsePolicyPatch = (raw: string): StorePolicy => {
       );
     }
 
+    if (key === 'bot_opt_in') {
+      if (entry === null || typeof entry === 'boolean') {
+        patch.bot_opt_in = entry;
+        continue;
+      }
+
+      throw new PolicyError('bot_opt_in must be true, false or null');
+    }
+
     if (key === 'redirect_only') {
       if (entry === null || typeof entry === 'boolean') {
         patch.redirect_only = entry;

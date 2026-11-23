@@ -20,6 +20,7 @@ import { StockRepository } from '../stock/repository';
 import { resolveDeliveryFee } from '../stores/delivery';
 import { distanceMeters, pickBandFee } from '../stores/geo';
 import { isClosingSoon } from '../stores/hours';
+import { acceptedMethods } from '../stores/payment';
 import { orderMemorySince } from '../stores/policy';
 import { StoreRepository } from '../stores/repository';
 import { DeliveryMode, PaymentMethod } from '../stores/types';
@@ -914,7 +915,7 @@ export namespace OrderRepository {
       where: { id: scope.storeId }
     });
 
-    if (!store?.payment_methods.includes(input.method)) {
+    if (!store || !acceptedMethods(store.payment_methods).includes(input.method)) {
       throw new OrderError(OrderErrorCode.PaymentNotAccepted, `${input.method} is not accepted by the store`);
     }
 

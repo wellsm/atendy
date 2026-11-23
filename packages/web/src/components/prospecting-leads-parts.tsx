@@ -11,10 +11,10 @@ export const SITUATION_LABEL: Record<ProspectSituation, string> = {
 const CHIP = 'whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium';
 
 const SYSTEM_TONE: Record<ProspectSystem['kind'], string> = {
-  bot: 'bg-amber-100 text-amber-800',
-  market: 'bg-blue-100 text-blue-800',
-  whats: 'bg-green-100 text-green-800',
-  other: 'bg-neutral-100 text-neutral-700'
+  bot: 'bg-accepted-bg text-warn-fg',
+  market: 'bg-out-bg text-out-fg',
+  whats: 'bg-ok-bg text-ok-fg',
+  other: 'bg-surface-2 text-fg-2'
 };
 
 export function SystemChip({ system }: { system: ProspectSystem }) {
@@ -29,7 +29,7 @@ export function SystemChips({ lead }: { lead: ProspectLead }) {
   return lead.situation === 'online_order' ? (
     <span className={`${CHIP} bg-violet-100 text-violet-800`}>Pedir on-line</span>
   ) : (
-    <span className={`${CHIP} border border-neutral-200 text-neutral-500`}>Nada detectado</span>
+    <span className={`${CHIP} border border-line text-muted`}>Nada detectado</span>
   );
 }
 
@@ -39,10 +39,10 @@ export function SystemChips({ lead }: { lead: ProspectLead }) {
 export function ScoreBadge({ score }: { score: number | null }) {
   const tone =
     score === null || score < 5
-      ? 'border border-neutral-300 text-neutral-500'
+      ? 'border border-line-2 text-muted'
       : score < 8
-        ? 'bg-amber-100 text-amber-800'
-        : 'bg-green-600 text-white';
+        ? 'bg-accepted-bg text-warn-fg'
+        : 'bg-on text-white';
 
   return (
     <span

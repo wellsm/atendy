@@ -3,6 +3,7 @@ import type { LlmTool } from './openrouter-client';
 import type { MenuProduct } from '../menu/repository';
 import type { Selection } from '../orders/pricing';
 import type { DraftScope, Geocode } from '../orders/repository';
+import type { PaymentMethod } from '../stores/types';
 
 import { BillingRepository } from '../billing/repository';
 import { ConversationRepository } from '../conversations/repository';
@@ -11,8 +12,8 @@ import { searchMenu } from '../menu/search';
 import { PricingError } from '../orders/pricing';
 import { OrderError, OrderErrorCode, OrderRepository } from '../orders/repository';
 import { Fulfillment } from '../orders/types';
+import { OFFERED_METHODS } from '../stores/payment';
 import { StoreRepository } from '../stores/repository';
-import { PaymentMethod } from '../stores/types';
 
 export const enum ToolName {
   SearchMenu = 'search_menu',
@@ -160,7 +161,7 @@ export const TOOL_DEFINITIONS: LlmTool[] = [
     {
       method: {
         type: 'string',
-        enum: [PaymentMethod.Pix, PaymentMethod.Card, PaymentMethod.Cash, PaymentMethod.Voucher]
+        enum: [...OFFERED_METHODS]
       },
       change_for_cents: { type: 'integer', minimum: 0 }
     },
@@ -435,12 +436,7 @@ const run = async (ctx: ToolContext, name: string, args: Record<string, unknown>
     }
 
     case ToolName.SetPayment: {
-      const method = requireEnum(args, 'method', [
-        PaymentMethod.Pix,
-        PaymentMethod.Card,
-        PaymentMethod.Cash,
-        PaymentMethod.Voucher
-      ]);
+      const method = requireEnum<PaymentMethod>(args, 'method', [...OFFERED_METHODS]);
 
       return {
         cart: await OrderRepository.setPayment(db, ctx, {

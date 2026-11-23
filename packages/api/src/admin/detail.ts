@@ -47,6 +47,7 @@ export const loadAdminDetail = async (db: DbClient, storeId: string): Promise<Ad
     welcomeText: store.policy?.welcome_text ?? null,
     redirect: store.policy?.redirect ?? null,
     redirectOnly: !!store.policy?.redirect_only,
+    botOptIn: !!store.policy?.bot_opt_in,
     orderPriceCents: store.order_price_cents ?? null,
     defaultOrderPriceCents: DEFAULT_ORDER_PRICE_CENTS,
     webOrderPercent: store.web_order_percent ?? null,

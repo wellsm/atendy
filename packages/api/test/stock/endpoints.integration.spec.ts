@@ -18,6 +18,7 @@ import { getProductStockLinksHandler } from '../../src/stock/endpoints/get-produ
 import { getStockSummaryHandler } from '../../src/stock/endpoints/get-summary';
 import { listStockItemsHandler } from '../../src/stock/endpoints/list-items';
 import { listStockMovementsHandler } from '../../src/stock/endpoints/list-movements';
+import { listStoreStockMovementsHandler } from '../../src/stock/endpoints/list-store-movements';
 import { setOptionStockLinksHandler } from '../../src/stock/endpoints/set-option-links';
 import { setProductStockLinksHandler } from '../../src/stock/endpoints/set-product-links';
 import { updateStockItemHandler } from '../../src/stock/endpoints/update-item';
@@ -55,11 +56,11 @@ describe('panel stock endpoints', () => {
     equal(item.balance, 0);
     deepEqual((await getStockSummaryHandler({ identity } as never, { db })).body, { low: 1, soldOut: 1 });
 
-    await createStockEntryHandler({ identity, body: { itemId: item.id, qty: 3 } } as never, { db });
+    await createStockEntryHandler({ identity, body: { lines: [{ itemId: item.id, qty: 3 }] } } as never, { db });
 
     deepEqual((await getStockSummaryHandler({ identity } as never, { db })).body, { low: 1, soldOut: 0 });
 
-    await createStockEntryHandler({ identity, body: { itemId: item.id, qty: 10 } } as never, { db });
+    await createStockEntryHandler({ identity, body: { lines: [{ itemId: item.id, qty: 10 }] } } as never, { db });
 
     deepEqual((await getStockSummaryHandler({ identity } as never, { db })).body, { low: 0, soldOut: 0 });
 
@@ -87,7 +88,9 @@ describe('panel stock endpoints', () => {
 
     const packageId = detail.body.packages[0]!.id;
 
-    await createStockEntryHandler({ identity, body: { itemId: item.id, packageId, qty: 2 } } as never, { db });
+    await createStockEntryHandler({ identity, body: { lines: [{ itemId: item.id, packageId, qty: 2 }] } } as never, {
+      db
+    });
 
     const found = await findStockBarcodeHandler({ identity, parameters: { code: '7891234567895' } } as never, { db });
 
@@ -111,10 +114,13 @@ describe('panel stock endpoints', () => {
     const { identity } = await setup();
     const item = await create(identity, 'Queijo');
 
-    await createStockEntryHandler({ identity, body: { itemId: item.id, qty: 10 } } as never, { db });
-    await createStockLossHandler({ identity, body: { itemId: item.id, qty: 2, reason: LossReason.Expired } } as never, {
-      db
-    });
+    await createStockEntryHandler({ identity, body: { lines: [{ itemId: item.id, qty: 10 }] } } as never, { db });
+    await createStockLossHandler(
+      { identity, body: { lines: [{ itemId: item.id, qty: 2 }], reason: LossReason.Expired } } as never,
+      {
+        db
+      }
+    );
     await createStockCountsHandler({ identity, body: { counts: [{ itemId: item.id, counted: 5 }] } } as never, { db });
 
     const page = await listStockMovementsHandler({ identity, parameters: { itemId: item.id }, query: {} } as never, {
@@ -125,9 +131,12 @@ describe('panel stock endpoints', () => {
     equal(page.body.movements[0]!.balanceAfter, 5);
 
     await rejects(
-      createStockLossHandler({ identity, body: { itemId: item.id, qty: 1, reason: LossReason.Other } } as never, {
-        db
-      }),
+      createStockLossHandler(
+        { identity, body: { lines: [{ itemId: item.id, qty: 1 }], reason: LossReason.Other } } as never,
+        {
+          db
+        }
+      ),
       badField('note')
     );
 
@@ -138,6 +147,88 @@ describe('panel stock endpoints', () => {
     });
 
     equal(archived.body.items.length, 1);
+  });
+
+  it('receives and loses batches in one transaction, with purchase data and packages', async () => {
+    const { identity } = await setup();
+    const other = await setup();
+    const cola = await create(identity, 'Coca 2L', {
+      packages: [{ name: 'Fardo', factor: 6, barcode: '7891234567895' }]
+    });
+    const cheese = await create(identity, 'Queijo', { unit: StockUnit.Gram });
+    const detail = async (itemId: string) =>
+      (await getStockItemHandler({ identity, parameters: { itemId } } as never, { db })).body;
+    const packageId = (await detail(cola.id)).packages[0]!.id;
+    const storeMovements = async (query: object, who = identity) =>
+      (await listStoreStockMovementsHandler({ identity: who, query } as never, { db })).body;
+
+    await createStockEntryHandler(
+      {
+        identity,
+        body: {
+          lines: [
+            { itemId: cola.id, packageId, qty: 2, totalCostCents: 6000 },
+            { itemId: cheese.id, qty: 4000 }
+          ],
+          supplier: ' Atacadão ',
+          invoice: '48213'
+        }
+      } as never,
+      { db }
+    );
+
+    equal((await detail(cola.id)).item.balance, 12);
+    equal((await detail(cola.id)).movements[0]!.note, 'NF 48213 · Atacadão');
+    equal((await detail(cheese.id)).item.balance, 4000);
+
+    await rejects(
+      createStockEntryHandler(
+        {
+          identity,
+          body: {
+            lines: [
+              { itemId: cheese.id, qty: 10 },
+              { itemId: randomUUID(), qty: 1 }
+            ]
+          }
+        } as never,
+        { db }
+      ),
+      badField('item')
+    );
+    equal((await detail(cheese.id)).item.balance, 4000);
+
+    await rejects(createStockEntryHandler({ identity, body: { lines: [] } } as never, { db }), badField('lines'));
+
+    await createStockLossHandler(
+      {
+        identity,
+        body: {
+          lines: [
+            { itemId: cola.id, packageId, qty: 1 },
+            { itemId: cheese.id, qty: 500 }
+          ],
+          reason: LossReason.Breakage
+        }
+      } as never,
+      { db }
+    );
+
+    equal((await detail(cola.id)).item.balance, 6);
+    equal((await detail(cheese.id)).item.balance, 3500);
+
+    const losses = await storeMovements({ kind: 'loss' });
+
+    deepEqual(
+      losses.movements.map(({ itemName, itemUnit, qtyDelta, reason }) => [itemName, itemUnit, qtyDelta, reason]).sort(),
+      [
+        ['Coca 2L', StockUnit.Unit, -6, LossReason.Breakage],
+        ['Queijo', StockUnit.Gram, -500, LossReason.Breakage]
+      ]
+    );
+    equal((await storeMovements({})).movements.length, 4);
+    equal((await storeMovements({ kind: 'purchase' })).movements.length, 2);
+    deepEqual((await storeMovements({}, other.identity)).movements, []);
   });
 
   it('keeps stores apart and validates input', async () => {

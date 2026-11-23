@@ -52,7 +52,8 @@ export async function evolutionWebhookHandler(
       whatsapp_instance: true,
       active: true,
       billing_blocked: true,
-      stock_alert_phone: true
+      stock_alert_phone: true,
+      policy: true
     },
     where: { id: storeId }
   });
@@ -96,6 +97,7 @@ export async function evolutionWebhookHandler(
 
     const ingested = await ConversationRepository.ingestCustomerMessage(db, {
       storeId,
+      botOptIn: store.policy?.bot_opt_in,
       message: {
         kind: ParsedEventKind.Message,
         instance: event.instance,
@@ -152,7 +154,11 @@ export async function evolutionWebhookHandler(
     return { status: 200 };
   }
 
-  const ingested = await ConversationRepository.ingestCustomerMessage(db, { storeId, message: event });
+  const ingested = await ConversationRepository.ingestCustomerMessage(db, {
+    storeId,
+    botOptIn: store.policy?.bot_opt_in,
+    message: event
+  });
 
   await notifyPanel(panelEvents, storeId, [PanelTrigger.Conversations], ingested.conversationId);
 

@@ -1,6 +1,5 @@
 import type { SimulationResult, SimulationStatus } from '../lib/queries';
 
-import { UserButton } from '@clerk/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { Loading } from '../components/loading';
@@ -24,10 +23,10 @@ const usd = new Intl.NumberFormat('pt-BR', {
 });
 
 const STATUS: Record<SimulationStatus, { label: string; className: string }> = {
-  running: { label: 'Rodando', className: 'bg-neutral-100 text-neutral-700' },
-  passed: { label: 'Passou', className: 'bg-green-100 text-green-800' },
-  failed: { label: 'Falhou', className: 'bg-red-100 text-red-800' },
-  error: { label: 'Erro', className: 'bg-amber-100 text-amber-800' }
+  running: { label: 'Rodando', className: 'bg-surface-2 text-fg-2' },
+  passed: { label: 'Passou', className: 'bg-ok-bg text-ok-fg' },
+  failed: { label: 'Falhou', className: 'bg-danger-soft text-danger-fg' },
+  error: { label: 'Erro', className: 'bg-accepted-bg text-warn-fg' }
 };
 
 const ERRORS: Record<string, string> = {
@@ -48,7 +47,7 @@ function RunPage() {
   }
 
   if (query.isError) {
-    return <p className="p-6 text-sm text-red-700">Não foi possível carregar a rodada.</p>;
+    return <p className="p-6 text-sm text-danger-fg">Não foi possível carregar a rodada.</p>;
   }
 
   const { run, simulations } = query.data;
@@ -76,23 +75,22 @@ function RunPage() {
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-8">
       <header className="mb-6 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <Link to="/admin/simulations" className="text-sm text-neutral-500">
+          <Link to="/admin/simulations" className="text-sm text-muted">
             ← Simulações
           </Link>
           <h1 className="truncate text-xl font-semibold">{run.name}</h1>
-          <p className="text-sm text-neutral-600">
+          <p className="text-sm text-fg-2">
             {run.store_name} · {run.router} · {run.llm_model} · prompt {run.prompt_version} · cliente{' '}
             {run.customer_model} · {formatWhen(run.created_at)}
             {!run.finished_at && ' · rodando…'}
           </p>
         </div>
-        <UserButton />
       </header>
 
-      <dl className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-neutral-200 bg-white p-4 text-sm sm:grid-cols-2 md:grid-cols-3">
+      <dl className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface p-4 text-sm sm:grid-cols-2 md:grid-cols-3">
         {totals.map(([label, value]) => (
           <div key={label}>
-            <dt className="text-xs text-neutral-500">{label}</dt>
+            <dt className="text-xs text-muted">{label}</dt>
             <dd className="font-medium">{value}</dd>
           </div>
         ))}
@@ -100,11 +98,11 @@ function RunPage() {
 
       <ul className="flex flex-col gap-3">
         {simulations.map((simulation) => (
-          <li key={simulation.id} className="rounded-xl border border-neutral-200 bg-white p-4">
+          <li key={simulation.id} className="rounded-xl border border-line bg-surface p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <span className="font-medium">{simulation.title}</span>{' '}
-                <code className="font-mono text-xs text-neutral-500">
+                <code className="font-mono text-xs text-muted">
                   {simulation.scenario_id}
                   {simulation.repeat_index > 0 && ` #${simulation.repeat_index + 1}`}
                 </code>
@@ -114,7 +112,7 @@ function RunPage() {
               </span>
             </div>
 
-            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-600">
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-2">
               <span>{simulation.turns} falas do cliente</span>
               <span>
                 {simulation.ai_calls} chamadas · {usd.format(simulation.bot_cost_usd)}
@@ -136,20 +134,18 @@ function RunPage() {
             </div>
 
             {simulation.error && (
-              <p className="mt-2 text-sm text-amber-800">{ERRORS[simulation.error] ?? simulation.error}</p>
+              <p className="mt-2 text-sm text-warn-fg">{ERRORS[simulation.error] ?? simulation.error}</p>
             )}
 
             {simulation.checks.length > 0 && (
               <ul className="mt-3 flex flex-col gap-1 text-sm">
                 {simulation.checks.map((check, index) => (
                   <li key={`${check.name}-${index}`} className="flex gap-2">
-                    <span className={check.pass ? 'text-green-700' : 'text-red-700'}>{check.pass ? '✓' : '✗'}</span>
+                    <span className={check.pass ? 'text-ok-fg' : 'text-danger-fg'}>{check.pass ? '✓' : '✗'}</span>
                     <span className="min-w-0 break-words">
-                      <span className="font-mono text-xs text-neutral-500">{check.name}</span> {check.expected}
-                      {!check.pass && <span className="text-red-700"> → {check.actual}</span>}
-                      {check.pass && check.name === 'judge' && (
-                        <span className="text-neutral-500"> ({check.actual})</span>
-                      )}
+                      <span className="font-mono text-xs text-muted">{check.name}</span> {check.expected}
+                      {!check.pass && <span className="text-danger-fg"> → {check.actual}</span>}
+                      {check.pass && check.name === 'judge' && <span className="text-muted"> ({check.actual})</span>}
                     </span>
                   </li>
                 ))}

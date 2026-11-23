@@ -5,12 +5,16 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { Loading } from './loading';
 import { ApiError } from '../lib/api';
+import { formatPhone } from '../lib/format';
 
 /**
  * Where the WhatsApp block reads and acts: the store's own routes or the admin ones for a given store.
  */
 export type WhatsAppHooks = {
-  useState: (poll: boolean) => UseQueryResult<{ state: WhatsAppState }>;
+  /**
+   * `phone`: the linked number while connected (store routes only; the prospecting number has none).
+   */
+  useState: (poll: boolean) => UseQueryResult<{ state: WhatsAppState; phone?: string | null }>;
   useConnect: () => UseMutationResult<{ qr_base64: string | null; pairing_code: string | null }, Error, void>;
   useDisconnect: () => UseMutationResult<{ state: WhatsAppState }, Error, void>;
 };
@@ -174,7 +178,12 @@ export function WhatsAppConnect({ hooks, copy = STORE_COPY }: { hooks: WhatsAppH
             <span className={`h-3 w-3 rounded-full ring-[5px] sm:h-4 sm:w-4 sm:ring-[6px] ${style.dot}`} />
           </span>
           <div className="flex min-w-0 flex-col items-start gap-1.5">
-            <span className={`rounded-full px-2.5 py-0.5 text-sm font-medium ${style.badge}`}>{style.label}</span>
+            <span className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-2.5 py-0.5 text-sm font-medium ${style.badge}`}>{style.label}</span>
+              {connected && status.data?.phone && (
+                <span className="text-sm font-medium text-fg">{formatPhone(status.data.phone)}</span>
+              )}
+            </span>
             <span className="text-[15px] text-fg-2">{copy.headline[shown]}</span>
           </div>
         </div>

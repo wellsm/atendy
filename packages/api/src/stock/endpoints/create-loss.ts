@@ -16,8 +16,14 @@ export declare class CreateStockLossRequest implements Http.Request {
   identity: PanelIdentity;
   headers: OperatorHeaders;
   body: {
-    itemId: String.UUID;
-    qty: number;
+    /**
+     * `qty` counts packages when `packageId` is sent.
+     */
+    lines: {
+      itemId: String.UUID;
+      packageId?: String.UUID;
+      qty: number;
+    }[];
     reason: LossReason;
     note?: string;
   };
@@ -30,6 +36,9 @@ export declare class CreateStockLossResponse implements Http.Response {
   };
 }
 
+/**
+ * A batch of losses with one reason, in one transaction (a bad line writes nothing).
+ */
 export async function createStockLossHandler(
   request: Http.Incoming<CreateStockLossRequest>,
   { db }: Service.Context<PanelStaffProvider>
@@ -37,7 +46,7 @@ export async function createStockLossHandler(
   const store = await requireStore(db, request.identity);
   const { author } = await authorize(db, store, request.identity, request.headers, Permission.StockMove);
 
-  await withStockErrors(() => StockRepository.recordLoss(db, store.id, { ...request.body, author }));
+  await withStockErrors(() => StockRepository.recordLosses(db, store.id, { ...request.body, author }));
 
   return { status: 201, body: { recorded: true } };
 }

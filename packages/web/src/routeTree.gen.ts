@@ -11,9 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SlugRouteImport } from './routes/$slug'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminStoreIdRouteImport } from './routes/admin.$storeId'
+import { Route as AdminConversationsRouteImport } from './routes/admin.conversations'
 import { Route as AdminCostsRouteImport } from './routes/admin.costs'
 import { Route as AdminPromptRouteImport } from './routes/admin.prompt'
 import { Route as AdminProspectingRouteImport } from './routes/admin.prospecting'
@@ -33,6 +35,7 @@ import { Route as PanelSlugConversationsRouteImport } from './routes/panel.$slug
 import { Route as PanelSlugPhonesRouteImport } from './routes/panel.$slug/phones'
 import { Route as PanelSlugPosRouteImport } from './routes/panel.$slug/pos'
 import { Route as PanelSlugSettingsRouteImport } from './routes/panel.$slug/settings'
+import { Route as PanelSlugStockRouteImport } from './routes/panel.$slug/stock'
 import { Route as PanelSlugWhatsappRouteImport } from './routes/panel.$slug/whatsapp'
 import { Route as PanelSlugMenuIndexRouteImport } from './routes/panel.$slug/menu.index'
 import { Route as PanelSlugMenuProductIdRouteImport } from './routes/panel.$slug/menu.$productId'
@@ -47,40 +50,50 @@ const SlugRoute = SlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/admin/',
-  path: '/admin/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminStoreIdRoute = AdminStoreIdRouteImport.update({
-  id: '/admin/$storeId',
-  path: '/admin/$storeId',
-  getParentRoute: () => rootRouteImport,
+  id: '/$storeId',
+  path: '/$storeId',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminConversationsRoute = AdminConversationsRouteImport.update({
+  id: '/conversations',
+  path: '/conversations',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminCostsRoute = AdminCostsRouteImport.update({
-  id: '/admin/costs',
-  path: '/admin/costs',
-  getParentRoute: () => rootRouteImport,
+  id: '/costs',
+  path: '/costs',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminPromptRoute = AdminPromptRouteImport.update({
-  id: '/admin/prompt',
-  path: '/admin/prompt',
-  getParentRoute: () => rootRouteImport,
+  id: '/prompt',
+  path: '/prompt',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminProspectingRoute = AdminProspectingRouteImport.update({
-  id: '/admin/prospecting',
-  path: '/admin/prospecting',
-  getParentRoute: () => rootRouteImport,
+  id: '/prospecting',
+  path: '/prospecting',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
-  id: '/admin/users',
-  path: '/admin/users',
-  getParentRoute: () => rootRouteImport,
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
 } as any)
 const CourierTokenRoute = CourierTokenRouteImport.update({
   id: '/courier/$token',
@@ -108,25 +121,25 @@ const SignInSsoCallbackRoute = SignInSsoCallbackRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminConversationsIndexRoute = AdminConversationsIndexRouteImport.update({
-  id: '/admin/conversations/',
-  path: '/admin/conversations/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminConversationsRoute,
 } as any)
 const AdminConversationsConversationIdRoute =
   AdminConversationsConversationIdRouteImport.update({
-    id: '/admin/conversations/$conversationId',
-    path: '/admin/conversations/$conversationId',
-    getParentRoute: () => rootRouteImport,
+    id: '/$conversationId',
+    path: '/$conversationId',
+    getParentRoute: () => AdminConversationsRoute,
   } as any)
 const AdminSimulationsIndexRoute = AdminSimulationsIndexRouteImport.update({
-  id: '/admin/simulations/',
-  path: '/admin/simulations/',
-  getParentRoute: () => rootRouteImport,
+  id: '/simulations/',
+  path: '/simulations/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminSimulationsRunIdRoute = AdminSimulationsRunIdRouteImport.update({
-  id: '/admin/simulations/$runId',
-  path: '/admin/simulations/$runId',
-  getParentRoute: () => rootRouteImport,
+  id: '/simulations/$runId',
+  path: '/simulations/$runId',
+  getParentRoute: () => AdminRoute,
 } as any)
 const PanelSlugIndexRoute = PanelSlugIndexRouteImport.update({
   id: '/',
@@ -158,6 +171,11 @@ const PanelSlugSettingsRoute = PanelSlugSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => PanelSlugRoute,
 } as any)
+const PanelSlugStockRoute = PanelSlugStockRouteImport.update({
+  id: '/stock',
+  path: '/stock',
+  getParentRoute: () => PanelSlugRoute,
+} as any)
 const PanelSlugWhatsappRoute = PanelSlugWhatsappRouteImport.update({
   id: '/whatsapp',
   path: '/whatsapp',
@@ -177,8 +195,10 @@ const PanelSlugMenuProductIdRoute = PanelSlugMenuProductIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$slug': typeof SlugRoute
+  '/admin': typeof AdminRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/admin/$storeId': typeof AdminStoreIdRoute
+  '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/costs': typeof AdminCostsRoute
   '/admin/prompt': typeof AdminPromptRoute
   '/admin/prospecting': typeof AdminProspectingRoute
@@ -196,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/panel/$slug/phones': typeof PanelSlugPhonesRoute
   '/panel/$slug/pos': typeof PanelSlugPosRoute
   '/panel/$slug/settings': typeof PanelSlugSettingsRoute
+  '/panel/$slug/stock': typeof PanelSlugStockRoute
   '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
   '/admin/conversations/': typeof AdminConversationsIndexRoute
   '/admin/simulations/': typeof AdminSimulationsIndexRoute
@@ -224,6 +245,7 @@ export interface FileRoutesByTo {
   '/panel/$slug/phones': typeof PanelSlugPhonesRoute
   '/panel/$slug/pos': typeof PanelSlugPosRoute
   '/panel/$slug/settings': typeof PanelSlugSettingsRoute
+  '/panel/$slug/stock': typeof PanelSlugStockRoute
   '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
   '/admin/conversations': typeof AdminConversationsIndexRoute
   '/admin/simulations': typeof AdminSimulationsIndexRoute
@@ -235,8 +257,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$slug': typeof SlugRoute
+  '/admin': typeof AdminRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/admin/$storeId': typeof AdminStoreIdRoute
+  '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/costs': typeof AdminCostsRoute
   '/admin/prompt': typeof AdminPromptRoute
   '/admin/prospecting': typeof AdminProspectingRoute
@@ -254,6 +278,7 @@ export interface FileRoutesById {
   '/panel/$slug/phones': typeof PanelSlugPhonesRoute
   '/panel/$slug/pos': typeof PanelSlugPosRoute
   '/panel/$slug/settings': typeof PanelSlugSettingsRoute
+  '/panel/$slug/stock': typeof PanelSlugStockRoute
   '/panel/$slug/whatsapp': typeof PanelSlugWhatsappRoute
   '/admin/conversations/': typeof AdminConversationsIndexRoute
   '/admin/simulations/': typeof AdminSimulationsIndexRoute
@@ -266,8 +291,10 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$slug'
+    | '/admin'
     | '/onboarding'
     | '/admin/$storeId'
+    | '/admin/conversations'
     | '/admin/costs'
     | '/admin/prompt'
     | '/admin/prospecting'
@@ -285,6 +312,7 @@ export interface FileRouteTypes {
     | '/panel/$slug/phones'
     | '/panel/$slug/pos'
     | '/panel/$slug/settings'
+    | '/panel/$slug/stock'
     | '/panel/$slug/whatsapp'
     | '/admin/conversations/'
     | '/admin/simulations/'
@@ -313,6 +341,7 @@ export interface FileRouteTypes {
     | '/panel/$slug/phones'
     | '/panel/$slug/pos'
     | '/panel/$slug/settings'
+    | '/panel/$slug/stock'
     | '/panel/$slug/whatsapp'
     | '/admin/conversations'
     | '/admin/simulations'
@@ -323,8 +352,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$slug'
+    | '/admin'
     | '/onboarding'
     | '/admin/$storeId'
+    | '/admin/conversations'
     | '/admin/costs'
     | '/admin/prompt'
     | '/admin/prospecting'
@@ -342,6 +373,7 @@ export interface FileRouteTypes {
     | '/panel/$slug/phones'
     | '/panel/$slug/pos'
     | '/panel/$slug/settings'
+    | '/panel/$slug/stock'
     | '/panel/$slug/whatsapp'
     | '/admin/conversations/'
     | '/admin/simulations/'
@@ -353,22 +385,13 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SlugRoute: typeof SlugRoute
+  AdminRoute: typeof AdminRouteWithChildren
   OnboardingRoute: typeof OnboardingRoute
-  AdminStoreIdRoute: typeof AdminStoreIdRoute
-  AdminCostsRoute: typeof AdminCostsRoute
-  AdminPromptRoute: typeof AdminPromptRoute
-  AdminProspectingRoute: typeof AdminProspectingRoute
-  AdminUsersRoute: typeof AdminUsersRoute
   CourierTokenRoute: typeof CourierTokenRoute
   PanelSlugRoute: typeof PanelSlugRouteWithChildren
   SignInSsoCallbackRoute: typeof SignInSsoCallbackRoute
-  AdminIndexRoute: typeof AdminIndexRoute
   PanelIndexRoute: typeof PanelIndexRoute
   SignInIndexRoute: typeof SignInIndexRoute
-  AdminConversationsConversationIdRoute: typeof AdminConversationsConversationIdRoute
-  AdminSimulationsRunIdRoute: typeof AdminSimulationsRunIdRoute
-  AdminConversationsIndexRoute: typeof AdminConversationsIndexRoute
-  AdminSimulationsIndexRoute: typeof AdminSimulationsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -387,6 +410,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/onboarding': {
       id: '/onboarding'
       path: '/onboarding'
@@ -396,45 +426,52 @@ declare module '@tanstack/react-router' {
     }
     '/admin/': {
       id: '/admin/'
-      path: '/admin'
+      path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/$storeId': {
       id: '/admin/$storeId'
-      path: '/admin/$storeId'
+      path: '/$storeId'
       fullPath: '/admin/$storeId'
       preLoaderRoute: typeof AdminStoreIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/conversations': {
+      id: '/admin/conversations'
+      path: '/conversations'
+      fullPath: '/admin/conversations'
+      preLoaderRoute: typeof AdminConversationsRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/costs': {
       id: '/admin/costs'
-      path: '/admin/costs'
+      path: '/costs'
       fullPath: '/admin/costs'
       preLoaderRoute: typeof AdminCostsRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/prompt': {
       id: '/admin/prompt'
-      path: '/admin/prompt'
+      path: '/prompt'
       fullPath: '/admin/prompt'
       preLoaderRoute: typeof AdminPromptRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/prospecting': {
       id: '/admin/prospecting'
-      path: '/admin/prospecting'
+      path: '/prospecting'
       fullPath: '/admin/prospecting'
       preLoaderRoute: typeof AdminProspectingRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/users': {
       id: '/admin/users'
-      path: '/admin/users'
+      path: '/users'
       fullPath: '/admin/users'
       preLoaderRoute: typeof AdminUsersRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/courier/$token': {
       id: '/courier/$token'
@@ -473,31 +510,31 @@ declare module '@tanstack/react-router' {
     }
     '/admin/conversations/': {
       id: '/admin/conversations/'
-      path: '/admin/conversations'
+      path: '/'
       fullPath: '/admin/conversations/'
       preLoaderRoute: typeof AdminConversationsIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminConversationsRoute
     }
     '/admin/conversations/$conversationId': {
       id: '/admin/conversations/$conversationId'
-      path: '/admin/conversations/$conversationId'
+      path: '/$conversationId'
       fullPath: '/admin/conversations/$conversationId'
       preLoaderRoute: typeof AdminConversationsConversationIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminConversationsRoute
     }
     '/admin/simulations/': {
       id: '/admin/simulations/'
-      path: '/admin/simulations'
+      path: '/simulations'
       fullPath: '/admin/simulations/'
       preLoaderRoute: typeof AdminSimulationsIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/simulations/$runId': {
       id: '/admin/simulations/$runId'
-      path: '/admin/simulations/$runId'
+      path: '/simulations/$runId'
       fullPath: '/admin/simulations/$runId'
       preLoaderRoute: typeof AdminSimulationsRunIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/panel/$slug/': {
       id: '/panel/$slug/'
@@ -541,6 +578,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PanelSlugSettingsRouteImport
       parentRoute: typeof PanelSlugRoute
     }
+    '/panel/$slug/stock': {
+      id: '/panel/$slug/stock'
+      path: '/stock'
+      fullPath: '/panel/$slug/stock'
+      preLoaderRoute: typeof PanelSlugStockRouteImport
+      parentRoute: typeof PanelSlugRoute
+    }
     '/panel/$slug/whatsapp': {
       id: '/panel/$slug/whatsapp'
       path: '/whatsapp'
@@ -565,12 +609,52 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminConversationsRouteChildren {
+  AdminConversationsConversationIdRoute: typeof AdminConversationsConversationIdRoute
+  AdminConversationsIndexRoute: typeof AdminConversationsIndexRoute
+}
+
+const AdminConversationsRouteChildren: AdminConversationsRouteChildren = {
+  AdminConversationsConversationIdRoute: AdminConversationsConversationIdRoute,
+  AdminConversationsIndexRoute: AdminConversationsIndexRoute,
+}
+
+const AdminConversationsRouteWithChildren =
+  AdminConversationsRoute._addFileChildren(AdminConversationsRouteChildren)
+
+interface AdminRouteChildren {
+  AdminStoreIdRoute: typeof AdminStoreIdRoute
+  AdminConversationsRoute: typeof AdminConversationsRouteWithChildren
+  AdminCostsRoute: typeof AdminCostsRoute
+  AdminPromptRoute: typeof AdminPromptRoute
+  AdminProspectingRoute: typeof AdminProspectingRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  AdminSimulationsRunIdRoute: typeof AdminSimulationsRunIdRoute
+  AdminSimulationsIndexRoute: typeof AdminSimulationsIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminStoreIdRoute: AdminStoreIdRoute,
+  AdminConversationsRoute: AdminConversationsRouteWithChildren,
+  AdminCostsRoute: AdminCostsRoute,
+  AdminPromptRoute: AdminPromptRoute,
+  AdminProspectingRoute: AdminProspectingRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  AdminSimulationsRunIdRoute: AdminSimulationsRunIdRoute,
+  AdminSimulationsIndexRoute: AdminSimulationsIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 interface PanelSlugRouteChildren {
   PanelSlugBillingRoute: typeof PanelSlugBillingRoute
   PanelSlugConversationsRoute: typeof PanelSlugConversationsRoute
   PanelSlugPhonesRoute: typeof PanelSlugPhonesRoute
   PanelSlugPosRoute: typeof PanelSlugPosRoute
   PanelSlugSettingsRoute: typeof PanelSlugSettingsRoute
+  PanelSlugStockRoute: typeof PanelSlugStockRoute
   PanelSlugWhatsappRoute: typeof PanelSlugWhatsappRoute
   PanelSlugIndexRoute: typeof PanelSlugIndexRoute
   PanelSlugMenuProductIdRoute: typeof PanelSlugMenuProductIdRoute
@@ -583,6 +667,7 @@ const PanelSlugRouteChildren: PanelSlugRouteChildren = {
   PanelSlugPhonesRoute: PanelSlugPhonesRoute,
   PanelSlugPosRoute: PanelSlugPosRoute,
   PanelSlugSettingsRoute: PanelSlugSettingsRoute,
+  PanelSlugStockRoute: PanelSlugStockRoute,
   PanelSlugWhatsappRoute: PanelSlugWhatsappRoute,
   PanelSlugIndexRoute: PanelSlugIndexRoute,
   PanelSlugMenuProductIdRoute: PanelSlugMenuProductIdRoute,
@@ -596,22 +681,13 @@ const PanelSlugRouteWithChildren = PanelSlugRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SlugRoute: SlugRoute,
+  AdminRoute: AdminRouteWithChildren,
   OnboardingRoute: OnboardingRoute,
-  AdminStoreIdRoute: AdminStoreIdRoute,
-  AdminCostsRoute: AdminCostsRoute,
-  AdminPromptRoute: AdminPromptRoute,
-  AdminProspectingRoute: AdminProspectingRoute,
-  AdminUsersRoute: AdminUsersRoute,
   CourierTokenRoute: CourierTokenRoute,
   PanelSlugRoute: PanelSlugRouteWithChildren,
   SignInSsoCallbackRoute: SignInSsoCallbackRoute,
-  AdminIndexRoute: AdminIndexRoute,
   PanelIndexRoute: PanelIndexRoute,
   SignInIndexRoute: SignInIndexRoute,
-  AdminConversationsConversationIdRoute: AdminConversationsConversationIdRoute,
-  AdminSimulationsRunIdRoute: AdminSimulationsRunIdRoute,
-  AdminConversationsIndexRoute: AdminConversationsIndexRoute,
-  AdminSimulationsIndexRoute: AdminSimulationsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

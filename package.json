@@ -9,10 +9,11 @@
   },
   "workspaces": [
     "packages/api",
-    "packages/web"
+    "packages/web",
+    "packages/videos"
   ],
   "scripts": {
-    "prettify": "npx prettier 'packages/**/*.ts' 'packages/web/**/*.tsx' --cache --write",
+    "prettify": "npx prettier 'packages/**/*.ts' 'packages/web/**/*.tsx' 'packages/videos/**/*.tsx' --cache --write",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",

@@ -10,12 +10,20 @@ import { DatabaseTester } from '@ez4/local-database/test';
 import { getAdminConversationHandler } from '../../src/admin/endpoints/get-conversation';
 import { getPromptHandler } from '../../src/admin/endpoints/get-prompt';
 import { listAdminConversationsHandler } from '../../src/admin/endpoints/list-conversations';
-import { REPLY_SYSTEM_PROMPT, SYSTEM_PROMPT } from '../../src/agent/prompt';
+import {
+  redirectPromptFor,
+  REPLY_SYSTEM_PROMPT,
+  replyPromptFor,
+  SYSTEM_PROMPT,
+  systemPromptFor
+} from '../../src/agent/prompt';
 import { PROMPT_VERSION } from '../../src/agent/prompt-version';
 import { AiCallRepository } from '../../src/agent/repository';
 import { TOOL_DEFINITIONS } from '../../src/agent/tools';
 import { AiPath, AiProvider } from '../../src/agent/types';
 import { ConversationMode } from '../../src/conversations/types';
+import { SimulationRepository } from '../../src/simulations/repository';
+import { RouterType, StoreType } from '../../src/stores/types';
 import { minutesAgo, seedConversation, seedStore } from '../support/fixtures';
 
 describe('admin conversation inspector', () => {
@@ -80,6 +88,47 @@ describe('admin conversation inspector', () => {
     );
   });
 
+  it('flags error and simulation conversations and filters simulations', async () => {
+    const { storeId } = await seedStore(db);
+
+    const plain = await conversation(storeId, { minutes: 30 });
+    const failed = await conversation(storeId, {
+      minutes: 20,
+      mode: ConversationMode.Human,
+      reason: 'technical_error'
+    });
+    const simulated = await conversation(storeId, { minutes: 10 });
+
+    const { simulationIds } = await SimulationRepository.createRun(db, {
+      store: { id: storeId, router: RouterType.Jev, llm_model: 'test/model' },
+      name: 'Rodada',
+      source: '',
+      scenarios: [{ id: 'cenario', repeat: 1 } as never],
+      promptVersion: 'v1',
+      customerModel: 'test/customer',
+      createdBy: 'user_admin'
+    });
+
+    await db.simulations.updateOne({ data: { conversation_id: simulated }, where: { id: simulationIds[0]! } });
+
+    deepEqual(
+      (await list({ storeId, filter: 'all' })).body.conversations.map(({ id, error, simulation }) => [
+        id,
+        error,
+        simulation
+      ]),
+      [
+        [simulated, false, true],
+        [failed, true, false],
+        [plain, false, false]
+      ]
+    );
+    deepEqual(
+      (await list({ storeId, filter: 'simulations' })).body.conversations.map(({ id }) => id),
+      [simulated]
+    );
+  });
+
   it('shows messages and AI calls of a conversation', async () => {
     const { storeId } = await seedStore(db);
     const { conversationId } = await seedConversation(db, storeId);
@@ -124,14 +173,16 @@ describe('admin conversation inspector', () => {
     );
   });
 
-  it('shows the current prompt', async () => {
+  it('shows the current prompts, food, retail and redirect', async () => {
     const { body } = await getPromptHandler({ identity } as never);
 
     deepEqual(body, {
       version: PROMPT_VERSION,
       system: SYSTEM_PROMPT,
       reply: REPLY_SYSTEM_PROMPT,
-      tools: JSON.stringify(TOOL_DEFINITIONS, null, 2)
+      tools: JSON.stringify(TOOL_DEFINITIONS, null, 2),
+      retail: { system: systemPromptFor(StoreType.Retail), reply: replyPromptFor(StoreType.Retail) },
+      redirect: { food: redirectPromptFor(StoreType.Food), retail: redirectPromptFor(StoreType.Retail) }
     });
   });
 });

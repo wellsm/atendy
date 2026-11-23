@@ -15,6 +15,10 @@ export declare class GetWhatsAppResponse implements Http.Response {
   status: 200;
   body: {
     state: WhatsAppState;
+    /**
+     * Linked number (digits) while connected; null when unknown.
+     */
+    phone: string | null;
   };
 }
 
@@ -23,7 +27,7 @@ export async function getWhatsAppHandler(
   { db }: Service.Context<PanelWhatsAppProvider>
 ): Promise<GetWhatsAppResponse> {
   const store = await requireStore(db, request.identity);
-  const state = await withEvolutionErrors(() => StoreWhatsApp.state(db, store.id, process.env));
+  const body = await withEvolutionErrors(() => StoreWhatsApp.status(db, store.id, process.env));
 
-  return { status: 200, body: { state } };
+  return { status: 200, body };
 }

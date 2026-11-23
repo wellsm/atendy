@@ -31,6 +31,7 @@ function Panel() {
   const [failed, setFailed] = useState(false);
   // The POS is full screen: no sidebar or header.
   const pos = !!useMatch({ from: '/panel/$slug/pos', shouldThrow: false });
+  const stock = !!useMatch({ from: '/panel/$slug/stock', shouldThrow: false });
   // The demo phones are full screen too, and outside the staff lock (the customer is talking, not the staff).
   const phones = !!useMatch({ from: '/panel/$slug/phones', shouldThrow: false });
 
@@ -72,7 +73,7 @@ function Panel() {
     return (
       <RealtimeProvider slug={slug}>
         <OperatorProvider key={slug} slug={slug}>
-          {pos ? (
+          {pos || stock ? (
             <Outlet />
           ) : (
             <PanelShell store={me.data.store!}>

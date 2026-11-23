@@ -54,6 +54,7 @@ export declare class UpdateStoreRequest implements Http.Request {
      * The store never sells: fixed welcome with the link, then catalog questions and handoff. Needs `redirect`.
      */
     redirectOnly?: boolean;
+    botOptIn?: boolean;
   };
 }
 
@@ -82,7 +83,8 @@ export async function updateAdminStoreHandler(
     storeType,
     welcomeText,
     redirect,
-    redirectOnly
+    redirectOnly,
+    botOptIn
   } = request.body;
 
   if (
@@ -97,7 +99,8 @@ export async function updateAdminStoreHandler(
       storeType,
       welcomeText,
       redirect,
-      redirectOnly
+      redirectOnly,
+      botOptIn
     ].every((value) => value === undefined)
   ) {
     throw new HttpBadRequestError('Nothing to update.');
@@ -111,7 +114,8 @@ export async function updateAdminStoreHandler(
     ...(orderMemoryHours !== undefined && parsePolicyKey('order_memory_hours', orderMemoryHours)),
     ...(welcomeText !== undefined && parsePolicyKey('welcome_text', welcomeText)),
     ...(redirect !== undefined && parsePolicyKey('redirect', redirect)),
-    ...(redirectOnly !== undefined && parsePolicyKey('redirect_only', redirectOnly))
+    ...(redirectOnly !== undefined && parsePolicyKey('redirect_only', redirectOnly)),
+    ...(botOptIn !== undefined && parsePolicyKey('bot_opt_in', botOptIn))
   };
 
   await requireAdminStore(db, storeId);

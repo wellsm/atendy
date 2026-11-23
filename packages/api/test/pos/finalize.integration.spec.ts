@@ -269,7 +269,16 @@ describe('pos finalize and cancel', () => {
     equal(report.canceledCount, 0);
     equal(report.salesCents, 3400);
     equal(report.discountsCents, 800);
-    deepEqual(report.byMethod, { pix: 1000, card: 0, cash: 2400, voucher: 0 });
+    deepEqual(report.byMethod, {
+      pix: 1000,
+      cash: 2400,
+      credit: 0,
+      debit: 0,
+      meal_voucher: 0,
+      food_voucher: 0,
+      card: 0,
+      voucher: 0
+    });
     equal(report.expectedCashCents, 10000 + 2400);
   });
   it('lists the finalized sales of the open session, or of today without cash control', async () => {

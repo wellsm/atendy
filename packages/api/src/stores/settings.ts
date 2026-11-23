@@ -1,8 +1,9 @@
 import type { DeliveryBand } from './geo';
 import type { HourRange } from './hours';
-import type { PaymentMethod, PosSettings, StaffSettings, StorePolicy } from './types';
+import type { PaymentBrands, PaymentMethod, PosSettings, StaffSettings, StorePolicy } from './types';
 
 import { normalizeNeighborhood } from './delivery';
+import { isBrandMethod, OFFERED_METHODS, PAYMENT_BRANDS } from './payment';
 import { parsePolicyPatch, PolicyError } from './policy';
 import { DeliveryMode } from './types';
 import { normalizePhone } from '../storefront/web-order';
@@ -42,7 +43,8 @@ export const PANEL_POLICY_KEYS = [
   'repeat_order_statuses',
   'new_order_after_status',
   'add_on_category_ids',
-  'add_on_extra_minutes'
+  'add_on_extra_minutes',
+  'bot_opt_in'
 ] as const;
 
 /**
@@ -223,12 +225,36 @@ export const validateDelivery = (input: DeliverySettings): Required<DeliverySett
   return { mode: input.mode, flatFeeCents: input.flatFeeCents, zones, bands: [], ...schedule };
 };
 
-export const validatePaymentMethods = (methods: PaymentMethod[]) => {
-  if (!methods.length) {
-    throw new SettingsError('payment_methods', 'Choose at least one payment method.');
+/**
+ * Methods (offered ones only, at least one) and, per accepted card/voucher method, at least one known brand (kept in
+ * catalog order; a missing list = every brand). Brands of methods left off are dropped.
+ */
+export const validatePayment = (input: { methods: PaymentMethod[]; brands?: PaymentBrands | null }) => {
+  const methods = OFFERED_METHODS.filter((method) => input.methods.includes(method));
+
+  if (!methods.length || input.methods.some((method) => !(OFFERED_METHODS as readonly string[]).includes(method))) {
+    throw new SettingsError('payment_methods', 'Choose at least one payment method among the offered ones.');
   }
 
-  return [...new Set(methods)];
+  const brands: PaymentBrands = {};
+
+  for (const method of methods.filter(isBrandMethod)) {
+    const chosen = input.brands?.[method];
+
+    if (chosen == null) {
+      continue;
+    }
+
+    const catalog = PAYMENT_BRANDS[method];
+
+    if (!chosen.length || chosen.some((brand) => !catalog.includes(brand))) {
+      throw new SettingsError('payment_brands', `Choose at least one known brand for ${method}.`);
+    }
+
+    brands[method] = catalog.filter((brand) => chosen.includes(brand));
+  }
+
+  return { methods, brands };
 };
 
 export const validateStockAlert = (input: { phone: string | null; hour: number | null }) => {
